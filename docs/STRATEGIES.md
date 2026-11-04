@@ -128,6 +128,12 @@ Shown as context only (failed tests): FII / Pro / Client positions for direction
 - History check (`touch_dom_combo.py`, `touch_dom_review.py`): **failed** – combo −₹4,551 (4 trades, replay levels) and −₹24,361 (19 trades, live touch log); the book lean effect flips between indices and halves (luck p 0.2–0.8). Paper record only.
 - House rule: new index strategies are always graded as a synthetic future.
 
+### 6c-3. Strong Block Touch v2 (`app/strongblock.py`, from 5 Nov 2026) – Nifty / Bank Nifty
+- Levels: STRONG blocks only, from `levelmap.build(asof = previous session)`, fixed for the day, shifted to futures by the basis (futures mid − option-chain spot, 09:20–09:40).
+- Entry: a closed 1-min futures bar reaches a strong block's near edge from outside, touch-minute delta / volume > +0.2 (support) / < −0.2 (resistance); bars 09:30–14:30; re-touch after 15 min; one open trade per index.
+- Exits on 1-min closes: stop 0.05 % beyond the block's far edge; target 2R; breakeven at +1R; out after 60 min or 15:20.
+- Synthetic future, 1 lot, ₹ after 4.5 / 12.5 pts. History (`strong_block_touch.py`, 7 days): 8 trades, −₹2,002 – too few. Forward paper test.
+
 ### 6d. Cross-section momentum basket (`app/xsecpaper.py`) – crypto
 - Universe: 29 Binance USDT perps (list in `data_store/research/alts1m/established.txt`, kept in the repo as config).
 - Daily at 00:00 UTC: rank by 72-hour return; long the 5 best, short the 5 worst, equal weight; hold 24 h.

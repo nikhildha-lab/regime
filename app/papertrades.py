@@ -21,6 +21,7 @@ RULES = {
     "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
+    "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
 }
 
 
@@ -103,6 +104,24 @@ def _touchdom(hot):
     return out
 
 
+def _sbt(hot):
+    """2026-11-04: Strong Block Touch v2 (app/strongblock.py) - synthetic future, 1 lot, rupees after costs."""
+    SB = hot("strongblock")
+    out = []
+    for x in SB.trades():
+        t = {"rule": "sbt", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x.get("sl"), "target": x["target"],
+             "how": f"stop beyond the block's far edge · target 2R · breakeven at +1R · out after 60 min or 15:20",
+             "instrument": f"{NAME.get(x['key'], x['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
+             "status": x["status"], "why": x.get("why", "")}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
+        elif x.get("now") is not None:
+            sd = 1 if x["side"] == "long" else -1
+            t.update(pnl_open=round((sd * (x["now"] - x["entry"]) - SB.SYN_PTS[x["key"]]) * x["lot"]), now=x["now"])
+        out.append(t)
+    return out
+
+
 def _dom(hot):
     """2026-11-03: DOM hold / break paper test (app/domcards.py). Rs = R after costs x Rs 1,000 risk.
     Only the plan account (first 3 trades a day, -2R day stop) is listed here; every DOM trade (~50-90 a day) is in the DOM Setups card."""
@@ -133,7 +152,7 @@ def group_of(key: str) -> str:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -159,4 +178,5 @@ def api(hot, px, keys=None, group=None) -> dict:
     return {"open": op, "closed": cl[:60], "totals": list(tot.values()), "errors": errs,
             "note": "Paper trades only (never orders). 4H break $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
                     "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs. "
-                    "Touch + DOM v1 = touch-minute signal with the DOM book agreeing, synthetic future, 1 lot, rupees after costs."}
+                    "Touch + DOM v1 = touch-minute signal with the DOM book agreeing, synthetic future, 1 lot, rupees after costs. "
+                    "Strong Block Touch v2 = strong block (evening-before map) + touch-minute confirm, synthetic future, 1 lot, rupees after costs."}

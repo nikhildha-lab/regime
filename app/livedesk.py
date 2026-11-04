@@ -421,6 +421,10 @@ def poll_once():
                     _hot("domcards").tick(_hot, views)
                 except Exception as e:
                     _STATE["domcards_error"] = str(e)[:160]
+                try:                               # 2026-11-04: Strong Block Touch v2 paper rule (app/strongblock.py), new - nothing else changed
+                    _hot("strongblock").tick()
+                except Exception as e:
+                    _STATE["strongblock_error"] = str(e)[:160]
             if desk == "crypto" and time.time() - _STATE.get("edge_t", 0) > 300:   # Edge board job: momentum paper basket (Block story removed 2026-11-03)
                 _STATE["edge_t"] = time.time()
                 try:
