@@ -4,6 +4,8 @@ trade cards in the relevant sections").
 Joins the three paper-trade rules into one list with the same fields:
   * 4H break        - ETH / BTC v3, Gold v1. Money shown as a $10,000 account risking 1% ($100) a trade: $ = R after costs x 100.
   * Touch-minute    - Nifty / Bank Nifty option cards (1 lot, rupees after costs; option prices are Black-Scholes estimates).
+  * DOM hold / break - plan account (index: synthetic future 1 lot in rupees; stocks: Rs 1,000 risk).
+  * Touch + DOM v1  - touch-minute cards confirmed by the DOM book lean (from 5 Nov), synthetic future 1 lot, rupees.
 Shadow trades (research records) and skipped signals are NOT included. Paper only - nothing here ever places an order.
 """
 from __future__ import annotations
@@ -18,6 +20,7 @@ RULES = {
     "b4h": {"label": "4H break", "edge": "tested edge (backtest 2023-26)"},
     "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
+    "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "new - history only 4 trades; forward paper test from 5 Nov"},
 }
 
 
@@ -79,6 +82,27 @@ def _touch(hot):
     return out
 
 
+def _touchdom(hot):
+    """2026-11-04: Touch + DOM combo v1 - touch-minute cards whose DOM book lean agreed at entry. Synthetic future, 1 lot, rupees."""
+    TT = hot("touchtrades")
+    import glob, os
+    files = sorted(glob.glob(os.path.join(TT.CDIR, "cards_*.json")))[-30:]
+    out = []
+    for c in [c for f in files for c in TT.load_cards(os.path.basename(f)[6:16]) if c.get("combo")]:
+        sd = 1 if c["side"] == "long" else -1
+        t = {"rule": "touchdom", "key": c["key"], "side": c["side"], "opened": f"{c['day']} {c['time']}", "entry": c.get("spot_entry"),
+             "stop": c.get("spot_sl"), "target": None, "how": f"stop on spot · {c.get('trail', '')} · out by {c.get('exit_by', '')}",
+             "instrument": f"{NAME.get(c['key'], c['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
+             "status": c["status"], "why": f"{c.get('why', '')} · book lean {c.get('dom_lean'):+.2f} vs normal"}
+        if c["status"] == "closed":
+            t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}", pnl=c.get("synth_rs_net"),
+                     r=round(c["spot_pts"] / c["R_pts"], 2) if c.get("R_pts") and c.get("spot_pts") is not None else None)
+        elif c.get("spot_now"):
+            t.update(pnl_open=round((sd * (c["spot_now"] - c["spot_entry"]) - TT.SYN_PTS[c["key"]]) * c.get("lot", 1)), now=c.get("spot_now"))
+        out.append(t)
+    return out
+
+
 def _dom(hot):
     """2026-11-03: DOM hold / break paper test (app/domcards.py). Rs = R after costs x Rs 1,000 risk.
     Only the plan account (first 3 trades a day, -2R day stop) is listed here; every DOM trade (~50-90 a day) is in the DOM Setups card."""
@@ -109,7 +133,7 @@ def group_of(key: str) -> str:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -134,4 +158,5 @@ def api(hot, px, keys=None, group=None) -> dict:
             z["today_n"] += 1; z["today_pnl"] = round(z["today_pnl"] + (t.get("pnl") or 0), 2)
     return {"open": op, "closed": cl[:60], "totals": list(tot.values()), "errors": errs,
             "note": "Paper trades only (never orders). 4H break $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
-                    "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs."}
+                    "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs. "
+                    "Touch + DOM v1 = touch-minute signal with the DOM book agreeing, synthetic future, 1 lot, rupees after costs."}

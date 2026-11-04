@@ -33,7 +33,27 @@ LOT = {"NIFTY": 65, "BANKNIFTY": 30}
 COST_PTS = {"NIFTY": 5.5, "BANKNIFTY": 15.0}
 MIN_DAYS_LEFT = 7                                  # 2026-11-04: next-week expiry (>= 7 days left) - less decay; Bank Nifty = nearest monthly with 7+ days
 SPREAD_PTS = {"NIFTY": 0.5, "BANKNIFTY": 1.5}
-SYN_PTS = {"NIFTY": 4.5, "BANKNIFTY": 12.5}        # 2026-11-04: synthetic future (buy ATM call + sell ATM put) round trip, index points - record-only comparison      # 2026-11-04: assumed bid / ask + slippage per side, option premium points
+SYN_PTS = {"NIFTY": 4.5, "BANKNIFTY": 12.5}        # 2026-11-04: synthetic future (buy ATM call + sell ATM put) round trip, index points - record-only comparison
+# 2026-11-04 TOUCH + DOM combo v1 (Nikhil: "another version ... combination of touch min and DOM ... start taking trades from tomorrow ...
+# always use synthetic future"). Same touch-minute signal, PLUS the DOM book lean at entry: 20-level imbalance (futures, Dhan engine),
+# mean of the last 30 s minus its own 30-min median >= +0.10 for a long / <= -0.10 for a short. Same exits as the card.
+# Vehicle: synthetic future (buy ATM call + sell ATM put, next-week expiry), 1 lot, rupees after SYN_PTS. Paper only.
+# History check (scripts/research/touch_dom_combo.py, 7 usable days 21 Oct - 4 Nov): only 4 combo trades, -Rs 4,551 - far too few to judge.
+COMBO_FROM, DOM_LEAN = "2026-11-05", 0.10
+OF_SEC = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data", "of")
+
+
+def dom_lean(key, day, t_epoch):
+    """Book lean at entry: mean 20-level imbalance of the last 30 s minus its median over the last 30 min (None if no book)."""
+    try:
+        s = pd.read_csv(os.path.join(OF_SEC, day, f"sec_{key}.csv"), usecols=["t", "bid", "ask", "imb20"])
+    except Exception:
+        return None
+    s = s[(s.bid > 0) & (s.ask > 0) & (s.t <= t_epoch) & (s.t > t_epoch - 1800)].dropna(subset=["imb20"])
+    last = s[s.t > t_epoch - 30]
+    if len(last) < 10 or len(s) < 300:
+        return None
+    return round(float(last.imb20.mean() - s.imb20.median()), 3)      # 2026-11-04: assumed bid / ask + slippage per side, option premium points
 NAME = {"NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty"}
 
 
@@ -258,6 +278,11 @@ def tick(t: datetime, spots: dict) -> bool:
             c["prem_sl_est"] = round(max(0.05, c["prem_entry"] - abs(o["delta"]) * R), 1)
         else:
             c["option"] = None; c["note"] = "no option-chain snapshot - spot only"
+        if day >= COMBO_FROM:
+            ln = dom_lean(k, day, _time.time())
+            c["dom_lean"] = ln
+            c["combo"] = ln is not None and (ln >= DOM_LEAN if sd > 0 else ln <= -DOM_LEAN)
+            c["combo_v"] = "v1"
         cards.append(c); changed = True
     for c in cards:
         if c["status"] != "open" and c.get("vdone", True):
