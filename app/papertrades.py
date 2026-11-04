@@ -52,7 +52,7 @@ def _b4h(hot, px):
              "how": ("3 targets 1R / 2R / 3R" if tg else f"trail {r.get('trail_atr', 1.5)} ATR after +1R" if r.get("exit_mode") == "trail" else "out after 2 days")
                     + f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "",
              "instrument": "Gold" if r["mkt"] == "GOLD" else f"{NAME[r['mkt']]} futures" if r.get("hist") else f"{NAME[r['mkt']]} perpetual", "size": round(units * r["entry"]), "ccy": "$",
-             "risk_money": 100, "status": r["status"], "why": r.get("dir", ""), "proven": r.get("proven"), "hist": r.get("hist")}
+             "risk_money": 100, "status": r["status"], "why": r.get("dir", ""), "proven": r.get("proven"), "hist": r.get("hist"), "_rk": risk}
         # 2026-11-05 (Nikhil: "4h break doesn't have a target and trailing SL?"): display only - show the CURRENT stop (it moves with the
         # trail / targets) and say when trailing starts. Exits themselves are unchanged (break4h.py).
         if r["status"] == "open":
@@ -72,21 +72,21 @@ def _b4h(hot, px):
                 t["how"] = "no target, no trailing stop (tested that way) · block stop · out after 2 days" + (f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "")
         if r["status"] == "closed":
             t.update(exit=r.get("exit"), exit_reason=r.get("exit_reason"), closed=_ist(pd.Timestamp(r.get("closed_bar")) + timedelta(hours=4)) if r.get("closed_bar") else "", r=r.get("R_net"),
-                     pnl=round((r.get("R_net") or 0) * 100, 2), pct=r.get("bps_net") and round(r["bps_net"] / 100, 2))
+                     pnl=round((r.get("R_net") or 0) * 100, 2), pct=r.get("bps_net") and round(r["bps_net"] / 100, 2), bps_net=r.get("bps_net"))
         elif px.get(r["mkt"]) and units:
             t.update(now=px[r["mkt"]], pnl_open=round(units * sd * (px[r["mkt"]] - r["entry"]), 2))
         out.append(t)
         v4 = r.get("v4")
         if isinstance(v4, dict):                            # 2026-11-05: ETH / BTC v4 shown as its own paper trade (record-only)
             B4 = hot("break4h"); c4 = B4.V4[r["mkt"]]
-            w = {**t, "rule": "b4h_v4", "stop": v4.get("cur_stop") or v4.get("stop"), "targets": None, "status": v4["status"],
+            w = {**t, "rule": "b4h_v4", "stop": v4.get("cur_stop") or v4.get("stop"), "targets": None, "status": v4["status"], "_rk": v4.get("risk") or risk,
                  "target": round(r["entry"] + sd * v4["risk"], 2) if r["mkt"] == "BTC" else None,
                  "how": (f"{c4['label']} · " + (f"book HALF at 1R ({r['entry'] + sd * v4['risk']:,.0f}), stop to entry, rest trails 1.5 ATR · out after 2 days"
                          if r["mkt"] == "BTC" else "no fixed target · trail 1.5 ATR from +1R · out after 3 days"))}
             for k_ in ("exit", "exit_reason", "closed", "r", "pnl", "pct", "now", "pnl_open"):
                 w.pop(k_, None)
             if v4["status"] == "closed":
-                w.update(exit=v4.get("exit"), exit_reason=v4.get("exit_reason"), r=v4.get("R_net"), pnl=round((v4.get("R_net") or 0) * 100, 2),
+                w.update(exit=v4.get("exit"), exit_reason=v4.get("exit_reason"), r=v4.get("R_net"), pnl=round((v4.get("R_net") or 0) * 100, 2), bps_net=v4.get("bps_net"),
                          closed=_ist(pd.Timestamp(v4["closed_bar"]) + timedelta(hours=4)) if v4.get("closed_bar") else "")
             elif px.get(r["mkt"]) and v4.get("risk"):
                 u4 = 100.0 / v4["risk"]; booked = 0.5 * sd * v4["risk"] if v4.get("hit") else 0.0; left = 0.5 if v4.get("hit") else 1.0
@@ -100,7 +100,7 @@ def _b4h(hot, px):
             for k_ in ("exit", "exit_reason", "closed", "r", "pnl", "pct", "now", "pnl_open"):
                 h2.pop(k_, None)
             if hv["status"] == "closed":
-                h2.update(exit=hv.get("exit"), exit_reason=hv.get("exit_reason"), r=hv.get("R_net"), pnl=round((hv.get("R_net") or 0) * 100, 2),
+                h2.update(exit=hv.get("exit"), exit_reason=hv.get("exit_reason"), r=hv.get("R_net"), pnl=round((hv.get("R_net") or 0) * 100, 2), bps_net=hv.get("bps_net"),
                           closed=_ist(pd.Timestamp(hv["closed_bar"]) + timedelta(hours=4)) if hv.get("closed_bar") else "")
             elif px.get("BTC") and units:
                 booked = 0.5 * sd * risk if hv.get("hit") else 0.0; left = 0.5 if hv.get("hit") else 1.0
@@ -121,7 +121,30 @@ def _b4h(hot, px):
                 booked = sum((1 / 3) * sd * (x - r["entry"]) for x in gv["targets"][:gv.get("hit") or 0])
                 g2.update(now=px["GOLD"], pnl_open=round(units * (booked + left * sd * (px["GOLD"] - r["entry"])), 2))
             out.append(g2)
-    return out
+    return [_usdt(t) for t in out]
+
+
+# 2026-11-05 (Nikhil: "make currency trades now with 100 USDT per trade with 5x leverage for all crypto coins"): money view only -
+# every crypto 4H-break paper trade (and its record versions) = 100 USDT margin x 5 = 500 USDT position. P&L = 500 x net move after the
+# 0.14 % round-trip cost. Trade logic unchanged. Paper only - never orders. Gold / metals / commodities keep the $100-risk view.
+MARGIN_USDT, LEVERAGE, MM = 100.0, 5, 0.005           # MM = maintenance margin used for the liquidation estimate (isolated)
+NON_CRYPTO = {"GOLD", "SILVER", "COPPER", "ALUMINUM", "CRUDE", "NATGAS"}
+
+
+def _usdt(t):
+    rk = t.pop("_rk", None)
+    if t["key"] in NON_CRYPTO or not t.get("entry"):
+        return t
+    e = float(t["entry"]); pos = MARGIN_USDT * LEVERAGE; sd = 1 if t["side"] == "long" else -1
+    t.update(ccy="USDT", size=pos, margin=MARGIN_USDT, leverage=LEVERAGE, qty=round(pos / e, 6),
+             liq=round(e * (1 - sd * (1 / LEVERAGE - MM)), 4), risk_money=round(pos * rk / e, 2) if rk else None)
+    if t["status"] == "closed" and t.get("bps_net") is not None:
+        t["pnl"] = round(pos * t["bps_net"] / 1e4, 2); t["pct_margin"] = round(100 * t["pnl"] / MARGIN_USDT, 1)
+    elif t.get("pnl_open") is not None and rk:
+        t["pnl_open"] = round(t["pnl_open"] * rk / 100 * pos / e, 2)       # pnl_open was in $ for $100 risk -> USDT on a 500 position
+    lq = t["liq"]; lqs = f"{lq:,.0f}" if lq >= 1000 else f"{lq:,.2f}" if lq >= 1 else f"{lq:.5f}"
+    t["how"] = f"{MARGIN_USDT:.0f} USDT x {LEVERAGE} = {pos:.0f} USDT · liq ~{lqs} · " + (t.get("how") or "")
+    return t
 
 
 def _touch(hot):
@@ -241,7 +264,7 @@ def api(hot, px, keys=None, group=None) -> dict:
         if str(t.get("closed", ""))[:10] == today:
             z["today_n"] += 1; z["today_pnl"] = round(z["today_pnl"] + (t.get("pnl") or 0), 2)
     return {"open": op, "closed": cl[:60], "totals": list(tot.values()), "errors": errs,
-            "note": "Paper trades only (never orders). 4H break $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
+            "note": "Paper trades only (never orders). 4H break crypto = 100 USDT margin x 5 leverage = 500 USDT a trade, P&L after 0.14 % costs; Gold / metals / commodities $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
                     "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs. "
                     "Touch + DOM v1 = touch-minute signal with the DOM book agreeing, synthetic future, 1 lot, rupees after costs. "
                     "Strong Block Touch v2 = strong block (evening-before map) + touch-minute confirm, synthetic future, 1 lot, rupees after costs."}
