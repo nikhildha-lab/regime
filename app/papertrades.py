@@ -50,6 +50,18 @@ def _b4h(hot, px):
                     + f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "",
              "instrument": f"{NAME[r['mkt']]} perpetual" if r["mkt"] != "GOLD" else "Gold", "size": round(units * r["entry"]), "ccy": "$",
              "risk_money": 100, "status": r["status"], "why": r.get("dir", ""), "proven": r.get("proven")}
+        # 2026-11-05 (Nikhil: "4h break doesn't have a target and trailing SL?"): display only - show the CURRENT stop (it moves with the
+        # trail / targets) and say when trailing starts. Exits themselves are unchanged (break4h.py).
+        if r["status"] == "open":
+            cur = r.get("cur_stop") or r.get("stop"); t["stop"] = cur; t["stop0"] = r.get("stop")
+            if r.get("exit_mode") == "trail":
+                t["how"] = (f"no fixed target · trailing {r.get('trail_atr', 1.5)} ATR now ON, stop moved to {cur:,.2f}" if r.get("trailing") else
+                            f"no fixed target · trailing {r.get('trail_atr', 1.5)} ATR starts at +1R ({r['entry'] + sd * risk:,.2f})") + (f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "")
+            elif tg:
+                t["how"] = (f"3 targets {' / '.join(f'{x:,.0f}' for x in tg)} (a third each) · stop to breakeven after T1, to T1 after T2"
+                            + (f" · {r.get('hit')} hit, stop now {cur:,.2f}" if r.get("hit") else "") + (f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else ""))
+            elif r["mkt"] == "GOLD":
+                t["how"] = "no target, no trailing stop (tested that way) · block stop · out after 2 days" + (f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "")
         if r["status"] == "closed":
             t.update(exit=r.get("exit"), exit_reason=r.get("exit_reason"), closed=_ist(pd.Timestamp(r.get("closed_bar")) + timedelta(hours=4)) if r.get("closed_bar") else "", r=r.get("R_net"),
                      pnl=round((r.get("R_net") or 0) * 100, 2), pct=r.get("bps_net") and round(r["bps_net"] / 100, 2))
