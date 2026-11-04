@@ -1173,7 +1173,7 @@ function renderPage(){
   renderStamp(); renderRail();
   if (!deskReady){ initDesk(); deskReady = true; }
   renderTiles(); renderJournal(); renderAll();
-  renderIndiaDesk(); showView(VIEW);
+  renderIndiaDesk(); showView(window.CUR_TAB || VIEW);   // 2026-11-04: keep the tab you are on (VIEW holds the Intraday sub-market, so a data refresh jumped to Indian / Crypto)
 }
 /* ---------- India desk (2026-10-17): Overview + Desk analyst, read from DATA.india ---------- */
 const LB = l => l ? `<span class="lb ${l}">${l==="tested"?"▲ Tested":l==="watch"?"◆ Watch":"● Context"}</span>` : "";
