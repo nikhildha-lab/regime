@@ -125,7 +125,7 @@ Shown as context only (failed tests): FII / Pro / Client positions for direction
 ### 6c-2. Touch + DOM combo v1 (`app/touchtrades.py`, from 5 Nov 2026) – Nifty / Bank Nifty
 - Touch-minute signal (6b) **and** DOM book lean at entry: 20-level imbalance, last-30 s mean minus its 30-min median, ≥ +0.10 for a long / ≤ −0.10 for a short.
 - Same exits as 6b. Vehicle: **synthetic future** (buy ATM call + sell ATM put, next-week expiry), 1 lot, rupees after 4.5 pts (Nifty) / 12.5 pts (Bank Nifty).
-- History check `scripts/research/touch_dom_combo.py`: 7 usable days, only 4 combo trades, −₹4,551 – too few to judge. Forward paper test.
+- History check (`touch_dom_combo.py`, `touch_dom_review.py`): **failed** – combo −₹4,551 (4 trades, replay levels) and −₹24,361 (19 trades, live touch log); the book lean effect flips between indices and halves (luck p 0.2–0.8). Paper record only.
 - House rule: new index strategies are always graded as a synthetic future.
 
 ### 6d. Cross-section momentum basket (`app/xsecpaper.py`) – crypto

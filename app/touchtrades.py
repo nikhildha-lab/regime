@@ -38,7 +38,7 @@ SYN_PTS = {"NIFTY": 4.5, "BANKNIFTY": 12.5}        # 2026-11-04: synthetic futur
 # always use synthetic future"). Same touch-minute signal, PLUS the DOM book lean at entry: 20-level imbalance (futures, Dhan engine),
 # mean of the last 30 s minus its own 30-min median >= +0.10 for a long / <= -0.10 for a short. Same exits as the card.
 # Vehicle: synthetic future (buy ATM call + sell ATM put, next-week expiry), 1 lot, rupees after SYN_PTS. Paper only.
-# History check (scripts/research/touch_dom_combo.py, 7 usable days 21 Oct - 4 Nov): only 4 combo trades, -Rs 4,551 - far too few to judge.
+# History check (touch_dom_combo.py + touch_dom_review.py, 4 Nov): FAILED - combo -Rs 4,551 (4 trades, replay levels) and -Rs 24,361 (19 trades, live touch log); book lean flips sign between indices and halves (luck p 0.2-0.8).
 COMBO_FROM, DOM_LEAN = "2026-11-05", 0.10
 OF_SEC = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data", "of")
 

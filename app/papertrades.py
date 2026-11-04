@@ -20,7 +20,7 @@ RULES = {
     "b4h": {"label": "4H break", "edge": "tested edge (backtest 2023-26)"},
     "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
-    "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "new - history only 4 trades; forward paper test from 5 Nov"},
+    "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
 }
 
 

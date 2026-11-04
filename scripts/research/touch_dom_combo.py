@@ -131,9 +131,10 @@ def run():
                             elif mv >= R and trail == 0:
                                 sl = e; trail = 1
                         pts = side * (ex - e)
+                        f30 = B.iloc[i + 1:i + 31]; p30 = side * (f30.c.iloc[-1] - e) if len(f30) else 0.0     # plain 30-min fade, no stop
                         rows.append({"day": day, "sym": sym, "time": b.time, "level": name, "side": side, "td": round(td, 3),
                                      "lean": None if ln is None else round(ln, 3), "touch": touch_ok, "dom": dom_ok, "against": dom_against,
-                                     "pts": round(pts, 1), "net": round(pts - COST[sym], 1), "rs": round((pts - COST[sym]) * LOT[sym]), "exit": why})
+                                     "pts": round(pts, 1), "p30": round(p30, 1), "risk": round(R, 1), "net": round(pts - COST[sym], 1), "rs": round((pts - COST[sym]) * LOT[sym]), "exit": why})
                         break                                   # one level per bar
             prev = B
     return pd.DataFrame(rows), days
