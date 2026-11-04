@@ -43,6 +43,10 @@ INDEX = ("NIFTY", "BANKNIFTY")
 # 2026-11-04 (Nikhil trades the index with 0.6-delta next-week options, not futures): index cost = option round trip in index-point
 # terms (charges + 0.5 / 1.5 pt spread a side + up to 60 min decay) / (0.6 x lot). Was 6 / 14 pts (futures, too low for 2026 STT).
 COST_PTS = {"NIFTY": 5.5, "BANKNIFTY": 15.0}
+# 2026-11-04 (Nikhil: "also try synthetic future ... buy ATM call + sell ATM put"): record-only comparison. Delta ~1, decay nets out;
+# cost = 2 legs x 2 sides: brokerage 4 x Rs 20, STT 0.15 % of each sold premium, exchange, GST + spread 0.5 pt (Nifty) / 1.5 pt
+# (Bank Nifty) per leg per side, in index points / lot. Rough estimate, not measured fills. Main grading stays the 0.6-delta option.
+SYN_PTS = {"NIFTY": 4.5, "BANKNIFTY": 12.5}
 COST_STOCK = 0.0008
 BAND = {"index": 0.0004, "stock": 0.0010}          # zone padding as a share of price (Nifty ~10 pts, stock 0.1%)
 RISK_RS = 1000
@@ -216,6 +220,8 @@ def _close(tr, px, t, why):
     g = (px - tr["entry"]) * sd / tr["risk"]
     tr.update(status="closed", exit=round(px, 2), closed=f"{S['day']} {_hm(t)}", exit_reason=why,
               r_gross=round(g, 2), r=round(g - tr["cost_r"], 2), pnl=round((g - tr["cost_r"]) * RISK_RS))
+    if tr["key"] in SYN_PTS and tr.get("risk"):
+        tr["r_synth"] = round(g - SYN_PTS[tr["key"]] / tr["risk"], 2)
 
 
 def _open(k, setup, side, entry, stop, zone, zones, t, why):
@@ -441,12 +447,16 @@ def api() -> dict:
     lv = S.get("lv") or {}
     return {"open": [x for x in T if x["status"] == "open"], "today": [x for x in T if x["day"] == day][::-1],
             "record": {"all": _rec(cl), "plan": _rec([x for x in cl if x.get("plan")]), "by": {k: _rec(v) for k, v in sorted(by.items())},
-                       "sessions": len(days), "since": days[0] if days else None},
+                       "sessions": len(days), "since": days[0] if days else None,
+                       "index_vehicle": {"option_0.6d": _rec([x for x in cl if x["key"] in INDEX]),
+                                         "synthetic_future": _rec([{**x, "r": x["r_synth"], "pnl": round(x["r_synth"] * RISK_RS)}
+                                                                   for x in cl if x["key"] in INDEX and x.get("r_synth") is not None]),
+                                         "note": "Same index trades graded two ways: 0.6-delta next-week option (main) vs synthetic future (buy ATM call + sell ATM put). Costs are estimates."}},
             "levels": {k: len((v or {}).get("zones") or []) for k, v in lv.items() if isinstance(v, dict) and k in (S.get("inst") or {})},
             "at": S.get("at"), "took_s": S.get("took_s"), "err": S.get("err"),
             "rules": "HOLD = into a level from away, leaves the same side within 2 min, book leaning our way, aggressive side absorbed. "
                      "BREAK = out the far side and beyond for 30 s, book leaning the break way, index delta >= 15% / stock wall pulled 30%. "
                      "Target next level (>= 2R), stop beyond the level, out after 60 min or 15:20, entries 09:30-15:00. "
-                     "Costs: Nifty 6 pts, Bank Nifty 14 pts, stocks 0.08%. Rs 1,000 risk a trade.",
+                     "Costs: index = 0.6-delta next-week option, Nifty 5.5 pts / Bank Nifty 15 pts (synthetic future compared: 4.5 / 12.5 pts); stocks 0.08%. Rs 1,000 risk a trade.",
             "label": LABEL, "edge": EDGE, "late_levels_n": sum(1 for x in T if x.get("late_levels")),
             "note": "Paper only - never orders. Index trades opened before that day's levels were first read (restart mid-day) are kept but not counted (look-ahead). Judge after 30-40 sessions: positive after costs in both halves, 30+ trades."}

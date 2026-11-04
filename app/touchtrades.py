@@ -32,7 +32,8 @@ LOT = {"NIFTY": 65, "BANKNIFTY": 30}
 # Was 18 / 45 pts (1-lot futures). Rough estimate, not measured fills.
 COST_PTS = {"NIFTY": 5.5, "BANKNIFTY": 15.0}
 MIN_DAYS_LEFT = 7                                  # 2026-11-04: next-week expiry (>= 7 days left) - less decay; Bank Nifty = nearest monthly with 7+ days
-SPREAD_PTS = {"NIFTY": 0.5, "BANKNIFTY": 1.5}      # 2026-11-04: assumed bid / ask + slippage per side, option premium points
+SPREAD_PTS = {"NIFTY": 0.5, "BANKNIFTY": 1.5}
+SYN_PTS = {"NIFTY": 4.5, "BANKNIFTY": 12.5}        # 2026-11-04: synthetic future (buy ATM call + sell ATM put) round trip, index points - record-only comparison      # 2026-11-04: assumed bid / ask + slippage per side, option premium points
 NAME = {"NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty"}
 
 
@@ -325,6 +326,7 @@ def tick(t: datetime, spots: dict) -> bool:
                 c["prem_now"] = prem
             if why:
                 c.update(status="closed", exit_reason=why, closed=hm, spot_exit=round(px, 1), spot_pts=round(sd * (px - e), 1))
+                c["synth_rs_net"] = round((c["spot_pts"] - SYN_PTS[c["key"]]) * c["lot"])        # same exit, synthetic future instead
                 if c.get("option") and c.get("prem_now"):
                     b, s_ = c["prem_entry"] * c["lot"], c["prem_now"] * c["lot"]
                     cs = _costs(b, s_, c["key"], c["lot"])
@@ -351,6 +353,10 @@ def cards_api() -> dict:
             z = [c["var"][vn]["rs_net"] for c in allc if c["key"] == k and c.get("var", {}).get(vn, {}).get("rs_net") is not None]
             if z:
                 vs[f"{k} {vn}"] = {"n": len(z), "rs_net": sum(z), "win_pct": round(100 * sum(x > 0 for x in z) / len(z))}
+    for k in ("NIFTY", "BANKNIFTY"):
+        z = [c["synth_rs_net"] for c in cl if c["key"] == k and c.get("synth_rs_net") is not None]
+        if z and k in sc:
+            sc[k]["synthetic"] = {"n": len(z), "rs_net": sum(z), "win_pct": round(100 * sum(x > 0 for x in z) / len(z))}
     today = datetime.now().strftime("%Y-%m-%d")
     return {"variants": vs, "cards": [c for c in allc if c["day"] == today][::-1], "recent": cl[-10:][::-1], "scorecard": sc,
             "price_note": "Option prices are estimates: Black-Scholes with the IV from the option-chain snapshot at entry, moved with spot and time. Real fills differ (bid / ask, IV changes).",
