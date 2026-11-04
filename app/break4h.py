@@ -136,6 +136,21 @@ _C: dict = {}
 VARIANTS = {"2% stop, trail 1.5 ATR": (0.02, "trail", 1.5), "2% stop, trail 3 ATR": (0.02, "trail", 3.0), "block stop, trail 3 ATR": (None, "trail", 3.0)}
 
 
+# 2026-11-05 (Nikhil: "I need rules for trailing logic else targets ... how will I book profits"): GOLD v2 = a NEW record-only version
+# on every Gold v1 trade (v1 itself unchanged): 3 targets 1R / 2R / 3R, a third each (hit by a 4H high / low), stop to breakeven after
+# T1 and to T1 after T2, the rest out after 2 days. History (scripts/research/b4h_exit_v4.py, 32 rebuilt Gold trades 2024-26):
+# v1 net -0.08 % a trade, v2 +0.05 %, worst drawdown -10.3 % -> -4.8 %, win 34 % -> 53 %; halves mixed (-0.13 / +0.24 vs -0.06 / -0.11). Too few to judge.
+GOLD_V2 = "Gold v2 · 3 targets 1R/2R/3R"
+
+
+def _gold_v2(r, after):
+    e, s_, st = r["entry"], r["side"], r["stop"]; R_ = abs(e - st)
+    v = {"entry": e, "side": s_, "stop": st, "risk": R_, "exit_mode": "targets", "targets": [round(e + s_ * k * R_, 4) for k in (1, 2, 3)], "status": "open"}
+    _manage(v, after)
+    keep = ("status", "exit", "exit_reason", "bps", "bps_net", "R", "R_net", "cur_stop", "hit", "targets", "closed_bar")
+    return {k2: (round(v[k2], 2) if isinstance(v.get(k2), float) else v.get(k2)) for k2 in keep}
+
+
 def _variants(r, after):
     out = {}
     for nm, (pct, mode, k) in VARIANTS.items():
@@ -270,6 +285,15 @@ def tick(force=False) -> dict:
                 r["var"] = vv; changed = True
             if all(x["status"] == "closed" for x in vv.values()):
                 r["var_done"] = True; changed = True
+        # Gold v2 (targets) - record-only, never changes the v1 trade
+        for r in rows:
+            if mkt != "GOLD" or r["mkt"] != "GOLD" or r.get("rule", "v1") != "v1" or (r.get("gv2_done") and r.get("gv2_fix")):
+                continue                                     # gv2_fix: recompute rows graded before the 5 Nov fix (wrong market's bars)
+            gv = _gold_v2(r, done[done.index > pd.Timestamp(r["bar"])])
+            if gv != r.get("gv2") or not r.get("gv2_fix"):
+                r["gv2"] = gv; r["gv2_fix"] = 1; r["gv2_done"] = gv["status"] == "closed"; changed = True
+            if gv["status"] == "closed":
+                r["gv2_done"] = True; changed = True
         # manage open trades
         for r in rows:
             if r["mkt"] != mkt or r["status"] != "open":
@@ -393,6 +417,9 @@ def api() -> dict:
             z = [r["var"][nm] for r in closed if r["mkt"] == mkt and r.get("rule") == "v3" and r.get("var", {}).get(nm, {}).get("status") == "closed"]
             if z:
                 vsc[f"{mkt} {nm}"] = {"n": len(z), "avg_bps_net": round(sum(x["bps_net"] for x in z) / len(z), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in z) / len(z))}
+    zg = [r["gv2"] for r in closed if r["mkt"] == "GOLD" and r.get("gv2", {}).get("status") == "closed"]
+    if zg:
+        vsc[GOLD_V2] = {"n": len(zg), "avg_bps_net": round(sum(x["bps_net"] for x in zg) / len(zg), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in zg) / len(zg))}
     for rule in ("v1", "v2", "v3", "skip"):
         for mkt in MKTS:
             z = [r for r in closed if r["mkt"] == mkt and r.get("rule", "v1") == rule]

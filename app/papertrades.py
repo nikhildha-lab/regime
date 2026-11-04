@@ -18,6 +18,7 @@ NAME = {"BTC": "BTC", "ETH": "ETH", "GOLD": "Gold", "NIFTY": "Nifty", "BANKNIFTY
         "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}   # 2026-11-04: 4H break forward test on more coins
 RULES = {
     "b4h": {"label": "4H break", "edge": "tested edge (backtest 2023-26)"},
+    "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
     "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
@@ -68,6 +69,21 @@ def _b4h(hot, px):
         elif px.get(r["mkt"]) and units:
             t.update(now=px[r["mkt"]], pnl_open=round(units * sd * (px[r["mkt"]] - r["entry"]), 2))
         out.append(t)
+        gv = r.get("gv2")
+        if r["mkt"] == "GOLD" and gv:                       # 2026-11-05: Gold v2 (targets) shown as its own paper trade
+            g2 = {**t, "rule": "b4h_g2", "target": gv["targets"][-1], "targets": gv["targets"], "stop": gv.get("cur_stop") or r.get("stop"),
+                  "how": f"3 targets {' / '.join(f'{x:,.1f}' for x in gv['targets'])} (a third each) · stop to breakeven after T1, to T1 after T2 · out after 2 days"
+                         + (f" · {gv['hit']} target(s) hit" if gv.get("hit") else ""), "status": gv["status"]}
+            for k_ in ("exit", "exit_reason", "closed", "r", "pnl", "pct", "now", "pnl_open"):
+                g2.pop(k_, None)
+            if gv["status"] == "closed":
+                g2.update(exit=gv.get("exit"), exit_reason=gv.get("exit_reason"), r=gv.get("R_net"), pnl=round((gv.get("R_net") or 0) * 100, 2),
+                          closed=_ist(pd.Timestamp(gv["closed_bar"]) + timedelta(hours=4)) if gv.get("closed_bar") else "")
+            elif px.get("GOLD") and units:
+                left = 1 - (gv.get("hit") or 0) / 3
+                booked = sum((1 / 3) * sd * (x - r["entry"]) for x in gv["targets"][:gv.get("hit") or 0])
+                g2.update(now=px["GOLD"], pnl_open=round(units * (booked + left * sd * (px["GOLD"] - r["entry"])), 2))
+            out.append(g2)
     return out
 
 
