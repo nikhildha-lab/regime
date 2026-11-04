@@ -21,7 +21,7 @@ Setups (rules fixed in advance, before any result was seen):
   Both   target = the next level in the trade direction, at least 2R (else 2R); out after 60 min or at 15:20;
          new trades 09:30-15:00 only; one open trade per market; each level / setup / side fires once a day;
          at most 4 trades per market a day. Fill = mid price; costs taken off at grading.
-Costs   : Nifty 5.5 pts, Bank Nifty 15 pts round trip (0.6-delta next-week option, index-point equivalent); stocks 0.08% (brokerage + STT + charges + half the spread x2).
+Costs   : index = synthetic future 1 lot, Nifty 4.5 pts / Bank Nifty 12.5 pts round trip, P&L in Rs (0.6-delta option 5.5 / 15 pts kept for comparison); stocks 0.08% (brokerage + STT + charges + half the spread x2).
 Money   : Rs 1,000 risked per trade (Rs = R after costs x 1,000). The "plan account" line also applies the plan's
           daily limits (first 3 trades of the day, stop for the day at -2R).
 Judged  : after 30-40 sessions: positive after costs in both halves with 30+ trades (dom-strategy-test-plan.md).
@@ -47,6 +47,10 @@ COST_PTS = {"NIFTY": 5.5, "BANKNIFTY": 15.0}
 # cost = 2 legs x 2 sides: brokerage 4 x Rs 20, STT 0.15 % of each sold premium, exchange, GST + spread 0.5 pt (Nifty) / 1.5 pt
 # (Bank Nifty) per leg per side, in index points / lot. Rough estimate, not measured fills. Main grading stays the 0.6-delta option.
 SYN_PTS = {"NIFTY": 4.5, "BANKNIFTY": 12.5}
+# 2026-11-04 (Nikhil: "DOM index should also use synthetic futures and share profits in currency"): index trades are now graded
+# as a SYNTHETIC FUTURE (buy ATM call + sell ATM put, next-week expiry), 1 lot, P&L in Rs = (points - SYN_PTS) x lot.
+# The 0.6-delta option result is kept beside it for comparison (r_opt, pnl_opt = 0.6 x lot x (points - COST_PTS)).
+LOT = {"NIFTY": 65, "BANKNIFTY": 30}
 COST_STOCK = 0.0008
 BAND = {"index": 0.0004, "stock": 0.0010}          # zone padding as a share of price (Nifty ~10 pts, stock 0.1%)
 RISK_RS = 1000
@@ -211,8 +215,17 @@ def _rows():
 
 # ------------------------------------------------------------------ engine
 def _cost_r(k, entry, risk):
-    c = COST_PTS[k] if k in INDEX else entry * COST_STOCK
+    c = SYN_PTS[k] if k in INDEX else entry * COST_STOCK          # index: synthetic future (main) since 4 Nov
     return c / risk if risk else 0.0
+
+
+def _index_money(tr, g):
+    """Index trade in rupees, 1 lot: synthetic future (main) and the 0.6-delta option (comparison)."""
+    k = tr["key"]; pts = g * tr["risk"]
+    tr.update(vehicle="synthetic future (ATM call + short ATM put), 1 lot", lot=LOT[k], pts_gross=round(pts, 1),
+              pts_net=round(pts - SYN_PTS[k], 1), cost_r=round(SYN_PTS[k] / tr["risk"], 3),
+              r=round(g - SYN_PTS[k] / tr["risk"], 2), pnl=round((pts - SYN_PTS[k]) * LOT[k]), r_synth=round(g - SYN_PTS[k] / tr["risk"], 2),
+              r_opt=round(g - COST_PTS[k] / tr["risk"], 2), pnl_opt=round(0.6 * LOT[k] * (pts - COST_PTS[k])))
 
 
 def _close(tr, px, t, why):
@@ -220,8 +233,8 @@ def _close(tr, px, t, why):
     g = (px - tr["entry"]) * sd / tr["risk"]
     tr.update(status="closed", exit=round(px, 2), closed=f"{S['day']} {_hm(t)}", exit_reason=why,
               r_gross=round(g, 2), r=round(g - tr["cost_r"], 2), pnl=round((g - tr["cost_r"]) * RISK_RS))
-    if tr["key"] in SYN_PTS and tr.get("risk"):
-        tr["r_synth"] = round(g - SYN_PTS[tr["key"]] / tr["risk"], 2)
+    if tr["key"] in INDEX and tr.get("risk"):
+        _index_money(tr, g)
 
 
 def _open(k, setup, side, entry, stop, zone, zones, t, why):
@@ -448,15 +461,14 @@ def api() -> dict:
     return {"open": [x for x in T if x["status"] == "open"], "today": [x for x in T if x["day"] == day][::-1],
             "record": {"all": _rec(cl), "plan": _rec([x for x in cl if x.get("plan")]), "by": {k: _rec(v) for k, v in sorted(by.items())},
                        "sessions": len(days), "since": days[0] if days else None,
-                       "index_vehicle": {"option_0.6d": _rec([x for x in cl if x["key"] in INDEX]),
-                                         "synthetic_future": _rec([{**x, "r": x["r_synth"], "pnl": round(x["r_synth"] * RISK_RS)}
-                                                                   for x in cl if x["key"] in INDEX and x.get("r_synth") is not None]),
-                                         "note": "Same index trades graded two ways: 0.6-delta next-week option (main) vs synthetic future (buy ATM call + sell ATM put). Costs are estimates."}},
+                       "index_vehicle": {"option_0.6d": _rec([{**x, "r": x["r_opt"], "pnl": x["pnl_opt"]} for x in cl if x["key"] in INDEX and x.get("r_opt") is not None]),
+                                         "synthetic_future": _rec([x for x in cl if x["key"] in INDEX]),
+                                         "note": "Index trades, 1 lot, in rupees. Main = synthetic future (buy ATM call + sell ATM put). Comparison = 0.6-delta next-week option. Costs are estimates."}},
             "levels": {k: len((v or {}).get("zones") or []) for k, v in lv.items() if isinstance(v, dict) and k in (S.get("inst") or {})},
             "at": S.get("at"), "took_s": S.get("took_s"), "err": S.get("err"),
             "rules": "HOLD = into a level from away, leaves the same side within 2 min, book leaning our way, aggressive side absorbed. "
                      "BREAK = out the far side and beyond for 30 s, book leaning the break way, index delta >= 15% / stock wall pulled 30%. "
                      "Target next level (>= 2R), stop beyond the level, out after 60 min or 15:20, entries 09:30-15:00. "
-                     "Costs: index = 0.6-delta next-week option, Nifty 5.5 pts / Bank Nifty 15 pts (synthetic future compared: 4.5 / 12.5 pts); stocks 0.08%. Rs 1,000 risk a trade.",
+                     "Index = synthetic future (buy ATM call + sell ATM put, next-week expiry), 1 lot (Nifty 65, Bank Nifty 30), P&L in Rs after about 4.5 pts (Nifty) / 12.5 pts (Bank Nifty) round-trip cost; 0.6-delta option shown for comparison. Stocks: Rs 1,000 risk a trade, 0.08% cost.",
             "label": LABEL, "edge": EDGE, "late_levels_n": sum(1 for x in T if x.get("late_levels")),
             "note": "Paper only - never orders. Index trades opened before that day's levels were first read (restart mid-day) are kept but not counted (look-ahead). Judge after 30-40 sessions: positive after costs in both halves, 30+ trades."}

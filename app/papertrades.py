@@ -87,7 +87,7 @@ def _dom(hot):
     for x in [t for t in (D.trades() or []) if t.get("plan")]:
         t = {"rule": "dom", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
              "how": f"{x['setup']} · target {x['target_note']} · out after 60 min or 15:20",
-             "instrument": NAME.get(x["key"], x["key"]) + (" futures" if x.get("kind") == "futures" else " (stock)"),
+             "instrument": NAME.get(x["key"], x["key"]) + (" synthetic future, 1 lot" if x["key"] in D.INDEX else " (stock)"),
              "size": None, "ccy": "₹", "risk_money": D.RISK_RS, "status": x["status"], "why": x.get("why", "")}
         if x["status"] == "closed":
             t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
@@ -134,4 +134,4 @@ def api(hot, px, keys=None, group=None) -> dict:
             z["today_n"] += 1; z["today_pnl"] = round(z["today_pnl"] + (t.get("pnl") or 0), 2)
     return {"open": op, "closed": cl[:60], "totals": list(tot.values()), "errors": errs,
             "note": "Paper trades only (never orders). 4H break $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
-                    "(premiums are estimates). DOM hold / break = Rs 1,000 risked a trade, after costs."}
+                    "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs."}
