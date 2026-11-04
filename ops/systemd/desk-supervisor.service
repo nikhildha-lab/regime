@@ -1,0 +1,16 @@
+# Runs ops/start_desk.sh, which keeps the Dhan keep-alive, Nifty tracker and order-flow engine up in NSE hours.
+# Use this OR separate units; do not run both market-pulse.service and the supervisor's Market Pulse start
+# (the supervisor only starts Market Pulse when port 8050 is down, so they do not clash).
+[Unit]
+Description=Market Pulse desk supervisor
+After=network-online.target market-pulse.service
+
+[Service]
+User=marketpulse
+WorkingDirectory=/opt/market-pulse
+ExecStart=/bin/bash ops/start_desk.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# Core
+kiteconnect>=5.0.1          # Zerodha Kite Connect REST + KiteTicker websocket
+fastapi>=0.110.0            # dashboard server
+uvicorn[standard]>=0.29.0   # ASGI server + websockets
+jinja2>=3.1.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Optional alerts (Telegram uses plain requests, no extra dep needed)
+# Desktop notifications on macOS use osascript (built-in), no dep needed

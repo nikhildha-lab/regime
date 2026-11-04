@@ -1,0 +1,18 @@
+# Example unit – adjust User and paths. Install: sudo cp to /etc/systemd/system/ && sudo systemctl enable --now market-pulse
+[Unit]
+Description=Market Pulse dashboard (paper / indications only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=marketpulse
+WorkingDirectory=/opt/market-pulse
+EnvironmentFile=/opt/market-pulse/.env
+ExecStart=/opt/market-pulse/.venv/bin/python app/server.py --port 8050 --every 5 --no-browser
+Restart=always
+RestartSec=20
+StandardOutput=append:/opt/market-pulse/logs/market_pulse.log
+StandardError=append:/opt/market-pulse/logs/market_pulse.log
+
+[Install]
+WantedBy=multi-user.target

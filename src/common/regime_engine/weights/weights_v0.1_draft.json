@@ -1,0 +1,375 @@
+{
+  "version": "v0.1_draft",
+  "status": "DRAFT - unreviewed. Not for live trading until a named reviewer signs off (BRD \u00a76.5).",
+  "created_at": "2026-10-03T22:24:37",
+  "method": "ridge on group scores vs vol-scaled forward return, expanding walk-forward, purged + embargoed",
+  "profiles": {
+    "daily": {
+      "groups": {
+        "TREND": 0.10668702014726594,
+        "VOLATILITY": -0.37550736239709964,
+        "BREADTH": -0.5178056174556344
+      },
+      "within_group": "equal",
+      "horizon_bars": 5,
+      "label_threshold": 0.15,
+      "confidence": {
+        "high": 0.45,
+        "medium": 0.25
+      }
+    },
+    "4h": {
+      "groups": {
+        "TREND": 0.3535871929629596,
+        "VOLATILITY": -0.15683139151834335,
+        "BREADTH": -0.48958141551869716
+      },
+      "within_group": "equal",
+      "horizon_bars": 4,
+      "label_threshold": 0.15,
+      "confidence": {
+        "high": 0.45,
+        "medium": 0.25
+      }
+    }
+  },
+  "validation": {
+    "daily": {
+      "scoreboard": {
+        "n_scored_calls": 624,
+        "hit_rate_pct": 34.5,
+        "baseline_persistence_pct": 32.9,
+        "baseline_always_bullish_pct": 31.6,
+        "by_label": {
+          "Bearish": {
+            "n": 254,
+            "hit_rate_pct": 28.7
+          },
+          "Bullish": {
+            "n": 174,
+            "hit_rate_pct": 32.8
+          },
+          "Neutral": {
+            "n": 196,
+            "hit_rate_pct": 43.4
+          }
+        },
+        "by_confidence": {
+          "High": {
+            "n": 77,
+            "hit_rate_pct": 36.4
+          },
+          "Low": {
+            "n": 299,
+            "hit_rate_pct": 36.8
+          },
+          "Medium": {
+            "n": 248,
+            "hit_rate_pct": 31.0
+          }
+        },
+        "per_class": {
+          "Bullish": {
+            "precision_pct": 32.8,
+            "recall_pct": 28.9,
+            "n_called": 174
+          },
+          "Bearish": {
+            "precision_pct": 28.7,
+            "recall_pct": 37.4,
+            "n_called": 254
+          },
+          "Neutral": {
+            "precision_pct": 43.4,
+            "recall_pct": 36.6,
+            "n_called": 196
+          }
+        },
+        "actual_mix_pct": {
+          "Neutral": 37.2,
+          "Bullish": 31.6,
+          "Bearish": 31.2
+        }
+      },
+      "n_folds": 11,
+      "fold_weights": [
+        {
+          "test_start": "2024-03-04 00:00:00",
+          "test_end": "2024-06-03 00:00:00",
+          "weights": {
+            "TREND": 0.6041104365817119,
+            "VOLATILITY": 0.39588956341828807,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-06-04 00:00:00",
+          "test_end": "2024-08-29 00:00:00",
+          "weights": {
+            "TREND": 0.39684491973684205,
+            "VOLATILITY": 0.603155080263158,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-08-30 00:00:00",
+          "test_end": "2024-11-26 00:00:00",
+          "weights": {
+            "TREND": 0.49303922875957934,
+            "VOLATILITY": 0.5069607712404207,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-11-27 00:00:00",
+          "test_end": "2025-02-18 00:00:00",
+          "weights": {
+            "TREND": 0.3654520655602832,
+            "VOLATILITY": 0.6345479344397169,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2025-02-19 00:00:00",
+          "test_end": "2025-05-22 00:00:00",
+          "weights": {
+            "TREND": 0.164549582137887,
+            "VOLATILITY": 0.047536252175521605,
+            "BREADTH": -0.7879141656865915
+          }
+        },
+        {
+          "test_start": "2025-05-23 00:00:00",
+          "test_end": "2025-08-14 00:00:00",
+          "weights": {
+            "TREND": 0.021559316253783833,
+            "VOLATILITY": -0.4617614204491588,
+            "BREADTH": -0.5166792632970573
+          }
+        },
+        {
+          "test_start": "2025-08-18 00:00:00",
+          "test_end": "2025-11-13 00:00:00",
+          "weights": {
+            "TREND": 0.10197143284974204,
+            "VOLATILITY": -0.49352830132526515,
+            "BREADTH": -0.4045002658249928
+          }
+        },
+        {
+          "test_start": "2025-11-14 00:00:00",
+          "test_end": "2026-02-09 00:00:00",
+          "weights": {
+            "TREND": -0.10748537544432812,
+            "VOLATILITY": -0.4562926592136947,
+            "BREADTH": -0.43622196534197716
+          }
+        },
+        {
+          "test_start": "2026-02-10 00:00:00",
+          "test_end": "2026-05-12 00:00:00",
+          "weights": {
+            "TREND": -0.05060573448493453,
+            "VOLATILITY": -0.4714983419387226,
+            "BREADTH": -0.4778959235763428
+          }
+        },
+        {
+          "test_start": "2026-05-13 00:00:00",
+          "test_end": "2026-08-06 00:00:00",
+          "weights": {
+            "TREND": 0.10668702014726594,
+            "VOLATILITY": -0.37550736239709964,
+            "BREADTH": -0.5178056174556344
+          }
+        },
+        {
+          "test_start": "2026-08-07 00:00:00",
+          "test_end": "2026-09-17 00:00:00",
+          "weights": {
+            "TREND": 0.10668702014726594,
+            "VOLATILITY": -0.37550736239709964,
+            "BREADTH": -0.5178056174556344
+          }
+        }
+      ],
+      "data_range": [
+        "2023-01-18 00:00:00",
+        "2026-09-17 00:00:00"
+      ]
+    },
+    "4h": {
+      "scoreboard": {
+        "n_scored_calls": 1342,
+        "hit_rate_pct": 32.2,
+        "baseline_persistence_pct": 35.8,
+        "baseline_always_bullish_pct": 32.2,
+        "by_label": {
+          "Bearish": {
+            "n": 392,
+            "hit_rate_pct": 31.9
+          },
+          "Bullish": {
+            "n": 508,
+            "hit_rate_pct": 29.9
+          },
+          "Neutral": {
+            "n": 442,
+            "hit_rate_pct": 35.1
+          }
+        },
+        "by_confidence": {
+          "High": {
+            "n": 130,
+            "hit_rate_pct": 27.7
+          },
+          "Low": {
+            "n": 773,
+            "hit_rate_pct": 31.6
+          },
+          "Medium": {
+            "n": 439,
+            "hit_rate_pct": 34.6
+          }
+        },
+        "per_class": {
+          "Bullish": {
+            "precision_pct": 29.9,
+            "recall_pct": 35.2,
+            "n_called": 508
+          },
+          "Bearish": {
+            "precision_pct": 31.9,
+            "recall_pct": 30.4,
+            "n_called": 392
+          },
+          "Neutral": {
+            "precision_pct": 35.1,
+            "recall_pct": 31.1,
+            "n_called": 442
+          }
+        },
+        "actual_mix_pct": {
+          "Neutral": 37.2,
+          "Bullish": 32.2,
+          "Bearish": 30.6
+        }
+      },
+      "n_folds": 12,
+      "fold_weights": [
+        {
+          "test_start": "2023-12-29 13:15:00+05:30",
+          "test_end": "2024-03-26 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.8500879402354649,
+            "VOLATILITY": 0.14991205976453517,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-03-27 09:15:00+05:30",
+          "test_end": "2024-06-26 09:15:00+05:30",
+          "weights": {
+            "TREND": 0.8093647615264747,
+            "VOLATILITY": 0.19063523847352523,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-06-26 13:15:00+05:30",
+          "test_end": "2024-09-20 09:15:00+05:30",
+          "weights": {
+            "TREND": 0.6514434131569182,
+            "VOLATILITY": -0.3485565868430817,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-09-20 13:15:00+05:30",
+          "test_end": "2024-12-18 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.8607194251070044,
+            "VOLATILITY": -0.1392805748929956,
+            "BREADTH": 0.0
+          }
+        },
+        {
+          "test_start": "2024-12-19 09:15:00+05:30",
+          "test_end": "2025-03-13 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.3713557812123921,
+            "VOLATILITY": -0.22945091422634523,
+            "BREADTH": -0.39919330456126273
+          }
+        },
+        {
+          "test_start": "2025-03-17 09:15:00+05:30",
+          "test_end": "2025-06-13 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.35128631534457927,
+            "VOLATILITY": -0.22161944193089284,
+            "BREADTH": -0.42709424272452784
+          }
+        },
+        {
+          "test_start": "2025-06-16 09:15:00+05:30",
+          "test_end": "2025-09-09 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.3603677978977568,
+            "VOLATILITY": -0.15324522930036966,
+            "BREADTH": -0.48638697280187365
+          }
+        },
+        {
+          "test_start": "2025-09-10 09:15:00+05:30",
+          "test_end": "2025-12-05 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.26305251352943704,
+            "VOLATILITY": -0.3808922443179908,
+            "BREADTH": -0.3560552421525723
+          }
+        },
+        {
+          "test_start": "2025-12-08 09:15:00+05:30",
+          "test_end": "2026-03-04 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.2491808898211474,
+            "VOLATILITY": -0.32699407950695414,
+            "BREADTH": -0.42382503067189853
+          }
+        },
+        {
+          "test_start": "2026-03-05 09:15:00+05:30",
+          "test_end": "2026-06-04 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.2769366697810425,
+            "VOLATILITY": -0.2345437471867451,
+            "BREADTH": -0.48851958303221243
+          }
+        },
+        {
+          "test_start": "2026-06-05 09:15:00+05:30",
+          "test_end": "2026-08-28 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.3535871929629596,
+            "VOLATILITY": -0.15683139151834335,
+            "BREADTH": -0.48958141551869716
+          }
+        },
+        {
+          "test_start": "2026-08-31 09:15:00+05:30",
+          "test_end": "2026-09-17 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.3535871929629596,
+            "VOLATILITY": -0.15683139151834335,
+            "BREADTH": -0.48958141551869716
+          }
+        }
+      ],
+      "data_range": [
+        "2023-01-09 13:15:00+05:30",
+        "2026-09-17 13:15:00+05:30"
+      ]
+    }
+  }
+}

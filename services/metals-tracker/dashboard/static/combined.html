@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Trading — Crypto · Nifty</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#12151d; --panel2:#171b25; --line:rgba(255,255,255,.065);
+    --line2:rgba(255,255,255,.13); --ink:#e8ecf2; --muted:#8e99ab; --faint:#5d6778;
+    --accent:#4f8ff7; --accent-bg:rgba(79,143,247,.13); --up:#2fb46c; --up-bg:rgba(47,180,108,.13);
+  }
+  :root[data-theme="light"]{
+    --bg:#f3f5f8; --panel:#ffffff; --panel2:#f6f8fb; --line:rgba(16,24,40,.09);
+    --line2:rgba(16,24,40,.16); --ink:#182030; --muted:#5f6b7e; --faint:#97a1b2;
+    --accent:#2a6fd0; --accent-bg:rgba(42,111,208,.10); --up:#0e8a42; --up-bg:rgba(14,138,66,.10);
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:13px/1.5 "Inter",-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:10px;padding:9px 20px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:12px}
+  .logo{width:28px;height:28px;border-radius:8px;background:var(--accent-bg);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+  h1{font-size:13px;margin:0;font-weight:700;letter-spacing:.05em;color:var(--ink)}
+  .tab{font-size:12px;font-weight:650;padding:6px 16px;border-radius:9px;border:1px solid transparent;
+       background:transparent;color:var(--muted);cursor:pointer;font-family:inherit}
+  .tab:hover{color:var(--ink)}
+  .tab.active{background:var(--accent-bg);color:var(--accent)}
+  .hint{margin-left:auto;font-size:11px;color:var(--faint)}
+  .tbtn{width:29px;height:29px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--muted);font-size:13px;cursor:pointer}
+  .tbtn:hover{color:var(--ink);border-color:var(--line2)}
+  .wrap{flex:1;position:relative}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;background:var(--bg)}
+  iframe.show{display:block}
+  .off{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+       gap:12px;background:var(--bg);color:var(--muted);text-align:center;padding:24px}
+  .off.show{display:flex}
+  .off b{color:var(--ink);font-size:16px;font-weight:700}
+  .off code{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:3px 10px;color:var(--accent);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">◆</span><h1>TRADING</h1></div>
+  <button class="tab" id="t-crypto" onclick="show('crypto')">CRYPTO · BTC ETH SOL</button>
+  <button class="tab" id="t-nifty"  onclick="show('nifty')">NIFTY · BANKNIFTY</button>
+  <span class="hint" id="hint"></span>
+  <button class="tbtn" id="tbtn" title="switch theme">☀</button>
+</header>
+<div class="wrap">
+  <iframe id="f-crypto"></iframe>
+  <iframe id="f-nifty"></iframe>
+  <div class="off" id="off-crypto"><b>Crypto tracker is not running</b>
+    <span>Double-click <code>Trading-Dashboard</code> on the Desktop to start it.</span>
+    <span style="font-size:11px">checking every 10s — this tab loads automatically once it&rsquo;s up</span></div>
+  <div class="off" id="off-nifty"><b>Nifty tracker is not running</b>
+    <span>It runs market hours only. In the morning: <code>Refresh-Kite-Token</code> → <code>Start-Tracker-LIVE</code></span>
+    <span style="font-size:11px">checking every 10s — this tab loads automatically once it&rsquo;s up</span></div>
+</div>
+<script>
+const host=location.hostname||"localhost";
+const SRC={crypto:`http://${host}:8898/`, nifty:`http://${host}:8899/`};
+const HINT={crypto:"24/7 · perps", nifty:"market hours · needs the Nifty tracker running (:8899)"};
+const up={crypto:null,nifty:null};   // null=unknown, true/false=last probe
+let cur="crypto";
+function render(){
+  for(const k of ["crypto","nifty"]){
+    const f=document.getElementById("f-"+k), t=document.getElementById("t-"+k),
+          o=document.getElementById("off-"+k);
+    const on=(k===cur), alive=up[k]!==false;
+    if(on && alive && !f.src) f.src=SRC[k];     // lazy-load once reachable
+    f.classList.toggle("show",on&&alive);
+    o.classList.toggle("show",on&&!alive);
+    t.classList.toggle("active",on);
+  }
+  document.getElementById("hint").textContent=HINT[cur];
+}
+function probe(k){
+  return fetch(SRC[k],{mode:"no-cors",cache:"no-store"})
+    .then(()=>{ const was=up[k]; up[k]=true;
+      if(was===false){ const f=document.getElementById("f-"+k); if(f.src) f.src=SRC[k]; } })
+    .catch(()=>{ up[k]=false; })
+    .then(render);
+}
+function show(which){
+  cur=which; render(); probe(which);
+  try{localStorage.setItem("tab",which);}catch(e){}
+}
+setInterval(()=>probe(cur),10000);
+function broadcastTheme(t){
+  for(const k of ["crypto","nifty"]){
+    const f=document.getElementById("f-"+k);
+    if(f && f.src){ try{ f.contentWindow.postMessage({theme:t},"*"); }catch(e){} }
+  }
+}
+function setTheme(t){ document.documentElement.dataset.theme=t;
+  try{localStorage.setItem("theme",t);}catch(e){}
+  document.getElementById("tbtn").textContent=(t==="light"?"☾":"☀");
+  broadcastTheme(t); }
+document.getElementById("tbtn").onclick=()=>
+  setTheme(document.documentElement.dataset.theme==="light"?"dark":"light");
+document.getElementById("tbtn").textContent=(document.documentElement.dataset.theme==="light"?"☾":"☀");
+// a freshly loaded iframe should pick up the current theme
+document.getElementById("f-crypto").addEventListener("load",()=>broadcastTheme(document.documentElement.dataset.theme));
+document.getElementById("f-nifty").addEventListener("load",()=>broadcastTheme(document.documentElement.dataset.theme));
+let start="crypto";
+try{ start=localStorage.getItem("tab")||"crypto"; }catch(e){}
+show(start==="nifty"?"nifty":"crypto");
+</script>
+</body>
+</html>

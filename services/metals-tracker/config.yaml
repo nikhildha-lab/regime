@@ -1,0 +1,155 @@
+# =====================================================================
+# Crypto live intraday tracker (BTC / ETH / SOL) — configuration
+# Gold & Silver tracker (clone of crypto-tracker, 2026-10-23). Data source: Hyperliquid perpetuals incl. HIP-3 'xyz' dex (public market data, no keys needed).
+# =====================================================================
+
+# Instruments to track. Each entry drives one dashboard column.
+# 'coin' is the Hyperliquid perp symbol (BTC, ETH, SOL, ...).
+instruments:
+  - { key: GOLD, coin: "xyz:GOLD", tick_size: 0.1, profile_bin: 2.0 }
+  - { key: SILVER, coin: "xyz:SILVER", tick_size: 0.001, profile_bin: 0.05 }
+  - { key: COPPER, coin: "xyz:COPPER", tick_size: 0.0001, profile_bin: 0.005 }
+  - { key: PAXG, coin: "PAXG", tick_size: 0.1, profile_bin: 2.0 }
+  # 2026-11-03 (Nikhil): Commodities on the Intraday desk - crude (WTI) and natural gas on the same xyz market (real trades + book)
+  - { key: CRUDE, coin: "xyz:CL", tick_size: 0.01, profile_bin: 0.05 }
+  - { key: NATGAS, coin: "xyz:NATGAS", tick_size: 0.001, profile_bin: 0.01 }
+
+session:
+  # Crypto trades 24/7. There is no exchange open/close, so the "day" is anchored
+  # to 00:00 UTC — the convention most desks use for the daily open. Market Profile,
+  # Initial Balance, ORB and prior-day levels all key off this anchor.
+  market_open: "00:00"                # day anchor (UTC) — start of the profile day
+  market_close: "23:59"               # nominal day end (24/7: never gates the feed)
+  initial_balance_minutes: 60         # IB = first hour of the UTC day
+  candle_minutes: 15                  # execution timeframe (15m: cleaner structure, wider stops for crypto)
+  eod_flatten: false                  # 24/7: never force-flat paper trades on a boundary
+
+analytics:
+  value_area_pct: 0.70                # 70% of volume = value area (VAH/VAL)
+  swing_lookback: 2                   # fractal swing pivot strength
+  opening_range_minutes: 45           # ORB window (from the day anchor)
+  tpo_period_minutes: 30              # Market Profile TPO period (30=classic, 15=finer)
+  hvn_lvn_zscore: 1.0
+  # Perp OI participation (price + OI quadrant): long/short buildup, covering, unwind.
+  oi_buildup_pct: 3.0
+  participation_lookback: 3           # 5-min bars to measure price & OI change over
+  participation_vol_mult: 1.5         # volume >= mult * median => 'strong' conviction
+  regime_timeframe: 60                # read bias on 1h while executing on 15m
+
+funding:
+  # Hyperliquid funding is charged HOURLY and read as crowd positioning.
+  #   very positive funding = longs paying = crowd is long  -> contrarian bearish lean
+  #   very negative funding = shorts paying = crowd is short -> contrarian bullish lean
+  # Thresholds are ANNUALIZED (funding_hourly * 24 * 365 * 100).
+  crowded_long_annual: 30.0
+  crowded_short_annual: -8.0
+
+liquidations:
+  # Hyperliquid has no public liquidation feed, so clusters are ESTIMATED: projected
+  # from recent swing highs/lows at common leverage tiers. They are MAGNETS (price is
+  # drawn toward stacked liquidity), not barriers like option walls — read accordingly.
+  leverage_tiers: [10, 25, 50]
+  lookback_bars: 48                   # bars used to find the swing extremes to project from
+  cluster_bin_pct: 0.4                # merge liq levels within this % into one cluster
+
+levels:
+  # Prior-period reference levels (previous UTC day / week high & low), derived from
+  # the daily history fetched for the chart. Static all session -> clean reversal anchors.
+  prior_day: true
+  prior_week: true
+  prior_month: false
+
+setup:
+  # Graded reversal setup + perp trade ticket. Confluence-scored, regime picks the
+  # playbook (continuation vs fade); a fade only stages as 'watch' until CHoCH confirms.
+  target_leverage: 5                  # suggested leverage for the ticket sizing
+  expected_hold_hours: 2.0            # used for the funding-cost estimate on the ticket
+  confluence_score_a: 2               # agreeing signal score >= this: +1
+  confluence_score_b: 4               # agreeing signal score >= this: +2
+  tier1_levels: [PDH, PDL, PWH, PWL, IB-low, IB-high]
+
+risk:
+  # Conviction-based sizing: every setup is graded A+/A/B/C; size scales to grade.
+  profile: conservative               # A/A+ only by default
+  capital: 10000                      # trading capital (USDT) used for sizing
+  base_risk_pct: 1.0                  # % of capital risked on a full-size (A+) trade
+  max_leverage: 20                    # hard leverage cap for ticket sizing
+  size_by_grade: {"A+": 1.0, "A": 0.75, "B": 0.5, "C": 0.25}
+  profiles:
+    conservative: {min_grade: A,  risk_mult: 1.0}
+    balanced:     {min_grade: B,  risk_mult: 1.0}
+    aggressive:   {min_grade: C,  risk_mult: 1.3}
+
+divergence:
+  health_lookback: 6                  # bars for the cum-delta trend-health slope
+
+footprint:
+  # Order-flow footprint — for crypto this is REAL: every trade arrives with its
+  # aggressor side (taker buy/sell), so buy/sell-at-price is exact, not a proxy.
+  bars_shown: 96
+  imbalance_ratio: 3.0
+  vol_mult: 1.5
+  level_tol:                          # how close price must get to 'test' a level ($)
+    BTC: 40
+    ETH: 3
+    SOL: 0.15
+
+signals:
+  min_confluence: 2                   # min agreeing factors to raise a signal
+  alert_cooldown_sec: 300             # per-signal-type dedup window
+  volume_spike_mult: 2.0
+
+trade_plan:
+  rr_min: 1.5
+
+fees:
+  # Hyperliquid perp fees (approx, fractions). Used for backtest cost modelling.
+  taker: 0.00035
+  maker: 0.0001
+
+paper:
+  enabled: true
+  min_score: 999            # off: only A/A+ graded setups are traded (see risk.profile)
+  max_open_per_side: 1
+  regime_gate: true
+  include_setups: false   # 2026-11-03 Nikhil: tracker setup cards dropped permanently (no setup paper trades)
+  file: "paper/paper_trades.jsonl"
+  max_hold_minutes: 240         # time exit: close any paper trade after 4 h (Nikhil 2026-10-22)
+  min_natural_stop_pct: 0.5             # untested starting value for this market (2026-10-23)
+  min_stop_pct: 0.3             # untested starting value for this market (2026-10-23)
+  max_stop_pct: 1.5             # untested starting value for this market (2026-10-23)
+  min_day_vol_usd: 1000000             # untested starting value for this market (2026-10-23)
+
+dashboard:
+  host: "0.0.0.0"                     # bind all interfaces (reachable over Tailscale/LAN)
+  port: 8897
+  chart_bars: 96                      # fixed number of candles per chart
+  refresh_ms: 1000                    # 1 s: live LTP + open P&L (was 1500; Nikhil 2026-10-20)
+
+alerts:
+  telegram: false
+  desktop: false                       # macOS osascript notification
+  snapshot_json: "snapshot.json"      # written each cycle (LLM-analyst bridge)
+  min_score: 4
+  eod_summary: false                  # 24/7 — no session close
+
+record:
+  # Capture the LIVE stream to datasets/live-<date>/ in replay format.
+  enabled: true
+  ctx_snapshot_sec: 300               # how often to snapshot OI/funding context
+  raw_ticks: false                    # log every trade to trades.jsonl (large)
+
+hyperliquid:
+  network: mainnet                    # mainnet | testnet
+  info_url: "https://api.hyperliquid.xyz/info"
+  ws_url: "wss://api.hyperliquid.xyz/ws"
+
+sim:
+  # Synthetic replay settings (RUN_MODE=sim) — no feed / no keys needed.
+  seed: 42
+  ticks_per_sec: 8
+  speed: 30                           # sim-seconds advanced per real second
+  start_price:
+    BTC: 111000.0
+    ETH: 3900.0
+    SOL: 182.0

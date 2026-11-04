@@ -1,0 +1,6 @@
+.env
+.kite_token
+snapshot.json
+__pycache__/
+*.pyc
+.venv/

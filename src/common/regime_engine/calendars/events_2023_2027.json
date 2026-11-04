@@ -1,0 +1,352 @@
+{
+ "source": "MASTER_BACKTESTER/experiments/options/regime_gates.py (copied 2026-10-04)",
+ "note": "dates marked (approx) follow the published cadence and must be verified when announced",
+ "core_keywords": [
+  "Budget",
+  "Lok Sabha",
+  "tariff",
+  "US election"
+ ],
+ "events": [
+  {
+   "date": "2024-02-01",
+   "name": "Interim Budget",
+   "core": true
+  },
+  {
+   "date": "2024-07-23",
+   "name": "Union Budget",
+   "core": true
+  },
+  {
+   "date": "2025-02-01",
+   "name": "Union Budget",
+   "core": true
+  },
+  {
+   "date": "2026-02-01",
+   "name": "Union Budget (approx)",
+   "core": true
+  },
+  {
+   "date": "2027-02-01",
+   "name": "Union Budget (approx)",
+   "core": true
+  },
+  {
+   "date": "2024-06-04",
+   "name": "Lok Sabha result",
+   "core": true
+  },
+  {
+   "date": "2024-11-05",
+   "name": "US election",
+   "core": true
+  },
+  {
+   "date": "2023-10-06",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2023-12-08",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2024-02-08",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2024-04-05",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2024-06-07",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2024-08-08",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2024-10-09",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2024-12-06",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2025-02-07",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2025-04-09",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2025-06-06",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2025-08-06",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2025-10-01",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2025-12-05",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2026-02-06",
+   "name": "RBI (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-04-08",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2026-06-05",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2026-08-05",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2026-10-07",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2026-12-04",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2027-02-05",
+   "name": "RBI",
+   "core": false
+  },
+  {
+   "date": "2027-04-07",
+   "name": "RBI (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-06-04",
+   "name": "RBI (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-08-05",
+   "name": "RBI (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-10-01",
+   "name": "RBI (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-12-03",
+   "name": "RBI (approx)",
+   "core": false
+  },
+  {
+   "date": "2023-11-01",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2023-12-13",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-01-31",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-03-20",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-05-01",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-06-12",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-07-31",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-09-18",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-11-07",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2024-12-18",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-01-29",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-03-19",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-05-07",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-06-18",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-07-30",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-09-17",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-10-29",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2025-12-10",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2026-01-28",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-03-18",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-04-29",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-06-17",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-07-29",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-09-16",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2026-10-28",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2026-12-09",
+   "name": "FOMC",
+   "core": false
+  },
+  {
+   "date": "2027-01-27",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-03-17",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-04-28",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-06-16",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-07-28",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-09-15",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-10-27",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2027-12-08",
+   "name": "FOMC (approx)",
+   "core": false
+  },
+  {
+   "date": "2025-04-02",
+   "name": "US tariff announcement",
+   "core": true
+  }
+ ]
+}

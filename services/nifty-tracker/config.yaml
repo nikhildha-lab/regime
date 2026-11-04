@@ -1,0 +1,254 @@
+# =====================================================================
+# Nifty / Bank Nifty live intraday 5-min tracker — configuration
+# =====================================================================
+
+# Instruments to track. Each entry drives one dashboard column.
+# 'index' is the NSE index name as it appears in the Kite instrument dump.
+# Market-data broker: dhan (DhanHQ v2) or kite (Zerodha). Override with env BROKER=kite.
+broker: dhan
+
+instruments:
+  - key: NIFTY
+    index_symbol: "NIFTY 50"          # spot index (price-action structure)
+    fut_name: "NIFTY"                 # futures underlying (volume/market profile)
+    opt_name: "NIFTY"                 # options underlying (OI analysis)
+    strike_step: 50                   # option strike interval
+    strikes_each_side: 12             # ATM +/- N strikes to stream for OI
+    tick_size: 0.05
+    profile_bin: 5.0                  # price bin width for volume/market profile
+
+  - key: BANKNIFTY
+    index_symbol: "NIFTY BANK"
+    fut_name: "BANKNIFTY"
+    opt_name: "BANKNIFTY"
+    strike_step: 100
+    strikes_each_side: 12
+    tick_size: 0.05
+    profile_bin: 10.0
+
+  # Stocks (2026-10-23, Nikhil): same engine, futures as the trading vehicle. strike_step / profile_bin 0 = worked out at start
+  # from the option grid and the price (~0.05%). Fewer strikes than the indices to keep the feed light.
+  - { key: RELIANCE, index_symbol: "RELIANCE", fut_name: "RELIANCE", opt_name: "RELIANCE", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: HDFCBANK, index_symbol: "HDFCBANK", fut_name: "HDFCBANK", opt_name: "HDFCBANK", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: ICICIBANK, index_symbol: "ICICIBANK", fut_name: "ICICIBANK", opt_name: "ICICIBANK", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: INFY, index_symbol: "INFY", fut_name: "INFY", opt_name: "INFY", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: TCS, index_symbol: "TCS", fut_name: "TCS", opt_name: "TCS", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: SBIN, index_symbol: "SBIN", fut_name: "SBIN", opt_name: "SBIN", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: AXISBANK, index_symbol: "AXISBANK", fut_name: "AXISBANK", opt_name: "AXISBANK", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: BHARTIARTL, index_symbol: "BHARTIARTL", fut_name: "BHARTIARTL", opt_name: "BHARTIARTL", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: LT, index_symbol: "LT", fut_name: "LT", opt_name: "LT", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+  - { key: BAJFINANCE, index_symbol: "BAJFINANCE", fut_name: "BAJFINANCE", opt_name: "BAJFINANCE", strike_step: 0, strikes_each_side: 3, tick_size: 0.05, profile_bin: 0 }
+
+session:
+  # NSE cash/F&O session in IST. Used to gate live streaming + IB window.
+  market_open: "09:15"
+  market_close: "15:30"
+  # Initial Balance = first N minutes (market profile). NSE convention: 60 min.
+  initial_balance_minutes: 60
+  # Operating timeframe. Intraday-validated: 5 (max return) or 15 (fewer/cleaner
+  # trades, higher win-rate). 30 works but the edge thins. 60+ / 4-hour do NOT fit
+  # this intraday-flat design (too few bars/day) — those are swing timeframes.
+  # Valid Kite-seed intervals: 1, 3, 5, 10, 15, 30, 60. Re-backtest after changing.
+  candle_minutes: 15                  # 2-yr backtest: 15-min A/A+ option-buy = +Rs619/trade
+                                      # vs +Rs40 on 5-min (bigger ranges beat theta). 15 is a
+                                      # native Kite seed interval. Revert to 5 to go back.
+
+analytics:
+  value_area_pct: 0.70                # 70% of volume = value area (VAH/VAL)
+  swing_lookback: 2                   # fractal swing pivot strength (bars each side)
+  opening_range_minutes: 15           # ORB window
+  tpo_period_minutes: 30              # Market Profile TPO period: 30=classic, 15=more resolution
+  hvn_lvn_zscore: 1.0                 # node prominence threshold
+  # OI
+  pcr_bull_below: 0.7                 # PCR < this = crowded puts / possible bullish
+  pcr_bear_above: 1.3                 # PCR > this = crowded calls / possible bearish
+  oi_buildup_pct: 5.0                 # min % OI change to flag buildup/unwind
+  # Futures price+OI participation (current-month contract): long/short buildup,
+  # short covering, long unwinding. Volume-graded. LIVE-only (not in the backtest).
+  participation_lookback: 3           # bars (5-min) to measure price & OI change over
+  participation_vol_mult: 1.5         # volume >= mult * median => 'strong' conviction
+  # Regime timeframe: read the stance on a HIGHER timeframe than entries for a
+  # stable bias (0 = same as candle_minutes). e.g. 15 => 5-min entries, 15-min regime.
+  regime_timeframe: 0
+
+levels:
+  # Prior-period reference levels (previous day / week / month high & low),
+  # derived for free from the daily history fetched for the 1D/1W chart. They're
+  # STATIC all session, so they're the cleanest anchors for footprint reversals.
+  # Live-only (daily is fetched at live start). Drawn on the chart + fed to the
+  # footprint reversal scan.
+  prior_day: true                     # PDH / PDL — most-watched intraday pair
+  prior_week: true                    # PWH / PWL — swing pivots
+  prior_month: false                  # PMH / PML — rarely tested intraday (off by default)
+
+setup:
+  # Graded reversal setup + option trade ticket. Confluence-scored, NOT a hard
+  # AND-gate — regime picks the playbook (continuation vs fade) and only stages a
+  # fade as 'watch' until CHoCH confirms; it never vetoes on its own.
+  # Tightness is driven by the risk PROFILE below (risk.profile -> min_grade).
+  target_delta: 0.60                  # strike selection (~1-strike ITM, per backtest)
+  expected_hold_hours: 1.0            # used in the greeks go/no-go (theta cost)
+  # Signal confluence: agreeing volume/OI/structure signals bump a setup's grade,
+  # which is how Tier-2 levels (VWAP/VAH/VAL/POC) become tradeable.
+  confluence_score_a: 2               # an agreeing signal with score >= this: +1
+  confluence_score_b: 4               # agreeing signal score >= this: +2
+  # Tier-1 = static, most-watched levels (weighted higher). Everything else (VWAP,
+  # VAH/VAL, POC, walls, swings) counts as Tier-2.
+  tier1_levels: [PDH, PDL, PWH, PWL, IB-low, IB-high]
+
+risk:
+  # Conviction-based position sizing: every setup is graded A+/A/B/C, and size
+  # scales to the grade — so weaker Tier-2 trades are taken SMALL, not skipped.
+  # One 'profile' switch sets both how much you take (min grade) and how big.
+  profile: conservative               # A+/A only (per backtest — B/C bleed on options)
+  capital: 500000                     # trading capital used for sizing
+  base_risk_pct: 1.0                  # % of capital risked on a full-size (A+) trade
+  size_by_grade: {"A+": 1.0, "A": 0.75, "B": 0.5, "C": 0.25}   # fraction of base risk
+  profiles:
+    conservative: {min_grade: A,  risk_mult: 1.0}   # only A/A+ (validated grades), full conviction size
+    balanced:     {min_grade: B,  risk_mult: 1.0}   # B and up (default)
+    aggressive:   {min_grade: C,  risk_mult: 1.3}   # takes weak Tier-2 punts, bigger
+
+divergence:
+  # Delta divergence — price swing pivots vs cumulative footprint delta (bullish
+  # = lower low on rising delta; bearish = higher high on falling delta), plus a
+  # cumulative-delta 'trend health' read. Tagged on the chart + confirms signals.
+  health_lookback: 6                  # bars for the cum-delta trend-health slope
+
+chain:
+  # Option chain: how many nearest expiries to stream (for the expiry dropdown).
+  # Trading logic (walls, setup, ticket) always uses the NEAREST expiry regardless.
+  # More expiries = more streamed tokens (~50 per expiry per instrument).
+  expiries: 3
+
+footprint:
+  # Order-flow footprint — APPROXIMATED from Kite's ~1/sec snapshot feed (last
+  # price + cumulative volume + 5-level bid/ask book). Buy/sell split uses the
+  # quote rule (price vs best bid/ask) with a tick-rule fallback. It's a LIVE
+  # confirmation lens, NOT a backtested signal (2yr history is OHLC-only).
+  bars_shown: 96                      # how many recent bars to render in the grid
+  imbalance_ratio: 3.0                # buy@price >= 3x sell one level down => imbalance
+  vol_mult: 1.5                       # bar volume >= mult * median => 'heavy' (strong absorption)
+  level_tol:                          # how close price must get to 'test' a level (points)
+    NIFTY: 12
+    BANKNIFTY: 30
+
+signals:
+  # Opportunity engine thresholds
+  min_confluence: 2                   # min number of agreeing factors to raise a signal
+  alert_cooldown_sec: 300             # per-signal-type dedup window
+  volume_spike_mult: 2.0              # 5-min vol > mult * rolling median => spike
+
+trade_plan:
+  rr_min: 1.5                         # minimum reward:risk when auto-drafting targets
+
+hybrid:
+  # NOTE: the day-type routing below was OVERFIT to a 3-month window. Over the full
+  # 2-year backtest it LOST to plain option buying (synthetic beat buy in only 1 of
+  # 9 quarters). Honest conclusion: don't route — just buy options. Left empty so
+  # the "hybrid" == pure option buy. (Re-populate only if a fresh out-of-sample
+  # test justifies it.)
+  synth_daytypes: []                  # e.g. [Trend, Neutral] — but not justified out-of-sample
+  skip_daytypes: []                   # e.g. [Normal-Variation] — threw away profitable buys over 2yr
+
+vehicles:
+  # Economics for the vehicle-comparison backtest (compare_vehicles.py).
+  lots: 1
+  future_margin: 200000               # Rs margin per futures lot
+  optsell_margin: 100000              # Rs margin per option-sell lot (approx)
+  risk_free: 0.065
+  per_instrument:
+    NIFTY:     {lot: 65, iv: 0.12, expiry: weekly}    # ATM IV assumption; nearest-Thursday expiry
+    BANKNIFTY: {lot: 30, iv: 0.17, expiry: monthly}   # BankNifty weeklies discontinued -> monthly
+  synthetic:
+    # Synthetic future = buy ATM CE + sell ATM PE (long) [or reverse for short],
+    # + a deep-OTM long option hedging the short leg -> defined risk, low margin.
+    hedge_points: {NIFTY: 600, BANKNIFTY: 1500}       # distance of the deep-OTM hedge
+    margin:       {NIFTY: 40000, BANKNIFTY: 55000}    # approx hedged SPAN margin per 3-leg set
+  sell_spread:
+    # Option-sell is a CREDIT SPREAD (defined risk), not a naked short:
+    #   long view  -> bull put spread (sell ATM PE, buy OTM PE `width` lower)
+    #   short view -> bear call spread (sell ATM CE, buy OTM CE `width` higher)
+    width: {NIFTY: 300, BANKNIFTY: 700}               # wing distance (points)
+    min_margin: {NIFTY: 6000, BANKNIFTY: 8000}        # floor for the spread margin
+
+condor:
+  # Legged iron condor: bear-call spread on qualified shorts + bull-put spread on
+  # qualified longs, built one side at a time on RANGE days after the IB.
+  min_score: 3                                        # signal score to leg a side in
+  width: {NIFTY: 300, BANKNIFTY: 700}                 # spread wing width
+  profit_take: 0.5                                    # buy back a side at 50% of max profit
+  sl_buffer: {NIFTY: 15, BANKNIFTY: 40}               # acceptance beyond short strike -> stop
+  eligible_daytypes: [Balanced, Normal, Neutral]      # range-compatible only
+  skip_ib: true                                       # wait for the first-hour IB to complete
+  min_otm: {NIFTY: 20, BANKNIFTY: 50}                 # short strike must be >= this far OTM
+
+costs:
+  # Real Zerodha F&O charges (fetched from zerodha.com/charges, effective ~Apr 2026).
+  # Adjust here if rates change. Fractions, not percents (0.0005 = 0.05%).
+  futures:
+    brokerage_per_order: 20
+    stt_sell: 0.0005                  # 0.05% on sell-side notional
+    exch_txn: 0.0000183               # 0.00183% NSE, both legs
+    sebi: 0.000001                    # Rs 10 / crore
+    gst: 0.18                         # on brokerage + txn + sebi
+    stamp_buy: 0.00002                # 0.002% on buy-side notional
+  options:
+    brokerage_per_order: 20
+    stt_sell: 0.0015                  # 0.15% on premium, sell side
+    exch_txn: 0.0003553               # 0.03553% NSE on premium, both legs
+    sebi: 0.000001
+    gst: 0.18
+    stamp_buy: 0.00003                # 0.003% on buy-side premium
+
+paper:
+  # Paper-trade the QUALIFIED signals to measure whether the edge is real.
+  enabled: true
+  min_score: 999                      # DISABLED the legacy signal stream — only the graded
+                                      # A/A+ setups are paper-logged now (set back to ~4 to
+                                      # re-enable the old score-based signal trades)
+  max_open_per_side: 1               # one open long + one open short per instrument
+  regime_gate: false                  # off (Nikhil 2026-10-22): regime is recorded on each trade as context, not a filter
+  include_setups: false   # 2026-11-03 Nikhil: tracker setup cards dropped permanently (no setup paper trades)
+  supertrend:                         # Supertrend(10,3) 15-min swing — PAPER forward-test
+    enabled: true                     # logs flips to paper/supertrend_trades.jsonl; no orders
+    period: 10
+    mult: 3.0
+                                      # stream, sliced by grade — forward-test conviction sizing)
+  file: "paper/paper_trades.jsonl"    # persisted trade log (stats accumulate across days)
+
+dashboard:
+  host: "0.0.0.0"                     # bind all interfaces so it's reachable over
+                                      # Tailscale/LAN (was 127.0.0.1 = localhost-only).
+                                      # SAFE only behind Tailscale + macOS firewall on —
+                                      # see REMOTE_ACCESS.md. Revert to 127.0.0.1 to lock
+                                      # it back to this machine only.
+  port: 8899
+  chart_bars: 96                      # fixed number of candles per chart
+  refresh_ms: 1500                    # client poll/render cadence
+
+alerts:
+  telegram: false                     # 2026-11-03 Nikhil: tracker setup alerts off (screen only; setup cards dropped)
+  desktop: false                       # macOS osascript notification
+  snapshot_json: "snapshot.json"      # written each cycle for the trading-skill bridge
+  min_score: 4                        # Telegram alerts only for setups >= this score (tuned)
+  eod_summary: true                   # send a paper-trade performance summary at close
+
+record:
+  # Capture the LIVE stream to datasets/live-<date>/ in replay format, so each
+  # trading day becomes real, replayable history (incl. live-captured option OI).
+  enabled: true
+  oi_snapshot_sec: 300                # how often to snapshot the full option chain OI
+  raw_ticks: false                    # 2026-11-01 audit: OFF (1.3 GB/day, research only). log every tick (incl. bid/ask) to ticks.jsonl so
+                                      # footprints persist & can be replayed later.
+                                      # ~50-150MB/day — set false to save disk (the live
+                                      # footprint panel still works either way).
+
+sim:
+  # Synthetic replay settings (RUN_MODE=sim)
+  seed: 42
+  ticks_per_sec: 8
+  speed: 30                           # sim-seconds advanced per real second (compress a day)
+  start_price:
+    NIFTY: 24800.0
+    BANKNIFTY: 55200.0

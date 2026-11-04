@@ -1,0 +1,36 @@
+# secrets – never commit
+.env
+*.env
+!.env.example
+.dhan_token
+.kite_token
+access_tokens/
+*token*.json
+
+# environments / caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# data, logs, research output (rebuilt or recorded at runtime)
+data_store/**
+!data_store/**/
+!data_store/**/.gitkeep
+!data_store/agent/personas/**
+!data_store/agent/memory/**
+!data_store/research/alts1m/established.txt
+logs/*
+!logs/.gitkeep
+*.log
+services/**/data/
+services/**/datasets/
+services/**/backtests/
+services/**/paper/
+services/**/logs/
+services/**/snapshot.json
+*.csv
+*.csv.gz
+*.jsonl
+*.parquet

@@ -1,0 +1,13 @@
+[Unit]
+Description=Metals tracker (Hyperliquid xyz perps, port 8897)
+After=network-online.target
+
+[Service]
+User=marketpulse
+WorkingDirectory=/opt/market-pulse/services/metals-tracker
+ExecStart=/bin/bash run_forever.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

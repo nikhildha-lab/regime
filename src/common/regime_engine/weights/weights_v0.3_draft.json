@@ -1,0 +1,972 @@
+{
+  "version": "v0.3_draft",
+  "status": "DRAFT - unreviewed. Not for live trading until a named reviewer signs off (BRD \u00a76.5).",
+  "created_at": "2026-10-03T22:44:28",
+  "method": "ridge on group scores vs vol-scaled forward return, expanding walk-forward, purged + embargoed",
+  "profiles": {
+    "daily": {
+      "groups": {
+        "TREND": 0.010779468231869076,
+        "VOLATILITY": -0.29741743355402817,
+        "BREADTH": -0.2697629110289709,
+        "POSITIONING": -0.011163274419994164,
+        "GLOBAL": 0.38388869510123935,
+        "TECHNICALS": -0.026988217663898365
+      },
+      "within_group": "equal",
+      "horizon_bars": 5,
+      "label_threshold": 0.15,
+      "confidence": {
+        "high": 0.45,
+        "medium": 0.25
+      }
+    },
+    "4h": {
+      "groups": {
+        "TREND": 0.08202332742505786,
+        "VOLATILITY": -0.12148184957518494,
+        "BREADTH": -0.3672524503539511,
+        "POSITIONING": 0.15861682043837566,
+        "GLOBAL": 0.18945975886659389,
+        "TECHNICALS": 0.08116579334083661
+      },
+      "within_group": "equal",
+      "horizon_bars": 4,
+      "label_threshold": 0.15,
+      "confidence": {
+        "high": 0.45,
+        "medium": 0.25
+      }
+    },
+    "1h": {
+      "groups": {
+        "TREND": 0.11068509952172144,
+        "VOLATILITY": -0.2966009767600936,
+        "BREADTH": -0.1545888404879853,
+        "POSITIONING": 0.05119406172428797,
+        "GLOBAL": 0.279704903252232,
+        "TECHNICALS": 0.10722611825367967
+      },
+      "within_group": "equal",
+      "horizon_bars": 7,
+      "label_threshold": 0.15,
+      "confidence": {
+        "high": 0.45,
+        "medium": 0.25
+      }
+    }
+  },
+  "validation": {
+    "daily": {
+      "scoreboard": {
+        "n_scored_calls": 2199,
+        "hit_rate_pct": 34.9,
+        "baseline_persistence_pct": 34.0,
+        "baseline_always_bullish_pct": 37.4,
+        "by_label": {
+          "Bearish": {
+            "n": 301,
+            "hit_rate_pct": 27.9
+          },
+          "Bullish": {
+            "n": 588,
+            "hit_rate_pct": 37.8
+          },
+          "Neutral": {
+            "n": 1310,
+            "hit_rate_pct": 35.3
+          }
+        },
+        "by_confidence": {
+          "High": {
+            "n": 5,
+            "hit_rate_pct": 40.0
+          },
+          "Low": {
+            "n": 1818,
+            "hit_rate_pct": 34.2
+          },
+          "Medium": {
+            "n": 376,
+            "hit_rate_pct": 38.3
+          }
+        },
+        "per_class": {
+          "Bullish": {
+            "precision_pct": 37.8,
+            "recall_pct": 27.0,
+            "n_called": 588
+          },
+          "Bearish": {
+            "precision_pct": 27.9,
+            "recall_pct": 14.2,
+            "n_called": 301
+          },
+          "Neutral": {
+            "precision_pct": 35.3,
+            "recall_pct": 58.9,
+            "n_called": 1310
+          }
+        },
+        "actual_mix_pct": {
+          "Bullish": 37.4,
+          "Neutral": 35.7,
+          "Bearish": 27.0
+        }
+      },
+      "n_folds": 37,
+      "fold_weights": [
+        {
+          "test_start": "2017-10-25 00:00:00",
+          "test_end": "2018-01-18 00:00:00",
+          "weights": {
+            "TREND": -0.47544553606181006,
+            "VOLATILITY": 0.001552627446563832,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.09197587212645607,
+            "TECHNICALS": 0.43102596436517
+          }
+        },
+        {
+          "test_start": "2018-01-19 00:00:00",
+          "test_end": "2018-04-19 00:00:00",
+          "weights": {
+            "TREND": -0.5019235271447128,
+            "VOLATILITY": -0.031749889244611675,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.0594843461049173,
+            "TECHNICALS": 0.4068422375057582
+          }
+        },
+        {
+          "test_start": "2018-04-20 00:00:00",
+          "test_end": "2018-07-13 00:00:00",
+          "weights": {
+            "TREND": -0.542633053420601,
+            "VOLATILITY": 0.017677893176371817,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.04372505672344004,
+            "TECHNICALS": 0.3959639966795872
+          }
+        },
+        {
+          "test_start": "2018-07-16 00:00:00",
+          "test_end": "2018-10-12 00:00:00",
+          "weights": {
+            "TREND": -0.5567979734526861,
+            "VOLATILITY": 0.06747482684013886,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.0014587132795030528,
+            "TECHNICALS": 0.374268486427672
+          }
+        },
+        {
+          "test_start": "2018-10-15 00:00:00",
+          "test_end": "2019-01-11 00:00:00",
+          "weights": {
+            "TREND": -0.42156087911419493,
+            "VOLATILITY": 0.15854799524896798,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.06636986634290583,
+            "TECHNICALS": 0.35352125929393124
+          }
+        },
+        {
+          "test_start": "2019-01-14 00:00:00",
+          "test_end": "2019-04-11 00:00:00",
+          "weights": {
+            "TREND": -0.4403545937390095,
+            "VOLATILITY": 0.10981728479844749,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.09145839169448461,
+            "TECHNICALS": 0.3583697297680584
+          }
+        },
+        {
+          "test_start": "2019-04-12 00:00:00",
+          "test_end": "2019-07-11 00:00:00",
+          "weights": {
+            "TREND": -0.3986780632248393,
+            "VOLATILITY": 0.16592701236576532,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.12067835017278272,
+            "TECHNICALS": 0.3147165742366126
+          }
+        },
+        {
+          "test_start": "2019-07-12 00:00:00",
+          "test_end": "2019-10-11 00:00:00",
+          "weights": {
+            "TREND": -0.4538611712453267,
+            "VOLATILITY": 0.0968529605654912,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.1365879867511221,
+            "TECHNICALS": 0.31269788143805993
+          }
+        },
+        {
+          "test_start": "2019-10-14 00:00:00",
+          "test_end": "2020-01-09 00:00:00",
+          "weights": {
+            "TREND": -0.4529868297077005,
+            "VOLATILITY": 0.06735369819406982,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.1449063496994523,
+            "TECHNICALS": 0.3347531223987774
+          }
+        },
+        {
+          "test_start": "2020-01-10 00:00:00",
+          "test_end": "2020-04-08 00:00:00",
+          "weights": {
+            "TREND": -0.452756135898561,
+            "VOLATILITY": 0.09041888477995236,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.13733262557891773,
+            "TECHNICALS": 0.31949235374256896
+          }
+        },
+        {
+          "test_start": "2020-04-09 00:00:00",
+          "test_end": "2020-07-07 00:00:00",
+          "weights": {
+            "TREND": -0.17813032317556787,
+            "VOLATILITY": 0.5626968865303545,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.044415020729327195,
+            "TECHNICALS": 0.21475776956475054
+          }
+        },
+        {
+          "test_start": "2020-07-08 00:00:00",
+          "test_end": "2020-09-29 00:00:00",
+          "weights": {
+            "TREND": -0.1614793550679374,
+            "VOLATILITY": 0.5698149873008843,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.07095732715209074,
+            "TECHNICALS": 0.19774833047908744
+          }
+        },
+        {
+          "test_start": "2020-09-30 00:00:00",
+          "test_end": "2020-12-28 00:00:00",
+          "weights": {
+            "TREND": -0.17136166190843213,
+            "VOLATILITY": 0.6105305053630644,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -2.0006396021695195e-05,
+            "TECHNICALS": 0.21808782633248183
+          }
+        },
+        {
+          "test_start": "2020-12-29 00:00:00",
+          "test_end": "2021-03-24 00:00:00",
+          "weights": {
+            "TREND": -0.20003998914075458,
+            "VOLATILITY": 0.4641793612501017,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.1155798671490703,
+            "TECHNICALS": 0.22020078246007355
+          }
+        },
+        {
+          "test_start": "2021-03-25 00:00:00",
+          "test_end": "2021-06-23 00:00:00",
+          "weights": {
+            "TREND": -0.254927048398391,
+            "VOLATILITY": 0.31162270405256726,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.12191693377415819,
+            "TECHNICALS": 0.3115333137748835
+          }
+        },
+        {
+          "test_start": "2021-06-24 00:00:00",
+          "test_end": "2021-09-20 00:00:00",
+          "weights": {
+            "TREND": -0.2604772232650084,
+            "VOLATILITY": 0.29573586648822886,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.10820255992682938,
+            "TECHNICALS": 0.3355843503199334
+          }
+        },
+        {
+          "test_start": "2021-09-21 00:00:00",
+          "test_end": "2021-12-16 00:00:00",
+          "weights": {
+            "TREND": -0.20299747932141676,
+            "VOLATILITY": 0.2658845762756765,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.07477300292635117,
+            "TECHNICALS": 0.4563449414765556
+          }
+        },
+        {
+          "test_start": "2021-12-17 00:00:00",
+          "test_end": "2022-03-14 00:00:00",
+          "weights": {
+            "TREND": -0.15006811232766784,
+            "VOLATILITY": 0.19098306859979802,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.246339111655815,
+            "TECHNICALS": 0.4126097074167191
+          }
+        },
+        {
+          "test_start": "2022-03-15 00:00:00",
+          "test_end": "2022-06-10 00:00:00",
+          "weights": {
+            "TREND": -0.26199898045421094,
+            "VOLATILITY": 0.22816084783721835,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.09989863105880181,
+            "TECHNICALS": 0.4099415406497688
+          }
+        },
+        {
+          "test_start": "2022-06-13 00:00:00",
+          "test_end": "2022-09-07 00:00:00",
+          "weights": {
+            "TREND": -0.2899476636971502,
+            "VOLATILITY": 0.2027874648025171,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.09284949310711277,
+            "TECHNICALS": 0.4144153783932199
+          }
+        },
+        {
+          "test_start": "2022-09-08 00:00:00",
+          "test_end": "2022-12-05 00:00:00",
+          "weights": {
+            "TREND": -0.23722773832478425,
+            "VOLATILITY": 0.23276783285565783,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.10212456724190268,
+            "TECHNICALS": 0.4278798615776552
+          }
+        },
+        {
+          "test_start": "2022-12-06 00:00:00",
+          "test_end": "2023-02-28 00:00:00",
+          "weights": {
+            "TREND": -0.22160734132427562,
+            "VOLATILITY": 0.28608252340237994,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.08049188665966207,
+            "TECHNICALS": 0.4118182486136825
+          }
+        },
+        {
+          "test_start": "2023-03-01 00:00:00",
+          "test_end": "2023-05-31 00:00:00",
+          "weights": {
+            "TREND": -0.22184928170186674,
+            "VOLATILITY": 0.16038910769480683,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": -0.15005505472983746,
+            "TECHNICALS": 0.46770655587348914
+          }
+        },
+        {
+          "test_start": "2023-06-01 00:00:00",
+          "test_end": "2023-08-25 00:00:00",
+          "weights": {
+            "TREND": -0.2855305399074493,
+            "VOLATILITY": 0.21616596562707663,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.0,
+            "GLOBAL": 0.0034337072387191094,
+            "TECHNICALS": 0.49486978722675495
+          }
+        },
+        {
+          "test_start": "2023-08-28 00:00:00",
+          "test_end": "2023-11-23 00:00:00",
+          "weights": {
+            "TREND": -0.20482776448653026,
+            "VOLATILITY": 0.09024856724750606,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.20867270259845583,
+            "GLOBAL": 0.32260285699821256,
+            "TECHNICALS": 0.1736481086692953
+          }
+        },
+        {
+          "test_start": "2023-11-24 00:00:00",
+          "test_end": "2024-02-21 00:00:00",
+          "weights": {
+            "TREND": -0.2838140217305831,
+            "VOLATILITY": 0.10525210784026769,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.17941437062685645,
+            "GLOBAL": 0.3149978308252787,
+            "TECHNICALS": 0.11652166897701406
+          }
+        },
+        {
+          "test_start": "2024-02-22 00:00:00",
+          "test_end": "2024-05-24 00:00:00",
+          "weights": {
+            "TREND": -0.2047553629643635,
+            "VOLATILITY": -0.004595907342205806,
+            "BREADTH": 0.0,
+            "POSITIONING": 0.031592070243919065,
+            "GLOBAL": 0.5787039227592675,
+            "TECHNICALS": 0.18035273669024407
+          }
+        },
+        {
+          "test_start": "2024-05-27 00:00:00",
+          "test_end": "2024-08-21 00:00:00",
+          "weights": {
+            "TREND": -0.209281620543149,
+            "VOLATILITY": -0.01212814211154969,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.052848245488877225,
+            "GLOBAL": 0.5702306815642793,
+            "TECHNICALS": 0.15551131029214485
+          }
+        },
+        {
+          "test_start": "2024-08-22 00:00:00",
+          "test_end": "2024-11-14 00:00:00",
+          "weights": {
+            "TREND": -0.1925767865050405,
+            "VOLATILITY": 0.019964591611363835,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.05918396886712073,
+            "GLOBAL": 0.5933929855448518,
+            "TECHNICALS": 0.13488166747162325
+          }
+        },
+        {
+          "test_start": "2024-11-18 00:00:00",
+          "test_end": "2025-02-10 00:00:00",
+          "weights": {
+            "TREND": -0.1801867765052887,
+            "VOLATILITY": 0.009583775996105893,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.11752075114786244,
+            "GLOBAL": 0.5607387350873547,
+            "TECHNICALS": 0.1319699612633883
+          }
+        },
+        {
+          "test_start": "2025-02-11 00:00:00",
+          "test_end": "2025-05-14 00:00:00",
+          "weights": {
+            "TREND": 0.014999489726679086,
+            "VOLATILITY": -0.006976750871961559,
+            "BREADTH": -0.358970518522176,
+            "POSITIONING": -0.0746976045966023,
+            "GLOBAL": 0.5213940555290183,
+            "TECHNICALS": -0.02296158075356275
+          }
+        },
+        {
+          "test_start": "2025-05-15 00:00:00",
+          "test_end": "2025-08-06 00:00:00",
+          "weights": {
+            "TREND": -0.11396182054834984,
+            "VOLATILITY": -0.2965284429345771,
+            "BREADTH": -0.15010210871430402,
+            "POSITIONING": 0.0026679889949710305,
+            "GLOBAL": 0.42641763017446677,
+            "TECHNICALS": 0.010322008633331303
+          }
+        },
+        {
+          "test_start": "2025-08-07 00:00:00",
+          "test_end": "2025-11-04 00:00:00",
+          "weights": {
+            "TREND": -0.037956307038764285,
+            "VOLATILITY": -0.43298304831151435,
+            "BREADTH": -0.16938056076882932,
+            "POSITIONING": 0.0795196659075253,
+            "GLOBAL": 0.27106810138035753,
+            "TECHNICALS": 0.009092316593009185
+          }
+        },
+        {
+          "test_start": "2025-11-06 00:00:00",
+          "test_end": "2026-02-02 00:00:00",
+          "weights": {
+            "TREND": -0.1261412064740923,
+            "VOLATILITY": -0.35637825876655116,
+            "BREADTH": -0.13428978879633482,
+            "POSITIONING": -0.026428224577322364,
+            "GLOBAL": 0.33431735800764106,
+            "TECHNICALS": 0.022445163378058356
+          }
+        },
+        {
+          "test_start": "2026-02-03 00:00:00",
+          "test_end": "2026-05-05 00:00:00",
+          "weights": {
+            "TREND": -0.1486165693105385,
+            "VOLATILITY": -0.3109096738058168,
+            "BREADTH": -0.1708412703295043,
+            "POSITIONING": 0.021641014296268107,
+            "GLOBAL": 0.31451713869438674,
+            "TECHNICALS": 0.03347433356348555
+          }
+        },
+        {
+          "test_start": "2026-05-06 00:00:00",
+          "test_end": "2026-07-30 00:00:00",
+          "weights": {
+            "TREND": 0.010779468231869076,
+            "VOLATILITY": -0.29741743355402817,
+            "BREADTH": -0.2697629110289709,
+            "POSITIONING": -0.011163274419994164,
+            "GLOBAL": 0.38388869510123935,
+            "TECHNICALS": -0.026988217663898365
+          }
+        },
+        {
+          "test_start": "2026-07-31 00:00:00",
+          "test_end": "2026-10-01 00:00:00",
+          "weights": {
+            "TREND": 0.010779468231869076,
+            "VOLATILITY": -0.29741743355402817,
+            "BREADTH": -0.2697629110289709,
+            "POSITIONING": -0.011163274419994164,
+            "GLOBAL": 0.38388869510123935,
+            "TECHNICALS": -0.026988217663898365
+          }
+        }
+      ],
+      "data_range": [
+        "2016-10-03 00:00:00",
+        "2026-10-01 00:00:00"
+      ]
+    },
+    "4h": {
+      "scoreboard": {
+        "n_scored_calls": 1026,
+        "hit_rate_pct": 33.5,
+        "baseline_persistence_pct": 37.2,
+        "baseline_always_bullish_pct": 30.1,
+        "by_label": {
+          "Bearish": {
+            "n": 264,
+            "hit_rate_pct": 35.6
+          },
+          "Bullish": {
+            "n": 154,
+            "hit_rate_pct": 26.6
+          },
+          "Neutral": {
+            "n": 608,
+            "hit_rate_pct": 34.4
+          }
+        },
+        "by_confidence": {
+          "Low": {
+            "n": 897,
+            "hit_rate_pct": 33.0
+          },
+          "Medium": {
+            "n": 129,
+            "hit_rate_pct": 37.2
+          }
+        },
+        "per_class": {
+          "Bullish": {
+            "precision_pct": 26.6,
+            "recall_pct": 13.3,
+            "n_called": 154
+          },
+          "Bearish": {
+            "precision_pct": 35.6,
+            "recall_pct": 27.4,
+            "n_called": 264
+          },
+          "Neutral": {
+            "precision_pct": 34.4,
+            "recall_pct": 55.9,
+            "n_called": 608
+          }
+        },
+        "actual_mix_pct": {
+          "Neutral": 36.5,
+          "Bearish": 33.4,
+          "Bullish": 30.1
+        }
+      },
+      "n_folds": 9,
+      "fold_weights": [
+        {
+          "test_start": "2024-08-30 09:15:00+05:30",
+          "test_end": "2024-11-27 13:15:00+05:30",
+          "weights": {
+            "TREND": -0.0032552979280285163,
+            "VOLATILITY": 0.08558909857129898,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.18981893214360598,
+            "GLOBAL": 0.6763677660514709,
+            "TECHNICALS": 0.04496890530559559
+          }
+        },
+        {
+          "test_start": "2024-11-28 09:15:00+05:30",
+          "test_end": "2025-02-19 13:15:00+05:30",
+          "weights": {
+            "TREND": -0.05181256922373522,
+            "VOLATILITY": -0.07812888339026061,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.2738771258403495,
+            "GLOBAL": 0.5061914404133012,
+            "TECHNICALS": 0.0899899811323534
+          }
+        },
+        {
+          "test_start": "2025-02-20 09:15:00+05:30",
+          "test_end": "2025-05-23 13:15:00+05:30",
+          "weights": {
+            "TREND": -0.07300685223084467,
+            "VOLATILITY": -0.019104246195968507,
+            "BREADTH": -0.28231640589967355,
+            "POSITIONING": -0.1068479909611308,
+            "GLOBAL": 0.3905288614397454,
+            "TECHNICALS": 0.12819564327263697
+          }
+        },
+        {
+          "test_start": "2025-05-26 09:15:00+05:30",
+          "test_end": "2025-08-18 13:15:00+05:30",
+          "weights": {
+            "TREND": -0.18353073180127824,
+            "VOLATILITY": -0.04516975023449588,
+            "BREADTH": -0.2109226648371387,
+            "POSITIONING": 0.0635632574287854,
+            "GLOBAL": 0.27241115464604826,
+            "TECHNICALS": 0.22440244105225352
+          }
+        },
+        {
+          "test_start": "2025-08-19 09:15:00+05:30",
+          "test_end": "2025-11-17 09:15:00+05:30",
+          "weights": {
+            "TREND": -0.2119106747347987,
+            "VOLATILITY": -0.18975190251118598,
+            "BREADTH": -0.1324719060691146,
+            "POSITIONING": 0.18322426567361452,
+            "GLOBAL": 0.0825517970377052,
+            "TECHNICALS": 0.200089453973581
+          }
+        },
+        {
+          "test_start": "2025-11-17 13:15:00+05:30",
+          "test_end": "2026-02-13 09:15:00+05:30",
+          "weights": {
+            "TREND": -0.1873929564512383,
+            "VOLATILITY": -0.1821825437244782,
+            "BREADTH": -0.2014938862263561,
+            "POSITIONING": 0.04877261862649811,
+            "GLOBAL": 0.14305480958802144,
+            "TECHNICALS": 0.23710318538340777
+          }
+        },
+        {
+          "test_start": "2026-02-13 13:15:00+05:30",
+          "test_end": "2026-05-18 13:15:00+05:30",
+          "weights": {
+            "TREND": -0.023409975022496674,
+            "VOLATILITY": -0.17590488831284617,
+            "BREADTH": -0.35184054035048173,
+            "POSITIONING": 0.20427988584607176,
+            "GLOBAL": 0.14197553552855732,
+            "TECHNICALS": 0.10258917493954631
+          }
+        },
+        {
+          "test_start": "2026-05-19 09:15:00+05:30",
+          "test_end": "2026-08-12 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.08202332742505786,
+            "VOLATILITY": -0.12148184957518494,
+            "BREADTH": -0.3672524503539511,
+            "POSITIONING": 0.15861682043837566,
+            "GLOBAL": 0.18945975886659389,
+            "TECHNICALS": 0.08116579334083661
+          }
+        },
+        {
+          "test_start": "2026-08-13 09:15:00+05:30",
+          "test_end": "2026-10-01 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.08202332742505786,
+            "VOLATILITY": -0.12148184957518494,
+            "BREADTH": -0.3672524503539511,
+            "POSITIONING": 0.15861682043837566,
+            "GLOBAL": 0.18945975886659389,
+            "TECHNICALS": 0.08116579334083661
+          }
+        }
+      ],
+      "data_range": [
+        "2023-10-26 09:15:00+05:30",
+        "2026-10-01 13:15:00+05:30"
+      ]
+    },
+    "1h": {
+      "scoreboard": {
+        "n_scored_calls": 4024,
+        "hit_rate_pct": 35.3,
+        "baseline_persistence_pct": 36.1,
+        "baseline_always_bullish_pct": 31.7,
+        "by_label": {
+          "Bearish": {
+            "n": 654,
+            "hit_rate_pct": 38.7
+          },
+          "Bullish": {
+            "n": 509,
+            "hit_rate_pct": 25.3
+          },
+          "Neutral": {
+            "n": 2861,
+            "hit_rate_pct": 36.2
+          }
+        },
+        "by_confidence": {
+          "High": {
+            "n": 6,
+            "hit_rate_pct": 50.0
+          },
+          "Low": {
+            "n": 3710,
+            "hit_rate_pct": 35.9
+          },
+          "Medium": {
+            "n": 308,
+            "hit_rate_pct": 27.3
+          }
+        },
+        "per_class": {
+          "Bullish": {
+            "precision_pct": 25.3,
+            "recall_pct": 10.1,
+            "n_called": 509
+          },
+          "Bearish": {
+            "precision_pct": 38.7,
+            "recall_pct": 19.9,
+            "n_called": 654
+          },
+          "Neutral": {
+            "precision_pct": 36.2,
+            "recall_pct": 70.2,
+            "n_called": 2861
+          }
+        },
+        "actual_mix_pct": {
+          "Neutral": 36.7,
+          "Bullish": 31.7,
+          "Bearish": 31.6
+        }
+      },
+      "n_folds": 14,
+      "fold_weights": [
+        {
+          "test_start": "2024-05-31 13:15:00+05:30",
+          "test_end": "2024-08-02 11:15:00+05:30",
+          "weights": {
+            "TREND": -0.17218782964116833,
+            "VOLATILITY": 0.09835669908736125,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.2621212055837988,
+            "GLOBAL": 0.3414027343433306,
+            "TECHNICALS": 0.125931531344341
+          }
+        },
+        {
+          "test_start": "2024-08-02 12:15:00+05:30",
+          "test_end": "2024-10-04 10:15:00+05:30",
+          "weights": {
+            "TREND": -0.1878997915332714,
+            "VOLATILITY": 0.15520765482169127,
+            "BREADTH": 0.0,
+            "POSITIONING": -0.15029646701135554,
+            "GLOBAL": 0.39705821979552497,
+            "TECHNICALS": 0.10953786683815697
+          }
+        },
+        {
+          "test_start": "2024-10-04 11:15:00+05:30",
+          "test_end": "2024-12-09 09:15:00+05:30",
+          "weights": {
+            "TREND": 0.07610654550590415,
+            "VOLATILITY": 0.22770412225785175,
+            "BREADTH": -0.161406488743944,
+            "POSITIONING": -0.2649254633489975,
+            "GLOBAL": 0.1777065332191032,
+            "TECHNICALS": 0.09215084692419936
+          }
+        },
+        {
+          "test_start": "2024-12-09 10:15:00+05:30",
+          "test_end": "2025-02-05 15:15:00+05:30",
+          "weights": {
+            "TREND": 0.014573536184562835,
+            "VOLATILITY": 0.0381595949292221,
+            "BREADTH": -0.04364207633081401,
+            "POSITIONING": -0.2763165477823933,
+            "GLOBAL": 0.5064562057489171,
+            "TECHNICALS": 0.12085203902409059
+          }
+        },
+        {
+          "test_start": "2025-02-06 09:15:00+05:30",
+          "test_end": "2025-04-11 14:15:00+05:30",
+          "weights": {
+            "TREND": 0.1557392649391162,
+            "VOLATILITY": -0.07010587465286743,
+            "BREADTH": -0.13136437623752253,
+            "POSITIONING": -0.10190290904655186,
+            "GLOBAL": 0.5212568265242195,
+            "TECHNICALS": -0.0196307485997225
+          }
+        },
+        {
+          "test_start": "2025-04-11 15:15:00+05:30",
+          "test_end": "2025-06-16 13:15:00+05:30",
+          "weights": {
+            "TREND": 0.33673313749312755,
+            "VOLATILITY": -0.1932198696635871,
+            "BREADTH": -0.12167147817728288,
+            "POSITIONING": -0.007661977458291409,
+            "GLOBAL": 0.30339863688309665,
+            "TECHNICALS": 0.03731490032461437
+          }
+        },
+        {
+          "test_start": "2025-06-16 14:15:00+05:30",
+          "test_end": "2025-08-14 12:15:00+05:30",
+          "weights": {
+            "TREND": 0.24828984025273956,
+            "VOLATILITY": -0.2269571898275307,
+            "BREADTH": -0.11225219429657987,
+            "POSITIONING": 0.06712259133038939,
+            "GLOBAL": 0.3205335376954965,
+            "TECHNICALS": -0.024844646597264056
+          }
+        },
+        {
+          "test_start": "2025-08-14 13:15:00+05:30",
+          "test_end": "2025-10-17 11:15:00+05:30",
+          "weights": {
+            "TREND": 0.15884845539876757,
+            "VOLATILITY": -0.32576978305663845,
+            "BREADTH": -0.08261218325311673,
+            "POSITIONING": 0.15977749251792114,
+            "GLOBAL": 0.24570303702107996,
+            "TECHNICALS": 0.0272890487524763
+          }
+        },
+        {
+          "test_start": "2025-10-17 12:15:00+05:30",
+          "test_end": "2025-12-19 15:15:00+05:30",
+          "weights": {
+            "TREND": 0.1125139823754698,
+            "VOLATILITY": -0.31107698026667263,
+            "BREADTH": -0.08916368130484792,
+            "POSITIONING": 0.05538100160649416,
+            "GLOBAL": 0.30990024062515364,
+            "TECHNICALS": 0.12196411382136173
+          }
+        },
+        {
+          "test_start": "2025-12-22 09:15:00+05:30",
+          "test_end": "2026-02-24 15:15:00+05:30",
+          "weights": {
+            "TREND": 0.13792129877841788,
+            "VOLATILITY": -0.3614386520908494,
+            "BREADTH": -0.07464109893214652,
+            "POSITIONING": -0.008242362495155038,
+            "GLOBAL": 0.32622933580120056,
+            "TECHNICALS": 0.09152725190223063
+          }
+        },
+        {
+          "test_start": "2026-02-25 09:15:00+05:30",
+          "test_end": "2026-05-05 12:15:00+05:30",
+          "weights": {
+            "TREND": 0.13925604989607887,
+            "VOLATILITY": -0.29981345715901436,
+            "BREADTH": -0.1490854788383263,
+            "POSITIONING": 0.05773394697559046,
+            "GLOBAL": 0.2742296576783102,
+            "TECHNICALS": 0.07988140945267976
+          }
+        },
+        {
+          "test_start": "2026-05-05 13:15:00+05:30",
+          "test_end": "2026-07-07 11:15:00+05:30",
+          "weights": {
+            "TREND": 0.11068509952172144,
+            "VOLATILITY": -0.2966009767600936,
+            "BREADTH": -0.1545888404879853,
+            "POSITIONING": 0.05119406172428797,
+            "GLOBAL": 0.279704903252232,
+            "TECHNICALS": 0.10722611825367967
+          }
+        },
+        {
+          "test_start": "2026-07-07 12:15:00+05:30",
+          "test_end": "2026-09-04 10:15:00+05:30",
+          "weights": {
+            "TREND": 0.11068509952172144,
+            "VOLATILITY": -0.2966009767600936,
+            "BREADTH": -0.1545888404879853,
+            "POSITIONING": 0.05119406172428797,
+            "GLOBAL": 0.279704903252232,
+            "TECHNICALS": 0.10722611825367967
+          }
+        },
+        {
+          "test_start": "2026-09-04 11:15:00+05:30",
+          "test_end": "2026-10-01 15:15:00+05:30",
+          "weights": {
+            "TREND": 0.11068509952172144,
+            "VOLATILITY": -0.2966009767600936,
+            "BREADTH": -0.1545888404879853,
+            "POSITIONING": 0.05119406172428797,
+            "GLOBAL": 0.279704903252232,
+            "TECHNICALS": 0.10722611825367967
+          }
+        }
+      ],
+      "data_range": [
+        "2023-10-26 09:15:00+05:30",
+        "2026-10-01 15:15:00+05:30"
+      ]
+    }
+  }
+}

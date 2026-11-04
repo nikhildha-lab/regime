@@ -1,0 +1,999 @@
+{
+ "tested_on": "2026-10-17",
+ "method": "scripts/research/test_score_v2.py: forward returns per label, both halves, 200 circular-shift luck test",
+ "horizons": {
+  "5m": "1 hour",
+  "15m": "2 hours",
+  "75m": "1 session",
+  "1D": "10 days",
+  "1W": "4 weeks"
+ },
+ "results": {
+  "NIFTY": {
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.285,
+     "excess_bps": 15.7,
+     "abs_ratio": 0.74
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.695,
+     "excess_bps": 32.7,
+     "abs_ratio": 0.99
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.655,
+     "excess_bps": -4.0,
+     "abs_ratio": 1.01
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 11.3,
+     "abs_ratio": 1.42
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.56,
+     "ic": -0.024
+    }
+   },
+   "1W": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.76,
+     "excess_bps": -42.1,
+     "abs_ratio": 0.87
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.875,
+     "excess_bps": 34.3,
+     "abs_ratio": 1.12
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.255,
+     "excess_bps": 9.6,
+     "abs_ratio": 1.05
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.815,
+     "ic": 0.016
+    }
+   },
+   "5m": {
+    "Trending up": {
+     "pass": true,
+     "luck": 0.01,
+     "excess_bps": 1.8,
+     "abs_ratio": 0.96
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.31,
+     "excess_bps": -0.4,
+     "abs_ratio": 1.07
+    },
+    "Range": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": -0.9,
+     "abs_ratio": 0.8
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 1.2,
+     "abs_ratio": 1.4
+    },
+    "direction": {
+     "pass": true,
+     "luck": 0.0,
+     "ic": 0.042
+    }
+   },
+   "15m": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.125,
+     "excess_bps": 1.8,
+     "abs_ratio": 0.8
+    },
+    "Trending down": {
+     "pass": true,
+     "luck": 0.03,
+     "excess_bps": -2.7,
+     "abs_ratio": 1.1
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.01,
+     "excess_bps": -1.1,
+     "abs_ratio": 0.92
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 3.7,
+     "abs_ratio": 1.43
+    },
+    "direction": {
+     "pass": true,
+     "luck": 0.005,
+     "ic": 0.059
+    }
+   },
+   "75m": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.295,
+     "excess_bps": 3.6,
+     "abs_ratio": 0.81
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.3,
+     "excess_bps": -3.3,
+     "abs_ratio": 1.09
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.715,
+     "excess_bps": 3.7,
+     "abs_ratio": 1.02
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 16.2,
+     "abs_ratio": 1.45
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.75,
+     "ic": 0.013
+    }
+   }
+  },
+  "BANKNIFTY": {
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.295,
+     "excess_bps": 28.9,
+     "abs_ratio": 0.82
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.38,
+     "excess_bps": -15.1,
+     "abs_ratio": 1.12
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.43,
+     "excess_bps": 15.6,
+     "abs_ratio": 0.98
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.05,
+     "excess_bps": -1.9,
+     "abs_ratio": 1.34
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.785,
+     "ic": -0.012
+    }
+   },
+   "1W": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.815,
+     "excess_bps": -68.8,
+     "abs_ratio": 0.88
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.93,
+     "excess_bps": 141.6,
+     "abs_ratio": 1.21
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.28,
+     "excess_bps": 57.9,
+     "abs_ratio": 1.04
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.655,
+     "ic": 0.024
+    }
+   },
+   "5m": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.11,
+     "excess_bps": 1.2,
+     "abs_ratio": 1.02
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.44,
+     "excess_bps": -0.2,
+     "abs_ratio": 1.06
+    },
+    "Range": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 0.3,
+     "abs_ratio": 0.81
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 0.3,
+     "abs_ratio": 1.39
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.415,
+     "ic": 0.009
+    }
+   },
+   "15m": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.31,
+     "excess_bps": 0.8,
+     "abs_ratio": 0.88
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.17,
+     "excess_bps": -1.8,
+     "abs_ratio": 1.14
+    },
+    "Range": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": -1.2,
+     "abs_ratio": 0.87
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 6.9,
+     "abs_ratio": 1.38
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.05,
+     "ic": 0.039
+    }
+   },
+   "75m": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.43,
+     "excess_bps": 1.5,
+     "abs_ratio": 0.9
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.4,
+     "excess_bps": -1.9,
+     "abs_ratio": 1.02
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.06,
+     "excess_bps": 5.0,
+     "abs_ratio": 0.89
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "excess_bps": 4.8,
+     "abs_ratio": 1.56
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.81,
+     "ic": -0.006
+    }
+   }
+  },
+  "SP500": {
+   "1h": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.55,
+     "tested_on": "ES=F",
+     "excess_bps": -0.5,
+     "abs_ratio": 0.65
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.86,
+     "tested_on": "ES=F",
+     "excess_bps": 4.4,
+     "abs_ratio": 0.99
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.07,
+     "tested_on": "ES=F",
+     "excess_bps": -1.8,
+     "abs_ratio": 0.92
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "ES=F",
+     "excess_bps": 3.1,
+     "abs_ratio": 1.7
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.085,
+     "tested_on": "ES=F",
+     "ic": -0.038,
+     "reverse": false
+    }
+   },
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.21,
+     "tested_on": "S&P 500",
+     "excess_bps": 14.6,
+     "abs_ratio": 0.67
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.425,
+     "tested_on": "S&P 500",
+     "excess_bps": 1.3,
+     "abs_ratio": 1.47
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.91,
+     "tested_on": "S&P 500",
+     "excess_bps": -19.1,
+     "abs_ratio": 1.07
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "S&P 500",
+     "excess_bps": 8.7,
+     "abs_ratio": 1.43
+    },
+    "direction": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "S&P 500",
+     "ic": -0.09,
+     "reverse": true
+    }
+   },
+   "1W": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.945,
+     "tested_on": "S&P 500",
+     "excess_bps": -88.2,
+     "abs_ratio": 0.8
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.24,
+     "tested_on": "S&P 500",
+     "excess_bps": -35.1,
+     "abs_ratio": 1.62
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.07,
+     "tested_on": "S&P 500",
+     "excess_bps": -5.2,
+     "abs_ratio": 0.85
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.175,
+     "tested_on": "S&P 500",
+     "excess_bps": 51.1,
+     "abs_ratio": 1.08
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.33,
+     "tested_on": "S&P 500",
+     "ic": -0.046,
+     "reverse": false
+    }
+   },
+   "5m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "15m": {
+    "note": "not tested yet - needs longer intraday history"
+   }
+  },
+  "NDX": {
+   "1h": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.67,
+     "tested_on": "NQ=F",
+     "excess_bps": -2.2,
+     "abs_ratio": 0.74
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.235,
+     "tested_on": "NQ=F",
+     "excess_bps": -3.0,
+     "abs_ratio": 1.12
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.075,
+     "tested_on": "NQ=F",
+     "excess_bps": -3.7,
+     "abs_ratio": 0.92
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "NQ=F",
+     "excess_bps": 5.7,
+     "abs_ratio": 1.51
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.23,
+     "tested_on": "NQ=F",
+     "ic": -0.025,
+     "reverse": false
+    }
+   },
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.745,
+     "tested_on": "NQ",
+     "excess_bps": -18.1,
+     "abs_ratio": 0.73
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.955,
+     "tested_on": "NQ",
+     "excess_bps": 106.7,
+     "abs_ratio": 1.31
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.54,
+     "tested_on": "NQ",
+     "excess_bps": -4.5,
+     "abs_ratio": 1.01
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "NQ",
+     "excess_bps": -19.6,
+     "abs_ratio": 1.45
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.055,
+     "tested_on": "NQ",
+     "ic": -0.072,
+     "reverse": false
+    }
+   },
+   "1W": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.895,
+     "tested_on": "NQ",
+     "excess_bps": -66.8,
+     "abs_ratio": 0.81
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.94,
+     "tested_on": "NQ",
+     "excess_bps": -128.3,
+     "abs_ratio": 1.13
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.09,
+     "tested_on": "NQ",
+     "excess_bps": 41.9,
+     "abs_ratio": 1.1
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.465,
+     "tested_on": "NQ",
+     "ic": -0.036,
+     "reverse": false
+    }
+   },
+   "5m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "15m": {
+    "note": "not tested yet - needs longer intraday history"
+   }
+  },
+  "BTC": {
+   "5m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "15m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "4h": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.575,
+     "tested_on": "BTC",
+     "excess_bps": -5.9,
+     "abs_ratio": 0.92
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.865,
+     "tested_on": "BTC",
+     "excess_bps": 26.7,
+     "abs_ratio": 0.91
+    },
+    "Range": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "BTC",
+     "excess_bps": -5.0,
+     "abs_ratio": 0.81
+    },
+    "Volatile": {
+     "pass": true,
+     "luck": 0.0,
+     "tested_on": "BTC",
+     "excess_bps": -7.7,
+     "abs_ratio": 1.47
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.7,
+     "tested_on": "BTC",
+     "ic": -0.015,
+     "reverse": false
+    }
+   },
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.145,
+     "tested_on": "BTC",
+     "excess_bps": 125.4,
+     "abs_ratio": 0.77
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.52,
+     "tested_on": "BTC",
+     "excess_bps": 21.4,
+     "abs_ratio": 0.89
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.895,
+     "tested_on": "BTC",
+     "excess_bps": -103.4,
+     "abs_ratio": 1.1
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.905,
+     "tested_on": "BTC",
+     "excess_bps": -157.6,
+     "abs_ratio": 0.8
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.68,
+     "tested_on": "BTC",
+     "ic": 0.024,
+     "reverse": false
+    }
+   },
+   "1W": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.05,
+     "tested_on": "BTC",
+     "excess_bps": 992.5,
+     "abs_ratio": 1.15
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.03,
+     "tested_on": "BTC",
+     "excess_bps": 107.2,
+     "abs_ratio": 0.68
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.025,
+     "tested_on": "BTC",
+     "excess_bps": 177.3,
+     "abs_ratio": 1.19
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.145,
+     "tested_on": "BTC",
+     "ic": 0.197,
+     "reverse": false
+    }
+   }
+  },
+  "ETH": {
+   "5m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "15m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "4h": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.345,
+     "tested_on": "ETH",
+     "excess_bps": 6.0,
+     "abs_ratio": 1.01
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.555,
+     "tested_on": "ETH",
+     "excess_bps": 11.5,
+     "abs_ratio": 1.23
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.035,
+     "tested_on": "ETH",
+     "excess_bps": 0.5,
+     "abs_ratio": 0.9
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.045,
+     "tested_on": "ETH",
+     "excess_bps": -34.3,
+     "abs_ratio": 1.19
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.66,
+     "tested_on": "ETH",
+     "ic": -0.017,
+     "reverse": false
+    }
+   },
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.235,
+     "tested_on": "ETH",
+     "excess_bps": 123.0,
+     "abs_ratio": 1.02
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.05,
+     "tested_on": "ETH",
+     "excess_bps": -438.2,
+     "abs_ratio": 1.23
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.745,
+     "tested_on": "ETH",
+     "excess_bps": -99.2,
+     "abs_ratio": 1.06
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.905,
+     "tested_on": "ETH",
+     "excess_bps": 105.9,
+     "abs_ratio": 0.76
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.285,
+     "tested_on": "ETH",
+     "ic": 0.06,
+     "reverse": false
+    }
+   },
+   "1W": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.17,
+     "tested_on": "ETH",
+     "excess_bps": 354.2,
+     "abs_ratio": 1.0
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.435,
+     "tested_on": "ETH",
+     "excess_bps": -273.0,
+     "abs_ratio": 0.97
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.81,
+     "tested_on": "ETH",
+     "excess_bps": -181.3,
+     "abs_ratio": 0.89
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.86,
+     "tested_on": "ETH",
+     "ic": 0.015,
+     "reverse": false
+    }
+   }
+  },
+  "SOL": {
+   "5m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "15m": {
+    "note": "not tested yet - needs longer intraday history"
+   },
+   "4h": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.76,
+     "tested_on": "SOL",
+     "excess_bps": -27.6,
+     "abs_ratio": 0.93
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.45,
+     "tested_on": "SOL",
+     "excess_bps": 4.0,
+     "abs_ratio": 1.23
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.02,
+     "tested_on": "SOL",
+     "excess_bps": 33.0,
+     "abs_ratio": 0.89
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.1,
+     "tested_on": "SOL",
+     "excess_bps": -26.2,
+     "abs_ratio": 1.13
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.205,
+     "tested_on": "SOL",
+     "ic": -0.049,
+     "reverse": false
+    }
+   },
+   "1D": {
+    "Trending up": {
+     "pass": false,
+     "luck": 0.005,
+     "tested_on": "SOL",
+     "excess_bps": 675.9,
+     "abs_ratio": 1.15
+    },
+    "Trending down": {
+     "pass": false,
+     "luck": 0.29,
+     "tested_on": "SOL",
+     "excess_bps": -80.7,
+     "abs_ratio": 1.23
+    },
+    "Range": {
+     "pass": false,
+     "luck": 0.07,
+     "tested_on": "SOL",
+     "excess_bps": 32.0,
+     "abs_ratio": 0.89
+    },
+    "Volatile": {
+     "pass": false,
+     "luck": 0.91,
+     "tested_on": "SOL",
+     "excess_bps": -234.1,
+     "abs_ratio": 0.82
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.26,
+     "tested_on": "SOL",
+     "ic": 0.074,
+     "reverse": false
+    }
+   },
+   "1W": {
+    "Range": {
+     "pass": false,
+     "luck": 0.895,
+     "tested_on": "SOL",
+     "excess_bps": -33.3,
+     "abs_ratio": 1.31
+    },
+    "direction": {
+     "pass": false,
+     "luck": 0.525,
+     "tested_on": "SOL",
+     "ic": 0.089,
+     "reverse": false
+    }
+   }
+  }
+ },
+ "markets_tested_on": "2026-10-18",
+ "horizons_markets": {
+  "5m": "1 hour",
+  "15m": "2 hours",
+  "1h": "6 hours",
+  "4h": "1 day",
+  "1D": "10 days",
+  "1W": "4 weeks"
+ },
+ "warnings": [
+  {
+   "warning": "W1 VIX +15% in 5 days -> high volatility next 10 days",
+   "market": "S&P 500",
+   "events": 1092,
+   "gap": 0.2408,
+   "h1": 0.1253,
+   "h2": 0.2818,
+   "luck": 0.0,
+   "PASS": true
+  },
+  {
+   "warning": "W2 VIX -15% in 5 days -> less high volatility",
+   "market": "S&P 500",
+   "events": 764,
+   "gap": -0.0112,
+   "h1": -0.0274,
+   "h2": -0.0056,
+   "luck": 0.294,
+   "PASS": false
+  },
+  {
+   "warning": "W1 DVOL +15% in 5 days -> high volatility next 10 days",
+   "market": "BTC",
+   "events": 119,
+   "gap": 0.2089,
+   "h1": 0.2085,
+   "h2": 0.2252,
+   "luck": 0.0,
+   "PASS": true
+  },
+  {
+   "warning": "W2 DVOL -15% in 5 days -> less high volatility",
+   "market": "BTC",
+   "events": 62,
+   "gap": 0.1122,
+   "h1": -0.0179,
+   "h2": 0.3354,
+   "luck": 0.964,
+   "PASS": false
+  },
+  {
+   "warning": "W3 funding top 10% -> weaker next 10 days",
+   "market": "BTC",
+   "events": 265,
+   "gap": 0.0086,
+   "h1": -0.0092,
+   "h2": 0.0237,
+   "luck": 0.704,
+   "PASS": false
+  },
+  {
+   "warning": "W4 funding bottom 10% -> stronger next 10 days",
+   "market": "BTC",
+   "events": 278,
+   "gap": 0.0101,
+   "h1": 0.0156,
+   "h2": 0.0071,
+   "luck": 0.23,
+   "PASS": false
+  },
+  {
+   "warning": "W1 DVOL +15% in 5 days -> high volatility next 10 days",
+   "market": "ETH",
+   "events": 111,
+   "gap": 0.2168,
+   "h1": 0.253,
+   "h2": 0.2001,
+   "luck": 0.002,
+   "PASS": true
+  },
+  {
+   "warning": "W2 DVOL -15% in 5 days -> less high volatility",
+   "market": "ETH",
+   "events": 29,
+   "gap": -0.1944,
+   "h1": -0.1388,
+   "h2": -0.2492,
+   "luck": 0.02,
+   "PASS": true
+  },
+  {
+   "warning": "W3 funding top 10% -> weaker next 10 days",
+   "market": "ETH",
+   "events": 225,
+   "gap": 0.0253,
+   "h1": 0.0276,
+   "h2": 0.0197,
+   "luck": 0.858,
+   "PASS": false
+  },
+  {
+   "warning": "W4 funding bottom 10% -> stronger next 10 days",
+   "market": "ETH",
+   "events": 304,
+   "gap": -0.0058,
+   "h1": -0.041,
+   "h2": 0.0319,
+   "luck": 0.652,
+   "PASS": false
+  },
+  {
+   "warning": "W3 funding top 10% -> weaker next 10 days",
+   "market": "SOL",
+   "events": 156,
+   "gap": 0.0228,
+   "h1": -0.0074,
+   "h2": 0.0516,
+   "luck": 0.744,
+   "PASS": false
+  },
+  {
+   "warning": "W4 funding bottom 10% -> stronger next 10 days",
+   "market": "SOL",
+   "events": 259,
+   "gap": -0.0069,
+   "h1": -0.0076,
+   "h2": -0.006,
+   "luck": 0.604,
+   "PASS": false
+  }
+ ]
+}

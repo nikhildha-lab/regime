@@ -1,0 +1,9 @@
+pandas>=2.0
+numpy>=1.24
+certifi
+curl_cffi
+scipy
+scikit-learn
+hmmlearn
+protobuf
+websocket-client
