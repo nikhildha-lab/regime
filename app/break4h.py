@@ -67,11 +67,48 @@ V3.update({k: {"room": 0.0, "exit": "trail", "trail": 1.5, "proven": False} for 
 # out after 2 days. History (scripts/research/b4h_hybrid.py, 162 SOL trades 2023-26, v3 conditions, net of 0.14 %): +0.28 % a trade,
 # halves +0.24 / +0.31, worst drawdown -22 % (pure trail +0.37 %, -28 %; targets +0.10 %). Other markets' rules are unchanged.
 MKTS["SOL"] = "SOLUSDT"
+# 2026-11-05 (Nikhil: "can we start testing all metals and commodities"): the Gold v1 signal (no taker data) as a FORWARD PAPER TEST on
+# the other futures, live 4H bars from the Yahoo 1h file (data_store/market_data/synaptic_intraday_all.csv), each with the exit that was
+# best in scripts/research/b4h_commod.py (May 2024 - Nov 2026, net of 0.14 %). Only Silver held in both halves; the rest are records only.
+INTRA_CSV = os.path.join(ROOT, "data_store", "market_data", "synaptic_intraday_all.csv")
+COMMOD = {"SILVER": ("SI=F", "trail", True,  "history: 92 trades, +0.19 % a trade, halves +0.19 / +0.20 (trail)"),
+          "NATGAS": ("NG=F", "h3",    False, "history mixed: 140 trades, +0.12 % a trade, halves +0.00 / +0.24 (H3)"),
+          "COPPER": ("HG=F", "targets", False, "history negative: 69 trades, -0.10 % a trade (targets, least bad)"),
+          "ALUMINUM": ("ALI=F", "h3",  False, "history negative: 43 trades, -0.13 % a trade (H3, least bad)"),
+          "CRUDE": ("CL=F", "targets", False, "history negative: 99 trades, -0.30 % a trade (targets, least bad)")}
+MKTS.update({k: None for k in COMMOD})
 V3["SOL"] = {"room": 0.0, "exit": "h3", "trail": 1.5, "proven": True}
 # 2026-11-05: BTC H2 = a record-only version on every BTC v3 trade (the live BTC trade keeps its 3 targets): HALF at 1R, stop to
 # breakeven, the other half trails 1.5 ATR; 2 days. History: +0.32 % vs targets +0.28 % a trade, halves +0.14 / +0.54 vs +0.10 / +0.50,
 # worst drawdown -13.7 % vs -15.0 %.
 BTC_H2 = "BTC H2 · half at 1R + trail"
+# 2026-11-05 (Nikhil: "enhance the logic for BTC and ETH wherever possible"): v4 = RECORD-ONLY versions beside v3 (v3 unchanged).
+# scripts/research/b4h_enhance.py, 2023-26, picked AFTER a one-at-a-time grid (only ideas better in both halves with >= 50 % of trades):
+#   ETH v4: only weekday entries (UTC) + BTC 24 h move >= 1 % with the trade + hold 3 days (trail 1.5 ATR as v3)
+#           +1.35 % a trade vs +1.04 % (halves +1.30 / +1.37 vs +0.94 / +1.10) but 139 trades vs 222 -> total +187 % vs +231 %
+#   BTC v4: BTC 24 h move >= 1 % with the trade + stop room 1.0 ATR (v3 0.5) + H2 exit (half at 1R, stop to entry, rest trails 1.5 ATR)
+#           +0.61 % a trade vs +0.28 % (halves +0.28 / +1.01 vs +0.10 / +0.50), 140 trades vs 170 -> total +85 % vs +47 %
+# Chosen after seeing ~15 ideas, so some of the gain can be luck: judged on live trades before anything replaces v3.
+V4 = {"ETH": {"label": "ETH v4 · weekday + trend 1% + 3 days", "trend": 0.01, "weekday": True, "hold": 18},
+      "BTC": {"label": "BTC v4 · trend 1% + 1.0 ATR room + H2", "trend": 0.01, "weekday": False, "hold": HOLD}}
+
+
+def _v4(r, after):
+    """None if the v3 trade does not qualify for v4; else the v4 record (same entry, own stop / exit)."""
+    cfg = V4.get(r["mkt"]); s_ = r["side"]; b24 = r.get("btc_24h_pct")
+    if not cfg or b24 is None or b24 / 100 * s_ < cfg["trend"]:
+        return None
+    if cfg["weekday"] and (pd.Timestamp(r["bar"]) + pd.Timedelta(hours=4)).weekday() >= 5:
+        return None
+    a = r.get("atr") or 0
+    if r["mkt"] == "BTC":
+        st = r["stop"] - s_ * 0.5 * a                         # v3 BTC stop already has 0.5 ATR room -> 1.0 ATR in total
+        v = {"entry": r["entry"], "side": s_, "stop": st, "risk": abs(r["entry"] - st), "atr": a, "trail_atr": 1.5, "exit_mode": "h2", "status": "open"}
+    else:
+        v = {"entry": r["entry"], "side": s_, "stop": r["stop"], "risk": r["risk"], "atr": a, "trail_atr": 1.5, "exit_mode": "trail", "status": "open"}
+    _manage(v, after, hold=cfg["hold"])
+    keep = ("status", "exit", "exit_reason", "bps", "bps_net", "R", "R_net", "cur_stop", "hit", "closed_bar", "trailing", "stop", "risk")
+    return {k2: (round(v[k2], 2) if isinstance(v.get(k2), float) else v.get(k2)) for k2 in keep}
 
 
 def _atr_rank(done, j):
@@ -112,7 +149,7 @@ def _close(r, ex_px, why, t_):
              R_net=round((pts - r["entry"] * COST / 1e4) / r["risk"], 2))
 
 
-def _manage_hybrid(r, after):
+def _manage_hybrid(r, after, hold=None):
     """2026-11-05: 'h2' (half at 1R, stop to breakeven, rest trails) and 'h3' (half at 2R, rest trails from +1R, stop never below
     entry after +1R). Same order as the research (b4h_hybrid.py): stop first (4H high / low), then the target, then the trail on the close."""
     mode, s, e, R_ = r["exit_mode"], r["side"], r["entry"], r["risk"]; a = r.get("atr") or 0; k_tr = r.get("trail_atr") or 1.5
@@ -135,16 +172,16 @@ def _manage_hybrid(r, after):
             if mode == "h3":
                 cur = max(cur, e) if s > 0 else min(cur, e)
         r["cur_stop"] = cur
-        if n_ >= HOLD:
-            _close(r, x.close, "2 days", t_); return True
+        if n_ >= (hold or HOLD):
+            _close(r, x.close, f"{(hold or HOLD) // 6} days", t_); return True
     return False
 
 
-def _manage(r, after):
-    """Walk completed 4H bars after entry. Stop checked first in each bar (conservative)."""
+def _manage(r, after, hold=None):
+    """Walk completed 4H bars after entry. Stop checked first in each bar (conservative). hold = bars (default HOLD = 2 days)."""
     mode = r.get("exit_mode", "fixed"); s = r["side"]
     if mode in ("h2", "h3"):
-        return _manage_hybrid(r, after)
+        return _manage_hybrid(r, after, hold)
     for n_, (t_, x) in enumerate(after.iterrows(), 1):
         cur = r.get("cur_stop", r["stop"])
         if (s < 0 and x.high >= cur) or (s > 0 and x.low <= cur):
@@ -166,8 +203,8 @@ def _manage(r, after):
             if s * (best - r["entry"]) >= r["risk"]:
                 nt = best - s * r["trail_atr"] * r["atr"]
                 r["cur_stop"] = max(cur, nt) if s > 0 else min(cur, nt); r["trailing"] = True
-        if n_ >= HOLD:
-            _close(r, x.close, "2 days", t_); return True
+        if n_ >= (hold or HOLD):
+            _close(r, x.close, f"{(hold or HOLD) // 6} days", t_); return True
     return False
 _C: dict = {}
 
@@ -231,8 +268,9 @@ def bars(mkt):
         b4["delta"] = (2 * b4.tbv - b4.volume) / b4.volume.replace(0, np.nan)
         b4["done"] = b4.index + pd.Timedelta(hours=4) <= pd.Timestamp.utcnow().tz_localize(None)
     else:
-        g = pd.read_csv(GOLD_CSV)
-        g = g[(g.symbol == "GC=F") & (g.interval == "1h")]
+        ysym = "GC=F" if mkt == "GOLD" else COMMOD[mkt][0]                # 2026-11-05: metals / commodities from the Yahoo 1h file
+        g = pd.read_csv(GOLD_CSV if mkt == "GOLD" else INTRA_CSV, usecols=["datetime_utc", "symbol", "interval", "open", "high", "low", "close", "volume"])
+        g = g[(g.symbol == ysym) & (g.interval == "1h")]
         g["t"] = pd.to_datetime(g.datetime_utc); g = g.set_index("t").sort_index()[["open", "high", "low", "close", "volume"]].astype(float)
         g = g[g.index >= g.index.max() - pd.Timedelta(days=90)]
         b4 = g.resample("4h").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna(subset=["close"])
@@ -342,6 +380,17 @@ def tick(force=False) -> dict:
                 r["gv2"] = gv; r["gv2_fix"] = 1; r["gv2_done"] = gv["status"] == "closed"; changed = True
             if gv["status"] == "closed":
                 r["gv2_done"] = True; changed = True
+        # v4 (ETH / BTC) - record-only, never changes the v3 trade
+        for r in rows:
+            if mkt not in V4 or r["mkt"] != mkt or r.get("rule") != "v3" or r.get("v4_done"):
+                continue
+            vv4 = _v4(r, done[done.index > pd.Timestamp(r["bar"])])
+            if vv4 is None:
+                if r.get("v4") is not False:
+                    r["v4"] = False; r["v4_done"] = True; changed = True
+                continue
+            if vv4 != r.get("v4"):
+                r["v4"] = vv4; r["v4_done"] = vv4["status"] == "closed"; changed = True
         # BTC H2 - record-only, never changes the BTC trade
         for r in rows:
             if mkt != "BTC" or r["mkt"] != "BTC" or r.get("rule") != "v3" or r.get("h2_done"):
@@ -395,6 +444,11 @@ def tick(force=False) -> dict:
                    "taker_delta": None if pd.isna(dl) else round(float(dl), 3), "exit_by": str(t_last + pd.Timedelta(hours=4 * (HOLD + 1))),
                    "created": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
             break
+        if sig and mkt in COMMOD:                            # 2026-11-05: commodity exit (v1 signal kept as rule 'v1')
+            _ys, ex_, pr_, note_ = COMMOD[mkt]; a_ = _atr(done, j); e_, ts_, R_ = sig["entry"], sig["side"], sig["risk"]
+            sig.update(exit_mode=ex_, atr=round(a_, 4), trail_atr=1.5, proven=pr_, hist=note_)
+            if ex_ == "targets":
+                sig["targets"] = [round(e_ + ts_ * k * R_, 4) for k in (1, 2, 3)]
         if sig and mkt in V3:                                # crypto: v3 only
             cfg = V3[mkt]; a = _atr(done, j); e = sig["entry"]; ts = sig["side"]
             tr = _btc_trend(t_last); rk = _atr_rank(done, j); md = _mood(rk)
@@ -472,6 +526,10 @@ def api() -> dict:
             z = [r["var"][nm] for r in closed if r["mkt"] == mkt and r.get("rule") == "v3" and r.get("var", {}).get(nm, {}).get("status") == "closed"]
             if z:
                 vsc[f"{mkt} {nm}"] = {"n": len(z), "avg_bps_net": round(sum(x["bps_net"] for x in z) / len(z), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in z) / len(z))}
+    for m4, c4 in V4.items():
+        z4 = [r["v4"] for r in closed if r["mkt"] == m4 and isinstance(r.get("v4"), dict) and r["v4"].get("status") == "closed"]
+        if z4:
+            vsc[c4["label"]] = {"n": len(z4), "avg_bps_net": round(sum(x["bps_net"] for x in z4) / len(z4), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in z4) / len(z4))}
     zb = [r["h2"] for r in closed if r["mkt"] == "BTC" and r.get("h2", {}).get("status") == "closed"]
     if zb:
         vsc[BTC_H2] = {"n": len(zb), "avg_bps_net": round(sum(x["bps_net"] for x in zb) / len(zb), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in zb) / len(zb))}

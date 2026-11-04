@@ -15,9 +15,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 NAME = {"BTC": "BTC", "ETH": "ETH", "GOLD": "Gold", "NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty",
-        "SOL": "SOL", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}   # 2026-11-04: 4H break forward test on more coins
+        "SOL": "SOL", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}   # 2026-11-04: 4H break forward test on more coins
 RULES = {
     "b4h": {"label": "4H break", "edge": "tested edge (backtest 2023-26)"},
+    "b4h_v4": {"label": "4H break · v4 (ETH / BTC record)", "edge": "new - picked on 2023-26 after a grid; judge on live trades"},
     "b4h_h2": {"label": "4H break · BTC H2 (half at 1R + trail)", "edge": "new - record beside BTC targets; history +0.32 % vs +0.28 % a trade"},
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
     "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
@@ -40,7 +41,7 @@ def _b4h(hot, px):
     for r in rows:
         if r.get("rule") not in ("v3", "v1") or r.get("mkt") not in NAME:
             continue
-        if r.get("rule") == "v1" and r["mkt"] != "GOLD":
+        if r.get("rule") == "v1" and r["mkt"] not in ("GOLD", "SILVER", "COPPER", "ALUMINUM", "CRUDE", "NATGAS"):
             continue
         sd = r["side"] if isinstance(r["side"], int) else (1 if r["side"] == "long" else -1)
         risk = r.get("risk") or 0
@@ -50,8 +51,8 @@ def _b4h(hot, px):
              "entry": r["entry"], "stop": r.get("stop"), "target": (tg[-1] if tg else None), "targets": tg,
              "how": ("3 targets 1R / 2R / 3R" if tg else f"trail {r.get('trail_atr', 1.5)} ATR after +1R" if r.get("exit_mode") == "trail" else "out after 2 days")
                     + f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "",
-             "instrument": f"{NAME[r['mkt']]} perpetual" if r["mkt"] != "GOLD" else "Gold", "size": round(units * r["entry"]), "ccy": "$",
-             "risk_money": 100, "status": r["status"], "why": r.get("dir", ""), "proven": r.get("proven")}
+             "instrument": "Gold" if r["mkt"] == "GOLD" else f"{NAME[r['mkt']]} futures" if r.get("hist") else f"{NAME[r['mkt']]} perpetual", "size": round(units * r["entry"]), "ccy": "$",
+             "risk_money": 100, "status": r["status"], "why": r.get("dir", ""), "proven": r.get("proven"), "hist": r.get("hist")}
         # 2026-11-05 (Nikhil: "4h break doesn't have a target and trailing SL?"): display only - show the CURRENT stop (it moves with the
         # trail / targets) and say when trailing starts. Exits themselves are unchanged (break4h.py).
         if r["status"] == "open":
@@ -75,6 +76,22 @@ def _b4h(hot, px):
         elif px.get(r["mkt"]) and units:
             t.update(now=px[r["mkt"]], pnl_open=round(units * sd * (px[r["mkt"]] - r["entry"]), 2))
         out.append(t)
+        v4 = r.get("v4")
+        if isinstance(v4, dict):                            # 2026-11-05: ETH / BTC v4 shown as its own paper trade (record-only)
+            B4 = hot("break4h"); c4 = B4.V4[r["mkt"]]
+            w = {**t, "rule": "b4h_v4", "stop": v4.get("cur_stop") or v4.get("stop"), "targets": None, "status": v4["status"],
+                 "target": round(r["entry"] + sd * v4["risk"], 2) if r["mkt"] == "BTC" else None,
+                 "how": (f"{c4['label']} · " + (f"book HALF at 1R ({r['entry'] + sd * v4['risk']:,.0f}), stop to entry, rest trails 1.5 ATR · out after 2 days"
+                         if r["mkt"] == "BTC" else "no fixed target · trail 1.5 ATR from +1R · out after 3 days"))}
+            for k_ in ("exit", "exit_reason", "closed", "r", "pnl", "pct", "now", "pnl_open"):
+                w.pop(k_, None)
+            if v4["status"] == "closed":
+                w.update(exit=v4.get("exit"), exit_reason=v4.get("exit_reason"), r=v4.get("R_net"), pnl=round((v4.get("R_net") or 0) * 100, 2),
+                         closed=_ist(pd.Timestamp(v4["closed_bar"]) + timedelta(hours=4)) if v4.get("closed_bar") else "")
+            elif px.get(r["mkt"]) and v4.get("risk"):
+                u4 = 100.0 / v4["risk"]; booked = 0.5 * sd * v4["risk"] if v4.get("hit") else 0.0; left = 0.5 if v4.get("hit") else 1.0
+                w.update(now=px[r["mkt"]], pnl_open=round(u4 * (booked + left * sd * (px[r["mkt"]] - r["entry"])), 2))
+            out.append(w)
         hv = r.get("h2")
         if r["mkt"] == "BTC" and hv:                        # 2026-11-05: BTC H2 shown as its own paper trade (record-only)
             h2 = {**t, "rule": "b4h_h2", "target": round(r["entry"] + sd * risk, 2), "targets": None, "stop": hv.get("cur_stop") or r.get("stop"),
@@ -212,7 +229,7 @@ def api(hot, px, keys=None, group=None) -> dict:
     for t in allt:
         t["market"] = NAME.get(t["key"], t["key"]); t["rule_label"] = RULES[t["rule"]]["label"]; t["edge"] = RULES[t["rule"]]["edge"]
         if t.get("proven") is False:
-            t["edge"] = "UNPROVEN - forward paper test (not backtested on this coin)"
+            t["edge"] = ("forward paper test - " + t["hist"]) if t.get("hist") else "UNPROVEN - forward paper test (not backtested on this coin)"
     op = sorted([t for t in allt if t["status"] == "open"], key=lambda t: t["opened"], reverse=True)
     cl = sorted([t for t in allt if t["status"] == "closed"], key=lambda t: t.get("closed") or t["opened"], reverse=True)
     today = datetime.now().strftime("%Y-%m-%d")
