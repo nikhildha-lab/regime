@@ -111,14 +111,15 @@ Shown as context only (failed tests): FII / Pro / Client positions for direction
 - Touch log records every key-level touch 09:30–14:30 IST (yesterday's POC / VAH / VAL, PDH / PDL, prior week / month, OI walls, max pain) with footprint and outcome.
 - **Signal:** the touch minute closes with buyers in control at support (delta / volume > +0.2) or sellers in control at resistance (< −0.2).
 - **Trade:** enter at that minute's close in the bounce direction; exit 30 min later at market; no stop, no target. One open trade per index; same-minute merged levels count once.
-- **Grading:** gross bps and points on spot first; net for 1-lot futures (Nifty ~18 pts, Bank Nifty ~45 pts round trip). Lots: Nifty 65, Bank Nifty 30. Status: hypothesis, not a tested edge.
+- **Vehicle (from 4 Nov 2026):** buy the ~0.6-delta option (call for long, put for short), next-week expiry (7+ days left; Bank Nifty: nearest monthly with 7+ days), 1 lot. Stop on spot 1-minute closes 0.10 % past the level; +1R → breakeven; +2R → trail 1R; out after 30 min.
+- **Grading:** gross bps and points on spot first; net = option round trip: real charges (STT 0.15 % of sell, exchange, GST, stamp, ₹40 brokerage) + assumed spread 0.5 pt (Nifty) / 1.5 pt (Bank Nifty) a side. In index points that is ~5.5 / ~15 pts. Lots: Nifty 65, Bank Nifty 30. Status: hypothesis, not a tested edge.
 
 ### 6c. DOM hold / break (`app/domcards.py`) – Nifty / Bank Nifty futures + 48 liquid F&O stocks
 - **Levels** fixed for the day on first read: index = medium / strong blocks (shifted to futures by the live basis) + call / put OI walls; stocks = yesterday's high / low / close; plus opening range 09:15–09:30 (stocks) / initial balance 09:15–10:15 (index).
 - **HOLD:** price comes into a level zone from away (outside 2+ min), does not break more than 2 bands past the far edge, and leaves on the side it came from within 2 min; book leaning our way over the last 30 s (20-level imbalance ≥ 0.10 above its 30-min median); aggressive side absorbed (index: market sells ≥ market buys in the zone; stocks: bid qty refilled). Trade the bounce; stop 2 bands beyond the far edge.
 - **BREAK:** price leaves the zone on the far side and stays beyond for 30 s; book leaning the break way (≥ 0.15 vs median); index: 60-s market-order delta ≥ 15 % of volume in the break direction; stocks: defending side's 20-level qty down ≥ 30 % vs 2 min earlier. Trade the break; stop 1 band inside the near side.
 - **Both:** target = next level, at least 2R (else 2R); out after 60 min or 15:20; new trades 09:30–15:00; one open trade per market; each level / setup / side once a day; max 4 trades per market a day; fill at mid.
-- **Costs:** Nifty futures 6 pts, Bank Nifty 14 pts round trip; stocks 0.08 %. ₹1,000 risked per trade. "Plan account": first 3 trades a day, stop for the day at −2R.
+- **Costs:** index = 0.6-delta next-week option round trip in index points: Nifty 5.5, Bank Nifty 15 (charges + spread + up to 60 min decay ÷ 0.6 × lot); stocks 0.08 %. ₹1,000 risked per trade. "Plan account": first 3 trades a day, stop for the day at −2R.
 - **Judged** after 30–40 sessions: must be positive after costs in both halves with 30+ trades. Day 1: 84 trades, +0.04R gross, −0.14R net.
 
 ### 6d. Cross-section momentum basket (`app/xsecpaper.py`) – crypto

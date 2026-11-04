@@ -9,7 +9,7 @@ Rule (the lead from 21-23 Oct, claude/levels-fii-footprint.md - a hypothesis, NO
   trade  : enter at that minute's close in the bounce direction (long at support, short at resistance)
   exit   : 30 minutes later, at the market (no stop, no target - exactly as the lead was measured)
   limits : one open trade per index; touches of merged levels in the same minute count once
-Graded gross first (bps and index points on spot); net shown for 1-lot futures (Nifty ~18 pts, Bank Nifty ~45 pts round trip,
+Graded gross first (bps and index points on spot); net = 0.6-delta next-week option round trip in index points (Nifty ~5.5, Bank Nifty ~15; was futures 18 / 45,
 claude/real-orderflow-test.md). Lot: Nifty 65, Bank Nifty 30.
 'replay' = trades rebuilt from touches logged 26-28 Oct, before the rule was switched on (same rule, recorded data);
 'live' = from 30 Oct. Judged by scripts/research/touch_review.py after ~35 sessions; nothing changes without Nikhil's approval.
@@ -27,7 +27,12 @@ THR = 0.2
 HOLD = 30
 LIVE_FROM = "2026-10-30"
 LOT = {"NIFTY": 65, "BANKNIFTY": 30}
-COST_PTS = {"NIFTY": 18.0, "BANKNIFTY": 45.0}
+# 2026-11-04 (Nikhil: "I will use options ... always 0.6 delta ... next week expiry"): the plain record is now netted with the
+# index-point equivalent of a 0.6-delta next-week option round trip (charges + spread + ~30-60 min decay) / (0.6 x lot).
+# Was 18 / 45 pts (1-lot futures). Rough estimate, not measured fills.
+COST_PTS = {"NIFTY": 5.5, "BANKNIFTY": 15.0}
+MIN_DAYS_LEFT = 7                                  # 2026-11-04: next-week expiry (>= 7 days left) - less decay; Bank Nifty = nearest monthly with 7+ days
+SPREAD_PTS = {"NIFTY": 0.5, "BANKNIFTY": 1.5}      # 2026-11-04: assumed bid / ask + slippage per side, option premium points
 NAME = {"NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty"}
 
 
@@ -97,7 +102,7 @@ def api(spots: dict | None = None) -> dict:
             "rule": "Key level touched, and the touch minute closes with buyers in control at support / sellers at resistance (delta beyond 0.2) -> "
                     "enter at that minute's close in the bounce direction, exit 30 min later. No stop. One trade per index at a time. Paper only.",
             "evidence": "Lead from 21-23 Oct: +16.5 bps at 30 min, 11 of 13 positive, about 10 independent events, about 25 splits looked at. A hypothesis, not a tested edge.",
-            "cost_note": "Net = 1 lot futures after about 18 pts (Nifty) / 45 pts (Bank Nifty) round trip."}
+            "cost_note": "Net = after the index-point equivalent of a 0.6-delta next-week option round trip: about 5.5 pts (Nifty) / 15 pts (Bank Nifty)."}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -168,8 +173,8 @@ def _pick(day, key, cp, now):
     s0 = x.ts.max(); a = x[x.ts == s0]
     for exp in sorted(a.expiry.unique()):
         days = (pd.Timestamp(exp) + pd.Timedelta(hours=15.5) - s0).total_seconds() / 86400
-        if days < 1:
-            continue                                         # no expiry-day options
+        if days < MIN_DAYS_LEFT:
+            continue                                         # next-week expiry or later (no near-expiry options)
         b = a[(a.expiry == exp) & (a.ltp > 0) & (a.iv > 0) & (a.volume > 0)].copy()
         if len(b) > 4:
             b = b[b.volume >= b.volume.median()]                 # liquid strikes only
@@ -197,9 +202,12 @@ def _prem(day, key, exp, strike, cp, now):
     return float(r.ltp), str(r.ts)[11:16], float(r.underlying)
 
 
-def _costs(buy, sell):
+def _costs(buy, sell, key=None, lot=0):
+    """Round-trip cost of 1 option lot (Rs). 2026-11-04: STT 0.15 % of the sell value (from 1 Apr 2026, was 0.1 %) and an assumed
+    spread / slippage of SPREAD_PTS per side (snapshot prices are last-traded, not bid / ask)."""
     exch = 0.00035 * (buy + sell)
-    return round(40 + 0.001 * sell + exch + 0.18 * (40 + exch) + 0.00003 * buy + 0.000001 * (buy + sell), 1)
+    spread = 2 * SPREAD_PTS.get(key, 0) * lot
+    return round(40 + 0.0015 * sell + exch + 0.18 * (40 + exch) + 0.00003 * buy + 0.000001 * (buy + sell) + spread, 1)
 
 
 def _cpath(day):
@@ -273,7 +281,7 @@ def tick(t: datetime, spots: dict) -> bool:
             d.update(done=True, why=why, at=hm, spot_pts=round(sd * (px - e), 1))
             if prem is not None:
                 b, s_ = c["prem_entry"] * c["lot"], prem * c["lot"]
-                d.update(prem=prem, rs_net=round(s_ - b - _costs(b, s_)))
+                d.update(prem=prem, rs_net=round(s_ - b - _costs(b, s_, c["key"], c["lot"])))
         def manage(d, close):
             """SL / trail on 1-minute CLOSES (ticks stopped trades out on noise in the 26-28 Oct tick study)."""
             if close is None or d.get("done"):
@@ -319,8 +327,8 @@ def tick(t: datetime, spots: dict) -> bool:
                 c.update(status="closed", exit_reason=why, closed=hm, spot_exit=round(px, 1), spot_pts=round(sd * (px - e), 1))
                 if c.get("option") and c.get("prem_now"):
                     b, s_ = c["prem_entry"] * c["lot"], c["prem_now"] * c["lot"]
-                    c.update(prem_exit=c["prem_now"], rs_gross=round(s_ - b), costs=_costs(b, s_), rs_net=round(s_ - b - _costs(b, s_)),
-                             ret_pct=round((s_ - b - _costs(b, s_)) / b * 100, 1))
+                    cs = _costs(b, s_, c["key"], c["lot"])
+                    c.update(prem_exit=c["prem_now"], rs_gross=round(s_ - b), costs=cs, rs_net=round(s_ - b - cs), ret_pct=round((s_ - b - cs) / b * 100, 1))
         changed = True
     if changed:
         _save_cards(day, cards)
@@ -346,5 +354,5 @@ def cards_api() -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     return {"variants": vs, "cards": [c for c in allc if c["day"] == today][::-1], "recent": cl[-10:][::-1], "scorecard": sc,
             "price_note": "Option prices are estimates: Black-Scholes with the IV from the option-chain snapshot at entry, moved with spot and time. Real fills differ (bid / ask, IV changes).",
-            "rule_option": "Buy the ~0.6-delta option (call for long, put for short), nearest expiry with 1+ day left, 1 lot. SL on spot 0.10% beyond the level; "
+            "rule_option": "Buy the ~0.6-delta option (call for long, put for short), next-week expiry (7+ days left; Bank Nifty: nearest monthly with 7+ days), 1 lot. Costs: real charges (STT 0.15 %) + spread 0.5 pt (Nifty) / 1.5 pt (Bank Nifty) a side. SL on spot 0.10% beyond the level; "
                            "+1R -> SL to entry; +2R -> trail 1R behind the best spot; out after 30 min."}

@@ -21,7 +21,7 @@ Setups (rules fixed in advance, before any result was seen):
   Both   target = the next level in the trade direction, at least 2R (else 2R); out after 60 min or at 15:20;
          new trades 09:30-15:00 only; one open trade per market; each level / setup / side fires once a day;
          at most 4 trades per market a day. Fill = mid price; costs taken off at grading.
-Costs   : Nifty futures 6 pts, Bank Nifty 14 pts round trip; stocks 0.08% (brokerage + STT + charges + half the spread x2).
+Costs   : Nifty 5.5 pts, Bank Nifty 15 pts round trip (0.6-delta next-week option, index-point equivalent); stocks 0.08% (brokerage + STT + charges + half the spread x2).
 Money   : Rs 1,000 risked per trade (Rs = R after costs x 1,000). The "plan account" line also applies the plan's
           daily limits (first 3 trades of the day, stop for the day at -2R).
 Judged  : after 30-40 sessions: positive after costs in both halves with 30+ trades (dom-strategy-test-plan.md).
@@ -37,10 +37,12 @@ from datetime import datetime
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "data_store", "livedesk", "domcards")
 TRADES = os.path.join(OUT, "trades.json")
-OFD = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data")
+OFD = os.path.join(os.path.expanduser("~"), "Documents", "dhan", "orderflow", "data")
 EOD = os.path.join(ROOT, "data_store", "market_data", "nse_stocks_eod.csv")
 INDEX = ("NIFTY", "BANKNIFTY")
-COST_PTS = {"NIFTY": 6.0, "BANKNIFTY": 14.0}
+# 2026-11-04 (Nikhil trades the index with 0.6-delta next-week options, not futures): index cost = option round trip in index-point
+# terms (charges + 0.5 / 1.5 pt spread a side + up to 60 min decay) / (0.6 x lot). Was 6 / 14 pts (futures, too low for 2026 STT).
+COST_PTS = {"NIFTY": 5.5, "BANKNIFTY": 15.0}
 COST_STOCK = 0.0008
 BAND = {"index": 0.0004, "stock": 0.0010}          # zone padding as a share of price (Nifty ~10 pts, stock 0.1%)
 RISK_RS = 1000
