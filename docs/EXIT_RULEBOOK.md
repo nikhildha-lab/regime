@@ -6,6 +6,8 @@ Paper only. Written from the running code. Each exit is the one the rule was tes
 |---|---|---|---|---|
 | 4H break – ETH, SOL, other coins (`app/break4h.py`) | Block stop: back past the near edge (+0.04 %), any 4H high / low | No fixed target | From a 4H close ≥ entry + 1R: stop = best 4H close − 1.5 × ATR(14, 4H), only moves forward | Close of the 12th 4H bar (2 days) |
 | 4H break – BTC | Block stop + 0.5 × ATR room | 3 targets 1R / 2R / 3R, a third each | Stop → breakeven after T1, → T1 after T2 | Rest at 2 days |
+| 4H break – SOL (back from 5 Nov, exit H3) | Block stop | HALF at 2R | Other half trails 1.5 × ATR from +1R; stop never below entry after +1R | 2 days |
+| 4H break – BTC H2 (record beside BTC) | Block stop + 0.5 × ATR room | HALF at 1R, stop → entry | Other half trails 1.5 × ATR | 2 days |
 | 4H break – Gold (v1) | Block stop | None | None | 2 days |
 | 4H break – Gold v2 (new 5 Nov, recorded beside v1) | Block stop | 3 targets 1R / 2R / 3R, a third each | Stop → breakeven after T1, → T1 after T2 | Rest at 2 days |
 | Touch-minute option (`app/touchtrades.py`) | Spot 1-min close 0.10 % past the level (≥ 0.05 % from entry) | None – booked at the 30-min exit | +1R → breakeven; +2R → trail 1R behind the best 1-min close | 30 min or 15:20 |

@@ -62,6 +62,16 @@ V2 = {"ETH": {"room": 0.0, "exit": "trail", "trail": 1.5}, "BTC": {"room": 0.5, 
 V3 = {"ETH": {"room": 0.0, "exit": "trail", "trail": 1.5, "proven": True}, "BTC": {"room": 0.5, "exit": "targets", "proven": True},
       }
 V3.update({k: {"room": 0.0, "exit": "trail", "trail": 1.5, "proven": False} for k in ALTS})   # 2026-11-04 forward test
+# 2026-11-05 (Nikhil: "SOL with targets or trailing ... both" -> "ok add .. SOL we improved"): SOL back as a v3 market with a NEW exit
+# 'h3' = HALF booked at 2R; the other half trails 1.5 ATR behind the best 4H close once +1R; after +1R the stop is never below entry;
+# out after 2 days. History (scripts/research/b4h_hybrid.py, 162 SOL trades 2023-26, v3 conditions, net of 0.14 %): +0.28 % a trade,
+# halves +0.24 / +0.31, worst drawdown -22 % (pure trail +0.37 %, -28 %; targets +0.10 %). Other markets' rules are unchanged.
+MKTS["SOL"] = "SOLUSDT"
+V3["SOL"] = {"room": 0.0, "exit": "h3", "trail": 1.5, "proven": True}
+# 2026-11-05: BTC H2 = a record-only version on every BTC v3 trade (the live BTC trade keeps its 3 targets): HALF at 1R, stop to
+# breakeven, the other half trails 1.5 ATR; 2 days. History: +0.32 % vs targets +0.28 % a trade, halves +0.14 / +0.54 vs +0.10 / +0.50,
+# worst drawdown -13.7 % vs -15.0 %.
+BTC_H2 = "BTC H2 · half at 1R + trail"
 
 
 def _atr_rank(done, j):
@@ -102,9 +112,39 @@ def _close(r, ex_px, why, t_):
              R_net=round((pts - r["entry"] * COST / 1e4) / r["risk"], 2))
 
 
+def _manage_hybrid(r, after):
+    """2026-11-05: 'h2' (half at 1R, stop to breakeven, rest trails) and 'h3' (half at 2R, rest trails from +1R, stop never below
+    entry after +1R). Same order as the research (b4h_hybrid.py): stop first (4H high / low), then the target, then the trail on the close."""
+    mode, s, e, R_ = r["exit_mode"], r["side"], r["entry"], r["risk"]; a = r.get("atr") or 0; k_tr = r.get("trail_atr") or 1.5
+    tgt_r = 1.0 if mode == "h2" else 2.0
+    for n_, (t_, x) in enumerate(after.iterrows(), 1):
+        cur = r.get("cur_stop", r["stop"])
+        if (s < 0 and x.high >= cur) or (s > 0 and x.low <= cur):
+            why = "stop" if cur == r["stop"] else ("breakeven stop" if abs(cur - e) < 1e-9 else "trailing stop")
+            _close(r, cur, why, t_); return True
+        tg = e + s * tgt_r * R_
+        if not r.get("hit") and ((s > 0 and x.high >= tg) or (s < 0 and x.low <= tg)):
+            r["pnl_pts"] = 0.5 * s * (tg - e); r["left"] = 0.5; r["hit"] = 1
+            if mode == "h2":
+                cur = max(cur, e) if s > 0 else min(cur, e)
+        best = max(r.get("best", e), x.close) if s > 0 else min(r.get("best", e), x.close); r["best"] = best
+        on = (mode == "h3" and s * (best - e) >= R_) or (mode == "h2" and r.get("hit"))
+        if on:
+            nt = best - s * k_tr * a
+            cur = max(cur, nt) if s > 0 else min(cur, nt); r["trailing"] = True
+            if mode == "h3":
+                cur = max(cur, e) if s > 0 else min(cur, e)
+        r["cur_stop"] = cur
+        if n_ >= HOLD:
+            _close(r, x.close, "2 days", t_); return True
+    return False
+
+
 def _manage(r, after):
     """Walk completed 4H bars after entry. Stop checked first in each bar (conservative)."""
     mode = r.get("exit_mode", "fixed"); s = r["side"]
+    if mode in ("h2", "h3"):
+        return _manage_hybrid(r, after)
     for n_, (t_, x) in enumerate(after.iterrows(), 1):
         cur = r.get("cur_stop", r["stop"])
         if (s < 0 and x.high >= cur) or (s > 0 and x.low <= cur):
@@ -141,6 +181,14 @@ VARIANTS = {"2% stop, trail 1.5 ATR": (0.02, "trail", 1.5), "2% stop, trail 3 AT
 # T1 and to T1 after T2, the rest out after 2 days. History (scripts/research/b4h_exit_v4.py, 32 rebuilt Gold trades 2024-26):
 # v1 net -0.08 % a trade, v2 +0.05 %, worst drawdown -10.3 % -> -4.8 %, win 34 % -> 53 %; halves mixed (-0.13 / +0.24 vs -0.06 / -0.11). Too few to judge.
 GOLD_V2 = "Gold v2 · 3 targets 1R/2R/3R"
+
+
+def _btc_h2(r, after):
+    v = {"entry": r["entry"], "side": r["side"], "stop": r["stop"], "risk": r["risk"], "atr": r.get("atr") or 0, "trail_atr": 1.5,
+         "exit_mode": "h2", "status": "open"}
+    _manage(v, after)
+    keep = ("status", "exit", "exit_reason", "bps", "bps_net", "R", "R_net", "cur_stop", "hit", "closed_bar", "trailing")
+    return {k2: (round(v[k2], 2) if isinstance(v.get(k2), float) else v.get(k2)) for k2 in keep}
 
 
 def _gold_v2(r, after):
@@ -294,6 +342,13 @@ def tick(force=False) -> dict:
                 r["gv2"] = gv; r["gv2_fix"] = 1; r["gv2_done"] = gv["status"] == "closed"; changed = True
             if gv["status"] == "closed":
                 r["gv2_done"] = True; changed = True
+        # BTC H2 - record-only, never changes the BTC trade
+        for r in rows:
+            if mkt != "BTC" or r["mkt"] != "BTC" or r.get("rule") != "v3" or r.get("h2_done"):
+                continue
+            hv = _btc_h2(r, done[done.index > pd.Timestamp(r["bar"])])
+            if hv != r.get("h2"):
+                r["h2"] = hv; r["h2_done"] = hv["status"] == "closed"; changed = True
         # manage open trades
         for r in rows:
             if r["mkt"] != mkt or r["status"] != "open":
@@ -417,6 +472,9 @@ def api() -> dict:
             z = [r["var"][nm] for r in closed if r["mkt"] == mkt and r.get("rule") == "v3" and r.get("var", {}).get(nm, {}).get("status") == "closed"]
             if z:
                 vsc[f"{mkt} {nm}"] = {"n": len(z), "avg_bps_net": round(sum(x["bps_net"] for x in z) / len(z), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in z) / len(z))}
+    zb = [r["h2"] for r in closed if r["mkt"] == "BTC" and r.get("h2", {}).get("status") == "closed"]
+    if zb:
+        vsc[BTC_H2] = {"n": len(zb), "avg_bps_net": round(sum(x["bps_net"] for x in zb) / len(zb), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in zb) / len(zb))}
     zg = [r["gv2"] for r in closed if r["mkt"] == "GOLD" and r.get("gv2", {}).get("status") == "closed"]
     if zg:
         vsc[GOLD_V2] = {"n": len(zg), "avg_bps_net": round(sum(x["bps_net"] for x in zg) / len(zg), 1), "win_pct": round(100 * sum(x["bps_net"] > 0 for x in zg) / len(zg))}

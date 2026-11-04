@@ -15,9 +15,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 NAME = {"BTC": "BTC", "ETH": "ETH", "GOLD": "Gold", "NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty",
-        "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}   # 2026-11-04: 4H break forward test on more coins
+        "SOL": "SOL", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}   # 2026-11-04: 4H break forward test on more coins
 RULES = {
     "b4h": {"label": "4H break", "edge": "tested edge (backtest 2023-26)"},
+    "b4h_h2": {"label": "4H break · BTC H2 (half at 1R + trail)", "edge": "new - record beside BTC targets; history +0.32 % vs +0.28 % a trade"},
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
     "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
@@ -55,7 +56,12 @@ def _b4h(hot, px):
         # trail / targets) and say when trailing starts. Exits themselves are unchanged (break4h.py).
         if r["status"] == "open":
             cur = r.get("cur_stop") or r.get("stop"); t["stop"] = cur; t["stop0"] = r.get("stop")
-            if r.get("exit_mode") == "trail":
+            if r.get("exit_mode") == "h3":                  # 2026-11-05 SOL: half at 2R + trail
+                t["target"] = round(r["entry"] + sd * 2 * risk, 4)
+                t["how"] = (f"book HALF at 2R ({t['target']:,.2f}){' - done' if r.get('hit') else ''} · other half trails 1.5 ATR from +1R "
+                            f"({r['entry'] + sd * risk:,.2f}){', ON - stop ' + format(cur, ',.2f') if r.get('trailing') else ''} · stop never below entry after +1R"
+                            + (f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else ""))
+            elif r.get("exit_mode") == "trail":
                 t["how"] = (f"no fixed target · trailing {r.get('trail_atr', 1.5)} ATR now ON, stop moved to {cur:,.2f}" if r.get("trailing") else
                             f"no fixed target · trailing {r.get('trail_atr', 1.5)} ATR starts at +1R ({r['entry'] + sd * risk:,.2f})") + (f" · out by {_ist(r['exit_by'])[5:]} IST" if r.get("exit_by") else "")
             elif tg:
@@ -69,6 +75,20 @@ def _b4h(hot, px):
         elif px.get(r["mkt"]) and units:
             t.update(now=px[r["mkt"]], pnl_open=round(units * sd * (px[r["mkt"]] - r["entry"]), 2))
         out.append(t)
+        hv = r.get("h2")
+        if r["mkt"] == "BTC" and hv:                        # 2026-11-05: BTC H2 shown as its own paper trade (record-only)
+            h2 = {**t, "rule": "b4h_h2", "target": round(r["entry"] + sd * risk, 2), "targets": None, "stop": hv.get("cur_stop") or r.get("stop"),
+                  "how": f"book HALF at 1R ({r['entry'] + sd * risk:,.0f}), stop to entry · other half trails 1.5 ATR · out after 2 days"
+                         + (" · half booked" if hv.get("hit") else ""), "status": hv["status"]}
+            for k_ in ("exit", "exit_reason", "closed", "r", "pnl", "pct", "now", "pnl_open"):
+                h2.pop(k_, None)
+            if hv["status"] == "closed":
+                h2.update(exit=hv.get("exit"), exit_reason=hv.get("exit_reason"), r=hv.get("R_net"), pnl=round((hv.get("R_net") or 0) * 100, 2),
+                          closed=_ist(pd.Timestamp(hv["closed_bar"]) + timedelta(hours=4)) if hv.get("closed_bar") else "")
+            elif px.get("BTC") and units:
+                booked = 0.5 * sd * risk if hv.get("hit") else 0.0; left = 0.5 if hv.get("hit") else 1.0
+                h2.update(now=px["BTC"], pnl_open=round(units * (booked + left * sd * (px["BTC"] - r["entry"])), 2))
+            out.append(h2)
         gv = r.get("gv2")
         if r["mkt"] == "GOLD" and gv:                       # 2026-11-05: Gold v2 (targets) shown as its own paper trade
             g2 = {**t, "rule": "b4h_g2", "target": gv["targets"][-1], "targets": gv["targets"], "stop": gv.get("cur_stop") or r.get("stop"),
