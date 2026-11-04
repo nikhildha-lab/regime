@@ -44,7 +44,7 @@ def sim(h, l, c, s, e, st, a, mode, bar_per_4h, n):
 rows = []
 # ---------- coins
 btc_c = pickle.load(open(OUT + "exitstudy_BTC.pkl", "rb"))["base"].close.resample("4h").last().dropna()
-for SYM in ("ETH", "SOL"):
+for SYM in ("ETH", "SOL", "BTC"):
     d = pickle.load(open(OUT + f"exitstudy_{SYM}.pkl", "rb")); E, B = d["E"], d["base"]
     b4 = B.resample("4h").agg({"high": "max", "low": "min", "close": "last"}).dropna()
     tr = np.maximum(b4.high - b4.low, np.maximum((b4.high - b4.close.shift()).abs(), (b4.low - b4.close.shift()).abs()))
@@ -59,11 +59,12 @@ for SYM in ("ETH", "SOL"):
         bb = btc_c[btc_c.index <= r.t_entry]; b24 = bb.iloc[-1] / bb.iloc[-7] - 1
         s, e, a = int(r.side), float(r.e), float(r.atr)
         if b24 * s <= 0: continue
-        st = float(r.stop0)
+        st = float(r.stop0) - (s * 0.5 * a if SYM == "BTC" else 0.0)     # BTC v3: block stop + 0.5 ATR room
         if s * (e - st) <= 0: continue
         h, l, c = H[i0:i0 + 576], L[i0:i0 + 576], C[i0:i0 + 576]
         half = "2023-24" if r.day < pd.Timestamp("2025-01-01") else "2025-26"
-        for nm, mode in (("NOW trail", "trail"), ("BE+TRAIL", "betrail"), ("TARGETS", "targets")):
+        vers = (("NOW targets", "targets"), ("trail 1.5 ATR", "trail")) if SYM == "BTC" else (("NOW trail", "trail"), ("BE+TRAIL", "betrail"), ("TARGETS", "targets"))
+        for nm, mode in vers:
             g = sim(h, l, c, s, e, st, a, mode, 48, 576) / e * 100
             rows.append(dict(mkt=SYM, half=half, ver=nm, g=g, risk=abs(e - st) / e * 100, day=r.day))
 # ---------- gold (live signal code on history)
