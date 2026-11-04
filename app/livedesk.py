@@ -425,6 +425,10 @@ def poll_once():
                     _hot("strongblock").tick()
                 except Exception as e:
                     _STATE["strongblock_error"] = str(e)[:160]
+                try:                               # 2026-11-05: Stocks in Play ORB paper rule (app/stockorb.py), MIS 5x, new - nothing else changed
+                    _hot("stockorb").tick()
+                except Exception as e:
+                    _STATE["stockorb_error"] = str(e)[:160]
             if desk == "crypto" and time.time() - _STATE.get("edge_t", 0) > 300:   # Edge board job: momentum paper basket (Block story removed 2026-11-03)
                 _STATE["edge_t"] = time.time()
                 try:
@@ -785,6 +789,14 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/run_tool" and q.get("name") == "fetch_stock_hist":    # 2026-11-05: one-time stock 1-min history (research)
+        return _hot("stockhist").start(int(q.get("days", 120)))
+    if path == "/api/livedesk/run_tool" and q.get("name") == "stock_hist_status":
+        import json as _j
+        try:
+            return _j.load(open(os.path.join(ROOT, "data_store", "research", "stocks_intraday", "_status.json")))
+        except Exception as e:
+            return {"state": "not started", "error": str(e)[:80]}
     if path == "/api/livedesk/run_tool" and q.get("name") == "news_now":           # 2026-11-03: refresh headlines now (and time each step)
         import importlib, traceback
         t0 = time.time()

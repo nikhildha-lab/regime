@@ -25,6 +25,7 @@ RULES = {
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
     "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
+    "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 6 Nov"},
 }
 
 
@@ -210,6 +211,23 @@ def _sbt(hot):
     return out
 
 
+def _sorb(hot):
+    """2026-11-05: Stocks in Play ORB (app/stockorb.py) - MIS 5x paper, Rs 20,000 margin x 5 = Rs 1 lakh position, rupees after 0.12 %."""
+    SO = hot("stockorb")
+    out = []
+    for x in SO.trades():
+        t = {"rule": "sorb", "key": x["sym"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": None,
+             "how": "stop = opening-range other side or 1 ATR (closer) · half off at 1.5R, stop to entry · rest out on a 5-min close through VWAP · all flat 15:10",
+             "instrument": f"{x['sym']} (NSE stock, MIS 5x: Rs {x.get('margin', 20000):,} margin, qty {x.get('qty')})", "size": x.get("qty"), "ccy": "₹",
+             "status": x["status"], "why": x.get("why", "") + (f" · book lean {x['book_lean']:+.2f}" if x.get("book_lean") is not None else "")}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), pct_margin=x.get("pnl_margin_pct"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
 def _dom(hot):
     """2026-11-03: DOM hold / break paper test (app/domcards.py). Rs = R after costs x Rs 1,000 risk.
     Only the plan account (first 3 trades a day, -2R day stop) is listed here; every DOM trade (~50-90 a day) is in the DOM Setups card."""
@@ -240,7 +258,7 @@ def group_of(key: str) -> str:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot))):
         try:
             allt += fn()
         except Exception as e:
