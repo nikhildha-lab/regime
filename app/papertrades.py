@@ -25,7 +25,8 @@ RULES = {
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
     "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
-    "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 6 Nov"},
+    "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
+    "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
 
@@ -172,6 +173,72 @@ def _touch(hot):
     return out
 
 
+_GAP: dict = {}
+
+
+def _gap_pct(hot, key, day):
+    """Opening gap % (spot open vs previous close): the live prep note first, then the Yahoo daily file. Cached per key/day."""
+    if (key, day) in _GAP:
+        return _GAP[(key, day)]
+    g = None
+    try:
+        gp = hot("prep").gap(key, day)
+        g = gp["gap_pct"] if gp else None
+    except Exception:
+        g = None
+    if g is None:
+        try:
+            import os
+            ys = {"NIFTY": "^NSEI", "BANKNIFTY": "^NSEBANK"}[key]
+            y = pd.read_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_store", "market_data", "yahoo_daily_deep.csv"),
+                            usecols=["date", "symbol", "open", "close"])
+            y = y[y.symbol == ys].drop_duplicates("date", keep="last").sort_values("date")
+            i = y.index[y.date.astype(str).str[:10] == day]
+            if len(i):
+                pos = y.index.get_loc(i[-1])
+                g = round(100 * (y.open.iloc[pos] / y.close.iloc[pos - 1] - 1), 2) if pos > 0 else None
+        except Exception:
+            g = None
+    if g is not None:
+        _GAP[(key, day)] = g
+    return g
+
+
+def _touchv2(hot):
+    """2026-11-05 (Nikhil: "update the strategy"): touch-minute v2 = the SAME cards, entry, stop, trail and exits as the live touch-minute
+    rule, plus ONE filter: if the opening gap is 1 % or more, only trades in the gap direction (no shorts after a big gap up, no longs
+    after a big gap down). Money: synthetic future (ATM call + short ATM put, next-week expiry), 1 lot, after 4.5 / 12.5 pts.
+    The old touch-minute rule is unchanged."""
+    TT = hot("touchtrades")
+    out = []
+    try:
+        import glob, os
+        files = sorted(glob.glob(os.path.join(TT.CDIR, "cards_*.json")))[-30:]
+        cards = [c for f in files for c in TT.load_cards(os.path.basename(f)[6:16])]
+    except Exception:
+        cards = []
+    for c in cards:
+        sd = 1 if c["side"] == "long" else -1
+        g = _gap_pct(hot, c["key"], c["day"])
+        if g is not None and abs(g) >= 1.0 and (1 if g > 0 else -1) != sd:
+            continue                                           # against a big opening gap - v2 skips it
+        lot = c.get("lot") or TT.LOT[c["key"]]
+        t = {"rule": "touchv2", "key": c["key"], "side": c["side"], "opened": f"{c['day']} {c['time']}", "entry": c.get("spot_entry"),
+             "stop": c.get("spot_sl"), "target": None,
+             "how": f"gap {g:+.2f}% {'(big - gap direction only)' if g is not None and abs(g) >= 1 else '(normal)'} · stop on spot · +1R breakeven, +2R trail 1R · out by {c.get('exit_by', '')}"
+                    if g is not None else f"gap unknown · stop on spot · out by {c.get('exit_by', '')}",
+             "instrument": f"{NAME.get(c['key'], c['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
+             "status": c["status"], "why": c.get("why", "")}
+        if c["status"] == "closed" and c.get("spot_pts") is not None:
+            t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}",
+                     pnl=round((c["spot_pts"] - TT.SYN_PTS[c["key"]]) * lot),
+                     r=round(c["spot_pts"] / c["R_pts"], 2) if c.get("R_pts") else None)
+        elif c.get("spot_now") and c.get("spot_entry"):
+            t.update(pnl_open=round((sd * (c["spot_now"] - c["spot_entry"]) - TT.SYN_PTS[c["key"]]) * lot), now=c.get("spot_now"))
+        out.append(t)
+    return out
+
+
 def _touchdom(hot):
     """2026-11-04: Touch + DOM combo v1 - touch-minute cards whose DOM book lean agreed at entry. Synthetic future, 1 lot, rupees."""
     TT = hot("touchtrades")
@@ -258,7 +325,7 @@ def group_of(key: str) -> str:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot))):
         try:
             allt += fn()
         except Exception as e:
