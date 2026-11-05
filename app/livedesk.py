@@ -429,6 +429,10 @@ def poll_once():
                     _hot("strongblock").tick()
                 except Exception as e:
                     _STATE["strongblock_error"] = str(e)[:160]
+                try:                               # 2026-11-06: Overnight hold paper rule (app/overnight.py): signal 15:13, exit next day ~09:16
+                    _hot("overnight").tick()
+                except Exception as e:
+                    _STATE["overnight_error"] = str(e)[:160]
                 try:                               # 2026-11-05: Stocks in Play ORB paper rule (app/stockorb.py), MIS 5x, new - nothing else changed
                     _hot("stockorb").tick()
                 except Exception as e:
