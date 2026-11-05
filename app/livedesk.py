@@ -408,6 +408,10 @@ def poll_once():
                 B4.tick()
             except Exception as e:
                 _STATE["break4h_error"] = str(e)[:160]
+            try:                                   # 2026-11-05: keep the MCX order-flow recorder up in MCX hours (app/mcxwatch.py)
+                _STATE["mcx_recorder"] = _hot("mcxwatch").tick()
+            except Exception as e:
+                _STATE["mcx_recorder"] = f"error: {str(e)[:120]}"
             try:                                   # hourly 5m/15m verdict per market (once per hour slot, logged)
                 _hot("hourverdict").tick()
             except Exception as e:
@@ -789,6 +793,14 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/run_tool" and q.get("name") == "fetch_mcx_hist":      # 2026-11-05: one-time MCX 1-min history (research)
+        return _hot("mcxhist").start(int(q.get("days", 100)))
+    if path == "/api/livedesk/run_tool" and q.get("name") == "mcx_hist_status":
+        import json as _j
+        try:
+            return _j.load(open(os.path.join(ROOT, "data_store", "research", "mcx_intraday", "_status.json")))
+        except Exception as e:
+            return {"state": "not started", "error": str(e)[:80]}
     if path == "/api/livedesk/run_tool" and q.get("name") == "fetch_stock_hist":    # 2026-11-05: one-time stock 1-min history (research)
         return _hot("stockhist").start(int(q.get("days", 120)))
     if path == "/api/livedesk/run_tool" and q.get("name") == "stock_hist_status":
