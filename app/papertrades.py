@@ -26,6 +26,9 @@ RULES = {
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
     "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
     "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic, Nifty only from 6 Nov)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
+    "ovn": {"label": "Overnight hold · synthetic (15:13 -> next 09:16)", "edge": "new 6 Nov - 2-yr spot study positive at the open (t 2.4), weak by 09:20; real option prices 6 Oct-5 Nov: 12 nights -Rs 56,464 - paper test"},
+    "ovn_h20": {"label": "Overnight hold · synthetic + 0.2-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 46,054"},
+    "ovn_h30": {"label": "Overnight hold · synthetic + 0.3-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 40,010"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -308,6 +311,27 @@ def _sorb(hot):
     return out
 
 
+def _ovn(hot):
+    """2026-11-06: Overnight hold (app/overnight.py) - three versions of the same signal, each its own row, rupees per 1 lot after costs."""
+    O = hot("overnight"); out = []
+    for r in O.trades():
+        if r.get("status") not in ("open", "closed"):
+            continue
+        for v, rule in (("plain", "ovn"), ("h20", "ovn_h20"), ("h30", "ovn_h30")):
+            V = (r.get("versions") or {}).get(v)
+            if not V:
+                continue
+            legs = " + ".join(f"{'buy' if lg['qty'] > 0 else 'sell'} {lg['strike']:.0f} {lg['cp']}" for lg in V["legs"].values())
+            t = {"rule": rule, "key": r["key"], "side": r["side"], "opened": f"{r['day']} {O.AT}", "entry": r["spot"], "stop": None, "target": None,
+                 "how": f"exit next trading day at the first option snapshot after 09:15 · net delta {V['net_delta']}",
+                 "instrument": f"{NAME.get(r['key'], r['key'])} {r.get('expiry')} options, 1 lot: {legs}", "size": None, "ccy": "₹",
+                 "status": r["status"], "why": r.get("why", "")}
+            if r["status"] == "closed":
+                t.update(exit=r.get("exit_spot"), exit_reason="next-day open", closed=V.get("exit_snap"), pnl=V.get("pnl"))
+            out.append(t)
+    return out
+
+
 def _dom(hot):
     """2026-11-03: DOM hold / break paper test (app/domcards.py). Rs = R after costs x Rs 1,000 risk.
     Only the plan account (first 3 trades a day, -2R day stop) is listed here; every DOM trade (~50-90 a day) is in the DOM Setups card."""
@@ -338,7 +362,7 @@ def group_of(key: str) -> str:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot))):
         try:
             allt += fn()
         except Exception as e:
