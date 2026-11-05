@@ -21,7 +21,7 @@ RULES = {
     "b4h_v4": {"label": "4H break · v4 (ETH / BTC record)", "edge": "new - picked on 2023-26 after a grid; judge on live trades"},
     "b4h_h2": {"label": "4H break · BTC H2 (half at 1R + trail)", "edge": "new - record beside BTC targets; history +0.32 % vs +0.28 % a trade"},
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
-    "touch": {"label": "Touch-minute option (Nifty only from 6 Nov)", "edge": "lead - forward test; Bank Nifty removed 6 Nov (no edge in 2-year study)"},
+    "touch": {"label": "Touch-minute option (Nifty only from 6 Nov)", "edge": "lead - forward test; Bank Nifty removed 6 Nov (no edge in 2-year study); option P&L uses the market-priced entry from 6 Nov (old zero-carry figure kept as pnl_old_bs)"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
     "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
@@ -179,7 +179,8 @@ def _touch(hot):
              "instrument": (f"BUY {o['name']} @ ~{c.get('prem_entry')}" if o else "spot only (no option chain)"),
              "size": c.get("capital"), "ccy": "₹", "status": c["status"], "why": c.get("why", "")}
         if c["status"] == "closed":
-            t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}", pnl=c.get("rs_net"),
+            t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}",
+                     pnl=c.get("rs_net_mkt", c.get("rs_net")), pnl_old_bs=c.get("rs_net"),   # 2026-11-06: market-priced entry (touchtrades.mkt_fix)
                      pct=c.get("ret_pct"), r=round(c["spot_pts"] / c["R_pts"], 2) if c.get("R_pts") and c.get("spot_pts") is not None else None)
         elif c.get("prem_now") and c.get("prem_entry"):
             t.update(pnl_open=round((c["prem_now"] - c["prem_entry"]) * c.get("lot", 1)), now=c.get("prem_now"))

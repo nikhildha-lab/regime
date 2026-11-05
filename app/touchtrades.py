@@ -356,10 +356,41 @@ def tick(t: datetime, spots: dict) -> bool:
                     b, s_ = c["prem_entry"] * c["lot"], c["prem_now"] * c["lot"]
                     cs = _costs(b, s_, c["key"], c["lot"])
                     c.update(prem_exit=c["prem_now"], rs_gross=round(s_ - b), costs=cs, rs_net=round(s_ - b - cs), ret_pct=round((s_ - b - cs) / b * 100, 1))
+                    mkt_fix(c)
         changed = True
     if changed:
         _save_cards(day, cards)
     return changed
+
+
+def mkt_fix(c: dict) -> bool:
+    """2026-11-06 (Nikhil: "Yes correct it"): market-priced entry beside the old one. prem_entry is a zero-carry Black-Scholes price at the
+    entry spot, but the exit uses real LTPs, which carry the futures premium - calls came out too cheap at entry (profit overstated) and puts
+    too dear (profit understated), ~Rs 1,400 / lot Nifty, ~Rs 3,500 Bank Nifty. New fields only: prem_entry_mkt = snapshot LTP moved by delta
+    for the spot change since the snapshot; rs_net_mkt / rs_gross_mkt / costs_mkt from it. Old fields (prem_entry, rs_net) are unchanged."""
+    o = c.get("option") or {}
+    if not o or o.get("premium") is None or o.get("underlying") is None or c.get("spot_entry") is None:
+        return False
+    pe = max(0.05, float(o["premium"]) + float(o.get("delta") or 0) * (float(c["spot_entry"]) - float(o["underlying"])))
+    c["prem_entry_mkt"] = round(pe, 1)
+    if c.get("status") == "closed" and c.get("prem_exit"):
+        b, s_ = pe * c["lot"], float(c["prem_exit"]) * c["lot"]
+        cs = _costs(b, s_, c["key"], c["lot"])
+        c.update(rs_gross_mkt=round(s_ - b), costs_mkt=cs, rs_net_mkt=round(s_ - b - cs), price_fix="2026-11-06 market entry")
+    return True
+
+
+def mkt_backfill() -> int:
+    """One-off: add the market-priced fields to every saved card (old fields untouched)."""
+    n = 0
+    for f in sorted(glob.glob(os.path.join(CDIR, "cards_*.json"))):
+        day = os.path.basename(f)[6:16]; cards = load_cards(day); ch = False
+        for c in cards:
+            if mkt_fix(c):
+                ch = True; n += 1
+        if ch:
+            _save_cards(day, cards)
+    return n
 
 
 def cards_api() -> dict:
