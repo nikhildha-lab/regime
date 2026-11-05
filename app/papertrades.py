@@ -21,11 +21,11 @@ RULES = {
     "b4h_v4": {"label": "4H break · v4 (ETH / BTC record)", "edge": "new - picked on 2023-26 after a grid; judge on live trades"},
     "b4h_h2": {"label": "4H break · BTC H2 (half at 1R + trail)", "edge": "new - record beside BTC targets; history +0.32 % vs +0.28 % a trade"},
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
-    "touch": {"label": "Touch-minute option", "edge": "lead - forward test"},
+    "touch": {"label": "Touch-minute option (Nifty only from 6 Nov)", "edge": "lead - forward test; Bank Nifty removed 6 Nov (no edge in 2-year study)"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
     "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
-    "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
+    "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic, Nifty only from 6 Nov)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -149,6 +149,15 @@ def _usdt(t):
     return t
 
 
+BN_OFF_FROM = "2026-11-06"   # 2026-11-06 (Nikhil: "remove bank nifty from this strategy"): Bank Nifty touch-minute dropped - 2-year study
+                             # (claude/banknifty-level-study.md) found no edge at Bank Nifty level touches. Its cards are still recorded
+                             # by touchtrades.py (research), but from this day they are no longer listed as touch-minute paper trades.
+
+
+def _bn_off(c):
+    return c.get("key") == "BANKNIFTY" and str(c.get("day", "")) >= BN_OFF_FROM
+
+
 def _touch(hot):
     TT = hot("touchtrades")
     out = []
@@ -159,6 +168,8 @@ def _touch(hot):
     except Exception:
         cards = []
     for c in cards:
+        if _bn_off(c):
+            continue
         o = c.get("option") or {}
         t = {"rule": "touch", "key": c["key"], "side": c["side"], "opened": f"{c['day']} {c['time']}", "entry": c.get("spot_entry"),
              "stop": c.get("spot_sl"), "target": None, "how": f"stop on spot · {c.get('trail', '')} · out by {c.get('exit_by', '')}",
@@ -218,6 +229,8 @@ def _touchv2(hot):
     except Exception:
         cards = []
     for c in cards:
+        if _bn_off(c):
+            continue
         sd = 1 if c["side"] == "long" else -1
         g = _gap_pct(hot, c["key"], c["day"])
         if g is not None and abs(g) >= 1.0 and (1 if g > 0 else -1) != sd:
