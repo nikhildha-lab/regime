@@ -1214,7 +1214,12 @@ function fxNormalize(V){
   if (V.desk === "nifty" && fut && spot && (V.fp_src === "of1m" || Math.abs(lastC - fut) < Math.abs(lastC - spot))){
     // 2026-11-06 (Nikhil: "footprint values are fluctuating every few seconds"): the live fut - spot gap moves 1-2 pts between polls, which
     // moved every spot level AND re-anchored the price rows (cells regrouped). Hold the basis steady: update only on a > 4 pt change or every 5 min.
-    FX.bs = FX.bs || {}; { const raw = fut - spot, pv = FX.bs[V.key]; if (!pv || Math.abs(raw - pv.v) > 4 || Date.now() - pv.t > 300000) FX.bs[V.key] = {v: Math.round(raw*2)/2, t: Date.now()}; }
+    // 2026-11-06 v2: the raw gap swings 14-30 pts within 30 s (the tracker's futures quote lags spot), so a 4-pt rule still jumped.
+    // Use the median of the last ~3 min of readings (90 polls) and only move the shown value when that median moves >= 1.5 pts.
+    FX.bs = FX.bs || {}; FX.bh = FX.bh || {}; { const raw = fut - spot, h = FX.bh[V.key] || (FX.bh[V.key] = []);
+      if (isFinite(raw)) { h.push(raw); if (h.length > 90) h.shift(); }
+      const sr = h.slice().sort((a,b)=>a-b), med = sr.length ? sr[Math.floor(sr.length/2)] : raw, pv = FX.bs[V.key];
+      if (!pv || Math.abs(med - pv.v) >= 1.5) FX.bs[V.key] = {v: Math.round(med*2)/2, t: Date.now()}; }
     const bs = FX.bs[V.key].v, sh = v => v==null ? v : +v + bs, L = Object.assign({}, V.levels||{}), SR = Object.assign({}, V.sr||{});
     ["VWAP","IB high","IB low"].forEach(k => { if (L[k]!=null) L[k] = sh(L[k]); });
     SR.support = (SR.support||[]).map(sh); SR.resistance = (SR.resistance||[]).map(sh); ["PDH","PDL","PWH","PWL"].forEach(k => { if (SR[k]!=null) SR[k] = sh(SR[k]); });
@@ -1297,7 +1302,10 @@ function fxChart(V){
       const last = bars.at(-1).cvd; if (last!=null) g += `<text x="${lx+6}" y="${cy(last)+4}" font-size="11.5" font-weight="700" fill="${last>=0?"var(--bull)":"var(--bear)"}">CVD ${last>=0?"+":"-"}${fxK(last)}</text>`;
     } }
   { const hv = (HV.d && HV.d.markets && (HV.d.markets[V.key] || STK_HV[V.key])) || null, BK = ((hv||{}).pressure||{}).chart || [];   // 2026-10-25: blocks (weak / medium / strong) as bands
-    let off = 0; if (hv && V.desk==="nifty" && V.spot && hv.price && Math.abs(V.spot/hv.price-1) < 0.01) off = V.spot - hv.price;      // blocks are spot levels; Nifty chart is futures
+    // blocks are spot levels; the Nifty chart is futures. 2026-11-06: shift by the same steady basis as the other levels (V.basis from
+    // fxNormalize). The old offset (chart price - the hourly verdict's stored price) also carried the price move since that verdict (up to an
+    // hour), so the bands slid with every tick.
+    const off = (V.desk==="nifty" && V.basis!=null && isFinite(V.basis)) ? +V.basis : 0;
     const op = {strong:.16, medium:.10, weak:.06};
     const [w0, w1] = V.__win || [-Infinity, Infinity];
     BK.filter(b => b.lo!=null && b.hi+off >= lo-RS && b.lo+off <= hi+RS && b.hi+off >= w0 && b.lo+off <= w1).forEach(b => { const y1 = y(b.hi+off)+RH/2, y2 = y(b.lo+off)+RH/2, col = b.side==="R" ? "var(--bear)" : b.side==="IN" ? "var(--wait)" : "var(--bull)";
