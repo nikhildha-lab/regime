@@ -348,12 +348,27 @@ def run_all() -> dict:
     if ms:
         triggers += [f"Market: {r}" for r in ms["reasons"]]
     if triggers:
+        # 2026-11-06 (Nikhil: "repeated... Market: India VIX +10% today"): the same market condition re-triggered every cycle and was appended,
+        # notified and sent to the agents each time. Now one line per trigger: a market trigger is keyed by its label (text before the number,
+        # e.g. "Market: India VIX"), so a changed number updates that line in place; alerts / agent wake-ups only for triggers that are NEW.
+        import re as _re
+        key = lambda r: _re.split(r"\s[+-]?\d", r, 1)[0] if r.startswith("Market:") else r
+        old = list(shock.get("reasons", [])) if shock.get("active") else []
+        dedup, seen_k = [], {}
+        for r in old:
+            k = key(r)
+            if k in seen_k: dedup[seen_k[k]] = r
+            else: seen_k[k] = len(dedup); dedup.append(r)
+        new_t = []
+        for r in triggers:
+            k = key(r)
+            if k in seen_k: dedup[seen_k[k]] = r
+            else: seen_k[k] = len(dedup); dedup.append(r); new_t.append(r)
         shock = {"active": True, "since": shock.get("since") if shock.get("active") else now.strftime("%Y-%m-%d %H:%M"),
-                 "until": (now + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M"),
-                 "reasons": (shock.get("reasons", []) if shock.get("active") else []) + triggers}
-        shock["reasons"] = shock["reasons"][-8:]
-        notify("Synaptic - BIG NEWS / SHOCK", " | ".join(triggers)[:220])
-        _wake(triggers)
+                 "until": (now + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M"), "reasons": dedup[-8:]}
+        if new_t:
+            notify("Synaptic - BIG NEWS / SHOCK", " | ".join(new_t)[:220])
+            _wake(new_t)
     elif any(g["new"] and g["severity"] == 3 for g in fresh):
         g = next(g for g in fresh if g["new"] and g["severity"] == 3)
         notify("Synaptic - possible big news (1 source)", g["title"][:200])
