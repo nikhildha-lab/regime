@@ -177,7 +177,7 @@ def _touch(hot):
         t = {"rule": "touch", "key": c["key"], "side": c["side"], "opened": f"{c['day']} {c['time']}", "entry": c.get("spot_entry"),
              "stop": c.get("spot_sl"), "target": None, "how": f"stop on spot · {c.get('trail', '')} · out by {c.get('exit_by', '')}",
              "instrument": (f"BUY {o['name']} @ ~{c.get('prem_entry')}" if o else "spot only (no option chain)"),
-             "size": c.get("capital"), "ccy": "₹", "status": c["status"], "why": c.get("why", "")}
+             "size": c.get("capital"), "ccy": "₹", "status": c["status"], "why": c.get("why", ""), "_src": ("touch", c)}
         if c["status"] == "closed":
             t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}",
                      pnl=c.get("rs_net_mkt", c.get("rs_net")), pnl_old_bs=c.get("rs_net"),   # 2026-11-06: market-priced entry (touchtrades.mkt_fix)
@@ -245,7 +245,7 @@ def _touchv2(hot):
              "how": f"gap {g:+.2f}% {'(big - gap direction only)' if g is not None and abs(g) >= 1 else '(normal)'} · stop on spot · +1R breakeven, +2R trail 1R · out by {c.get('exit_by', '')}"
                     if g is not None else f"gap unknown · stop on spot · out by {c.get('exit_by', '')}",
              "instrument": f"{NAME.get(c['key'], c['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
-             "status": c["status"], "why": c.get("why", "")}
+             "status": c["status"], "why": c.get("why", ""), "_src": ("touchsyn", c)}
         if c["status"] == "closed" and c.get("spot_pts") is not None:
             t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}",
                      pnl=round((c["spot_pts"] - TT.SYN_PTS[c["key"]]) * lot),
@@ -267,7 +267,7 @@ def _touchdom(hot):
         t = {"rule": "touchdom", "key": c["key"], "side": c["side"], "opened": f"{c['day']} {c['time']}", "entry": c.get("spot_entry"),
              "stop": c.get("spot_sl"), "target": None, "how": f"stop on spot · {c.get('trail', '')} · out by {c.get('exit_by', '')}",
              "instrument": f"{NAME.get(c['key'], c['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
-             "status": c["status"], "why": f"{c.get('why', '')} · book lean {c.get('dom_lean'):+.2f} vs normal"}
+             "status": c["status"], "why": f"{c.get('why', '')} · book lean {c.get('dom_lean'):+.2f} vs normal", "_src": ("touchsyn", c)}
         if c["status"] == "closed":
             t.update(exit=c.get("spot_exit"), exit_reason=c.get("exit_reason"), closed=f"{c['day']} {c.get('closed', '')}", pnl=c.get("synth_rs_net"),
                      r=round(c["spot_pts"] / c["R_pts"], 2) if c.get("R_pts") and c.get("spot_pts") is not None else None)
@@ -285,7 +285,7 @@ def _sbt(hot):
         t = {"rule": "sbt", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x.get("sl"), "target": x["target"],
              "how": f"stop beyond the block's far edge · target 2R · breakeven at +1R · out after 60 min or 15:20",
              "instrument": f"{NAME.get(x['key'], x['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
-             "status": x["status"], "why": x.get("why", "")}
+             "status": x["status"], "why": x.get("why", ""), "_src": ("sbt", x)}
         if x["status"] == "closed":
             t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
         elif x.get("now") is not None:
@@ -326,7 +326,7 @@ def _ovn(hot):
             t = {"rule": rule, "key": r["key"], "side": r["side"], "opened": f"{r['day']} {O.AT}", "entry": r["spot"], "stop": None, "target": None,
                  "how": f"exit next trading day at the first option snapshot after 09:15 · net delta {V['net_delta']}",
                  "instrument": f"{NAME.get(r['key'], r['key'])} {r.get('expiry')} options, 1 lot: {legs}", "size": None, "ccy": "₹",
-                 "status": r["status"], "why": r.get("why", "")}
+                 "status": r["status"], "why": r.get("why", ""), "_src": ("ovn", (r, v))}
             if r["status"] == "closed":
                 t.update(exit=r.get("exit_spot"), exit_reason="next-day open", closed=V.get("exit_snap"), pnl=V.get("pnl"))
             out.append(t)
@@ -342,7 +342,7 @@ def _dom(hot):
         t = {"rule": "dom", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
              "how": f"{x['setup']} · target {x['target_note']} · out after 60 min or 15:20",
              "instrument": NAME.get(x["key"], x["key"]) + (" synthetic future, 1 lot" if x["key"] in D.INDEX else " (stock)"),
-             "size": None, "ccy": "₹", "risk_money": D.RISK_RS, "status": x["status"], "why": x.get("why", "")}
+             "size": None, "ccy": "₹", "risk_money": D.RISK_RS, "status": x["status"], "why": x.get("why", ""), "_src": ("dom", x)}
         if x["status"] == "closed":
             t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
         out.append(t)
@@ -359,6 +359,29 @@ def group_of(key: str) -> str:
         if key in ks:
             return g
     return "india"                     # Nifty, Bank Nifty and NSE stocks
+
+
+def _add_legs(hot, show, allt):
+    """2026-11-06 (Nikhil: show the instrument deployed - option buying / selling, synthetic with or without hedge, exact strikes
+    with premiums, and check the premiums). Adds t["legs"] (structured) + t["legs_text"] (one line) to the rows shown. Never changes pnl."""
+    try:
+        LG = hot("legs")
+    except Exception:
+        LG = None
+    for t in show:
+        kind, src = t.get("_src") or (None, None)
+        try:
+            L = (LG.for_touch(src) if kind == "touch" else LG.for_touch(src, synth=True) if kind == "touchsyn" else LG.for_sbt(src) if kind == "sbt"
+                 else LG.for_dom(src) if kind == "dom" else LG.for_ovn(*src) if kind == "ovn" else None) if LG else None
+        except Exception as e:
+            L = {"ok": False, "why": f"legs: {type(e).__name__}"}
+        if L:
+            t["legs"] = {k: v for k, v in L.items() if not k.startswith("_")}
+            t["legs_text"] = LG.text(L)
+        else:
+            t["legs_text"] = t.get("instrument", "")
+    for t in allt:
+        t.pop("_src", None)
 
 
 def api(hot, px, keys=None, group=None) -> dict:
@@ -378,6 +401,7 @@ def api(hot, px, keys=None, group=None) -> dict:
             t["edge"] = ("forward paper test - " + t["hist"]) if t.get("hist") else "UNPROVEN - forward paper test (not backtested on this coin)"
     op = sorted([t for t in allt if t["status"] == "open"], key=lambda t: t["opened"], reverse=True)
     cl = sorted([t for t in allt if t["status"] == "closed"], key=lambda t: t.get("closed") or t["opened"], reverse=True)
+    _add_legs(hot, op + cl[:60], allt)                    # 2026-11-06: exact strikes + premiums per trade (app/legs.py, read-only)
     today = datetime.now().strftime("%Y-%m-%d")
     tot = {}
     for t in cl:

@@ -37,7 +37,7 @@ from datetime import datetime
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "data_store", "livedesk", "domcards")
 TRADES = os.path.join(OUT, "trades.json")
-OFD = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data")
+OFD = os.path.join(os.path.expanduser("~"), "Documents", "dhan", "orderflow", "data")
 EOD = os.path.join(ROOT, "data_store", "market_data", "nse_stocks_eod.csv")
 INDEX = ("NIFTY", "BANKNIFTY")
 # 2026-11-04 (Nikhil trades the index with 0.6-delta next-week options, not futures): index cost = option round trip in index-point
@@ -612,6 +612,24 @@ def _rev_summary(rows):
     return out
 
 
+_LEGS_MT: dict = {}
+
+
+def _with_legs(x):
+    """Copy of a trade with legs (structured) + legs_text (one line). Never changes the trade's own pnl."""
+    try:
+        import importlib, sys
+        LG = sys.modules.get("legs") or importlib.import_module("legs")
+        mt = os.path.getmtime(LG.__file__)
+        if _LEGS_MT.get("mt") not in (None, mt):
+            LG = importlib.reload(LG)                    # picks up a new legs.py without a restart
+        _LEGS_MT["mt"] = mt
+        L = LG.for_dom(x)
+        return dict(x, legs={k: v for k, v in L.items() if not k.startswith("_")}, legs_text=LG.text(L))
+    except Exception as e:
+        return dict(x, legs_text=f"legs not priced ({type(e).__name__})")
+
+
 def api() -> dict:
     T = trades() or []
     px = _live_px()
@@ -624,6 +642,7 @@ def api() -> dict:
     lv = S.get("lv") or {}
     today = [_with_live(x, px) for x in T if x["day"] == day][::-1]
     today = [dict(x, review=_rev_cached(x)) if x["status"] == "closed" else x for x in today]
+    today = [_with_legs(x) for x in today]               # 2026-11-06: exact strikes + premiums (app/legs.py, read-only)
     return {"open": [_with_live(x, px) for x in T if x["status"] == "open"], "today": today, "review_summary": _rev_summary(today),
             "live_px_at": datetime.fromtimestamp(_LPX["mt"]).strftime("%H:%M:%S") if px else None,
             "record": {"all": _rec(cl), "plan": _rec([x for x in cl if x.get("plan")]), "by": {k: _rec(v) for k, v in sorted(by.items())},
