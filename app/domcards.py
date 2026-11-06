@@ -449,8 +449,50 @@ def trades():
     return S.get("trades") if live else _load()
 
 
+_LPX: dict = {"mt": 0, "px": {}}
+
+
+def _live_px() -> dict:
+    """2026-11-06 (Nikhil: "show live pnl also for the trades"): latest prices from the order-flow engine's live.json (rewritten every 2 s):
+    index = futures mid, stocks = mid of the best 20-level bid / ask. Empty if the file is older than 20 s (engine down / after hours)."""
+    p = os.path.join(OFD, "of", "live.json")
+    try:
+        mt = os.path.getmtime(p)
+    except OSError:
+        return {}
+    if time.time() - mt > 20:
+        return {}
+    if mt != _LPX["mt"]:
+        px = {}
+        try:
+            L = json.load(open(p))
+            for k, I in (L.get("instruments") or {}).items():
+                m = ((I or {}).get("now") or {}).get("mid")
+                if m: px[k] = float(m)
+            for k, B in (L.get("stocks") or {}).items():
+                try:
+                    px[k] = (float(B["bids"][0][0]) + float(B["asks"][0][0])) / 2
+                except Exception:
+                    pass
+        except Exception:
+            px = {}
+        _LPX.update(mt=mt, px=px)
+    return _LPX["px"]
+
+
+def _with_live(x: dict, px: dict) -> dict:
+    """Copy of an open trade with now / r_open / pnl_open (same money rules as a close: index synthetic 1 lot after SYN_PTS, stocks R x RISK_RS)."""
+    if x.get("status") != "open" or x["key"] not in px or not x.get("risk"):
+        return x
+    sd = 1 if x["side"] == "long" else -1; now = px[x["key"]]; g = sd * (now - x["entry"]) / x["risk"]
+    y = dict(x, now=round(now, 2), r_open=round(g - (x.get("cost_r") or 0), 2))
+    y["pnl_open"] = round((sd * (now - x["entry"]) - SYN_PTS[x["key"]]) * LOT[x["key"]]) if x["key"] in INDEX else round(y["r_open"] * RISK_RS)
+    return y
+
+
 def api() -> dict:
     T = trades() or []
+    px = _live_px()
     cl = [x for x in T if x["status"] == "closed" and not x.get("late_levels")]     # look-ahead trades kept but not counted
     day = datetime.now().strftime("%Y-%m-%d")
     days = sorted({x["day"] for x in T})
@@ -458,7 +500,8 @@ def api() -> dict:
     for x in cl:
         by.setdefault(f"{x['setup']} · {'index' if x['key'] in INDEX else 'stocks'}", []).append(x)
     lv = S.get("lv") or {}
-    return {"open": [x for x in T if x["status"] == "open"], "today": [x for x in T if x["day"] == day][::-1],
+    return {"open": [_with_live(x, px) for x in T if x["status"] == "open"], "today": [_with_live(x, px) for x in T if x["day"] == day][::-1],
+            "live_px_at": datetime.fromtimestamp(_LPX["mt"]).strftime("%H:%M:%S") if px else None,
             "record": {"all": _rec(cl), "plan": _rec([x for x in cl if x.get("plan")]), "by": {k: _rec(v) for k, v in sorted(by.items())},
                        "sessions": len(days), "since": days[0] if days else None,
                        "index_vehicle": {"option_0.6d": _rec([{**x, "r": x["r_opt"], "pnl": x["pnl_opt"]} for x in cl if x["key"] in INDEX and x.get("r_opt") is not None]),
