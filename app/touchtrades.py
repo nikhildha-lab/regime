@@ -364,19 +364,27 @@ def tick(t: datetime, spots: dict) -> bool:
 
 
 def mkt_fix(c: dict) -> bool:
-    """2026-11-06 (Nikhil: "Yes correct it"): market-priced entry beside the old one. prem_entry is a zero-carry Black-Scholes price at the
-    entry spot, but the exit uses real LTPs, which carry the futures premium - calls came out too cheap at entry (profit overstated) and puts
-    too dear (profit understated), ~Rs 1,400 / lot Nifty, ~Rs 3,500 Bank Nifty. New fields only: prem_entry_mkt = snapshot LTP moved by delta
-    for the spot change since the snapshot; rs_net_mkt / rs_gross_mkt / costs_mkt from it. Old fields (prem_entry, rs_net) are unchanged."""
+    """2026-11-06 (Nikhil: "Yes correct it"), v2 the same day. Option rupees WITHOUT relying on snapshot LTP timing:
+    prem_entry (zero-carry Black-Scholes at spot) mixed with LTP exits carried the futures premium into the P&L (calls looked better, puts
+    worse); v1 of this fix used the snapshot LTP at entry, but at 09:30 the 3-min snapshot can still hold stale opening prints (6 Nov: a
+    stopped-out Nifty PE short showed +Rs 927). v2 = option P&L from the move itself: |delta| x points in the trade direction minus
+    time decay (premium / (2 x days left) per trading day, pro-rated by minutes held), times the lot, minus costs. Old fields unchanged."""
     o = c.get("option") or {}
-    if not o or o.get("premium") is None or o.get("underlying") is None or c.get("spot_entry") is None:
+    if not o or c.get("status") != "closed" or c.get("spot_pts") is None or not o.get("delta"):
         return False
-    pe = max(0.05, float(o["premium"]) + float(o.get("delta") or 0) * (float(c["spot_entry"]) - float(o["underlying"])))
-    c["prem_entry_mkt"] = round(pe, 1)
-    if c.get("status") == "closed" and c.get("prem_exit"):
-        b, s_ = pe * c["lot"], float(c["prem_exit"]) * c["lot"]
-        cs = _costs(b, s_, c["key"], c["lot"])
-        c.update(rs_gross_mkt=round(s_ - b), costs_mkt=cs, rs_net_mkt=round(s_ - b - cs), price_fix="2026-11-06 market entry")
+    d = abs(float(o["delta"])); pts = float(c["spot_pts"])
+    try:
+        mins = max(1.0, (datetime.strptime(c["closed"], "%H:%M") - datetime.strptime(c["time"], "%H:%M")).seconds / 60)
+    except Exception:
+        mins = 30.0
+    prem = float(o.get("premium") or c.get("prem_entry") or 0); dl = max(float(o.get("days_left") or 7), 0.5)
+    theta = prem / (2 * dl) * (mins / 375)
+    opt_pts = d * pts - theta
+    pe = max(1.0, prem); px = max(0.05, pe + opt_pts)
+    b, s_ = pe * c["lot"], px * c["lot"]
+    cs = _costs(b, s_, c["key"], c["lot"])
+    c.update(opt_pts_mkt=round(opt_pts, 1), rs_gross_mkt=round(opt_pts * c["lot"]), costs_mkt=cs, rs_net_mkt=round(opt_pts * c["lot"] - cs),
+             prem_entry_mkt=None, price_fix="2026-11-06 v2: delta x move - decay - costs")
     return True
 
 
