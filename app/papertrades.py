@@ -380,8 +380,76 @@ def _add_legs(hot, show, allt):
             t["legs_text"] = LG.text(L)
         else:
             t["legs_text"] = t.get("instrument", "")
+    _add_review(hot, show)
     for t in allt:
         t.pop("_src", None)
+
+
+def _risk_pts(t):
+    """First stop distance in price points, from the rule's own record (the shown stop may have moved to breakeven)."""
+    kind, src = t.get("_src") or (None, None)
+    try:
+        if kind in ("touch", "touchsyn"):
+            return src.get("R_pts")
+        if kind in ("dom", "sbt"):
+            return src.get("risk")
+    except Exception:
+        pass
+    if t.get("_rk"):
+        return t["_rk"]
+    if t.get("stop0") is not None and t.get("entry") is not None:
+        return abs(t["entry"] - t["stop0"]) or None
+    return None
+
+
+def _add_review(hot, show):
+    """2026-11-06 (Nikhil: same columns as DOM Setups for All Paper Trades): t["review"] = right / wrong / improve from the trade's
+    own price path (app/tradereview.py). Ideas only - rules unchanged."""
+    try:
+        TR = hot("tradereview")
+    except Exception:
+        return
+    for t in show:
+        if t.get("status") != "closed":
+            continue
+        try:
+            if t.get("rule") == "dom" and (t.get("_src") or (None, None))[0] == "dom":
+                r = hot("domcards")._rev_cached(t["_src"][1])        # DOM trades: the DOM card's own review
+            else:
+                r = TR.cached(t, _risk_pts(t))
+        except Exception as e:
+            r = {"right": "", "wrong": "", "improve": "-", "err": str(e)[:80]}
+        if r:
+            t["review"] = {k: v for k, v in r.items() if not str(k).startswith("_")}
+
+
+def all_rows(hot, px) -> list:
+    """2026-11-06: EVERY paper trade of every rule and market (all tabs), with legs + review - for the single CSV log (app/tradelog.py).
+    Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
+    allt, errs = [], {}
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("touchdom", lambda: _touchdom(hot)),
+                   ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot))):
+        try:
+            allt += fn()
+        except Exception as e:
+            errs[nm] = str(e)[:120]
+    try:
+        D = hot("domcards")
+        for x in (D._load() or []):
+            t = {"rule": "dom", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
+                 "how": f"{x['setup']} · target {x.get('target_note', '')} · out after 60 min or 15:20", "plan": bool(x.get("plan")),
+                 "instrument": NAME.get(x["key"], x["key"]) + (" synthetic future, 1 lot" if x["key"] in D.INDEX else " (stock)"),
+                 "ccy": "₹", "status": x["status"], "why": x.get("why", ""), "_src": ("dom", x)}
+            if x["status"] == "closed":
+                t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
+            allt.append(t)
+    except Exception as e:
+        errs["dom"] = str(e)[:120]
+    for t in allt:
+        if t["rule"] in RULES:
+            t["market"] = NAME.get(t["key"], t["key"]); t["rule_label"] = RULES[t["rule"]]["label"]; t["group"] = group_of(t["key"])
+    _add_legs(hot, allt, allt)
+    return allt, errs
 
 
 def api(hot, px, keys=None, group=None) -> dict:

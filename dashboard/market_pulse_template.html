@@ -1210,7 +1210,10 @@ function fxNormalize(V){
     const today = fp.filter(b => b.d === lastD), o0 = +today[0].o, d0 = new Date(lastD);
     out.fp = fp.filter(b => b.d === lastD || (b.d && (d0 - new Date(b.d)) / 864e5 <= 4 && Math.abs(+b.c / o0 - 1) <= 0.015));
   }
-  out.fp = (out.fp || fp).slice(-FX_BARS);                      // 2026-11-04 (Nikhil): only the last 12 candles, every timeframe
+  // 2026-11-06 (Nikhil: "all candles for the day should be displayed for Indian and US, metals, and commodities"): every bar of the
+  // latest session (Nifty: since 09:15 IST; crypto / US / metals / commodities: the UTC day, 05:30 IST onwards). 4h keeps the last 12
+  // (a day is only 2-6 of them). The chart opens at the right edge (latest bar) and scrolls left for the earlier ones.
+  out.fp = tf < 240 && lastD ? fp.filter(b => b.d === lastD) : (out.fp || fp).slice(-FX_BARS);
   const lastC = +(out.fp||fp).at(-1).c, fut = +V.fut, spot = +V.spot;
   // 2026-11-06: the order-flow engine's bars (of1m) are ALWAYS futures - shift every time. The old "is the last close nearer fut or spot"
   // test flipped between polls when the last close sat between them, so all levels jumped by the whole basis (~18 pts) and rows regrouped.
@@ -1250,6 +1253,12 @@ function fxNormalize(V){
   }
   return out;
 }
+// 2026-11-06: the last bar is still forming while now < its start + the timeframe (bar times are START times: at 13:13 the 15m bar
+// "13:00" is the live one, not 13 minutes late). Nifty bar times are IST, the other desks UTC.
+function fxLiveBar(V, b){
+  try { const tf = FX.tf[V.desk] || 15, [h, m] = String(b.t).split(":").map(Number), d = new Date();
+    const now = V.desk==="nifty" ? ((d.getUTCHours()*60 + d.getUTCMinutes() + 330) % 1440) : (d.getUTCHours()*60 + d.getUTCMinutes());
+    const age = now - (h*60 + m); return age >= 0 && age < tf; } catch(e){ return false; } }
 function fxChart(V){
   V = fxNormalize(V);
   const bars = (V.fp||[]).filter(b => b && b.bins && b.bins.length);
@@ -1303,7 +1312,7 @@ function fxChart(V){
       if (b.burst){ const ks = Object.keys(cells).map(Number), ty = 4 + Math.min(...ks)*RH - 4, buyB = (b.delta||0) >= 0;
         g += `<text x="${x+18+(CW-22)/2}" y="${Math.max(10, ty)}" text-anchor="middle" font-size="11" font-weight="700" fill="${buyB?"var(--bull)":"var(--bear)"}"><title>Δ ${fxK(b.delta)} - at least 3x the usual bar</title>⚡ big ${buyB?"buying":"selling"}</text>`; } }
     const cv = b.cvd;
-    g += `<text x="${x+CW/2+4}" y="${PH+12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(V.desk==="nifty" ? (b.t||"") : utcToIst(b.t))}${b.partial?"…":""}${est?" est.":""}</text>`
+    g += `<text x="${x+CW/2+4}" y="${PH+12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(V.desk==="nifty" ? (b.t||"") : utcToIst(b.t))}${i===bars.length-1 && fxLiveBar(V, b) ? " · live" : b.partial?"…":""}${est?" est.":""}</text>`
        + `<text x="${x+CW/2+4}" y="${PH+26}" text-anchor="middle" font-size="11" font-weight="600" fill="${b.delta>=0?"var(--bull)":"var(--bear)"}">Δ ${b.delta>=0?"+":"-"}${fxK(b.delta||0)}</text>`
        + (cv==null ? "" : est ? `<text x="${x+CW/2+4}" y="${PH+40}" text-anchor="middle" font-size="11" fill="var(--muted)">CVD –</text>` : `<text x="${x+CW/2+4}" y="${PH+40}" text-anchor="middle" font-size="11" fill="${cv>=0?"var(--bull)":"var(--bear)"}">CVD ${cv>=0?"+":"-"}${fxK(cv)}</text>`);
   });
@@ -1428,7 +1437,7 @@ async function fxLoad(desk){
     ${I.setup&&I.setup.state?`<span class="fx-chip">setup: ${esc(I.setup.state)} ${esc(I.setup.grade||"")} ${esc(I.setup.side||"")}</span>`:""}${I.depth&&!I.depth.stale&&I.depth.imb20_1m!=null?`<span class="fx-chip" title="20-level order book (futures): (bids - asks) / total, 1-min average. Biggest bid ${ldPx(I.depth.bid_wall_px)} x${I.depth.bid_wall_qty}, ask ${ldPx(I.depth.ask_wall_px)} x${I.depth.ask_wall_qty}. Context only.">book ${I.depth.imb20_1m>0?"+":""}${fmt(I.depth.imb20_1m,2)} ${I.depth.imb20_1m>=0.15?"bids heavy":I.depth.imb20_1m<=-0.15?"asks heavy":"balanced"}</span>`:""}<span class="small faint" style="margin-left:auto">updated ${esc((V.at||"").slice(11,19))}</span></div>`;
   const ofh = `<div class="spread" style="margin:0 0 8px"><h2>Order Flow <span class="small muted">${esc(SHORT[FX.sel[desk]]||FX.sel[desk]||"")}</span></h2></div>`;   // 2026-11-04 (Nikhil)
   if (!(I.fp||[]).length) return `<section class="card" style="margin:0">${ofh}${head}<p class="small muted" style="margin:4px 0">No footprint bars yet - the chart appears once the live tracker is running and trades come in (${desk==="nifty"?"09:15–15:30 IST":"round the clock"}).</p></section>`;
-  return `<section class="card" style="margin:0">${ofh}${head}<div class="small muted" style="margin-bottom:4px">Footprint ${FXTF.find(x=>x[0]===tf)[1]} · ${desk==="nifty" && I.fp_src==="of1m" && FX.bs && FX.bs[FX.sel[desk]] ? `<b>futures scale</b> (PDH / PDL, IB, VWAP from futures; blocks, walls, S/R moved up ${FX.bs[FX.sel[desk]].v} pts) · ` : ""}sell × buy per price · last ${Math.min(FX_BARS, (I.fp||[]).length)} bars${tf>15?" (merged from 15-min bars)":""} · shaded bands = blocks · text under each bar = who drove it (from OI). Descriptive, not tested signals.
+  return `<section class="card" style="margin:0">${ofh}${head}<div class="small muted" style="margin-bottom:4px">Footprint ${FXTF.find(x=>x[0]===tf)[1]} · ${desk==="nifty" && I.fp_src==="of1m" && FX.bs && FX.bs[FX.sel[desk]] ? `<b>futures scale</b> (PDH / PDL, IB, VWAP from futures; blocks, walls, S/R moved up ${FX.bs[FX.sel[desk]].v} pts) · ` : ""}sell × buy per price · ${tf<240 ? `all ${(I.fp||[]).filter(b => b.d && b.d === ((I.fp||[]).at(-1)||{}).d).length} bars today (scroll left for earlier)` : `last ${Math.min(FX_BARS, (I.fp||[]).length)} bars`}${tf>15?" (merged from 15-min bars)":""} · bar time = when the bar starts, the last one is still forming · shaded bands = blocks · text under each bar = who drove it (from OI). Descriptive, not tested signals.
       <details style="display:inline"><summary style="cursor:pointer;display:inline">Legend</summary><div style="margin-top:4px"><i>est.</i> = bar rebuilt from candles at tracker start (not real trades) · bold = imbalance · outlined = bar POC · lines = value area, VWAP, IB and OI walls · green / red bands = support / resistance (swings, previous day & week) · amber band = price inside a block · <span class="pos">new longs</span> (price up, OI up), <span style="color:var(--wait)">short cover</span> (price up, OI down), <span class="neg">new shorts</span> (price down, OI up), longs exit (price down, OI down) · ⚡ = buy/sell burst (3x a normal bar) · ▲/▼ = buyers / sellers absorbing at a level (solid ● = heavy volume) · ⇅ = exhaustion (new price extreme, delta does not confirm) · dashed line in the lower panel = OI.</div></details></div>${fxChart(I)}<p class="small faint" style="margin:6px 0 0"><b>CVD</b> = running total of the Δ (buy − sell) under each bar, real trades only, reset at the session start (${desk==="nifty"?"09:15 IST":"05:30 IST = 00:00 UTC"}); bar times in IST; <i>est.</i> bars add nothing. Source: ${I.fp_src==="of1m"?"Dhan order-flow engine - every trade checked against the 20-level book (at/above ask = buy, at/below bid = sell)":desk==="nifty"?"Nifty tracker ticks (bid/ask at each tick)":"Hyperliquid trades (the exchange marks the aggressor side)"}.</p>${fxOi(I)}</section>`;
 }
 async function ldLoad(desk){
@@ -1504,8 +1513,15 @@ function ptRender(P, title, all){
       <div style="margin-top:4px">${t.pnl_open==null?`<span class="pill p-accent">open</span>`:`Now ${f(t.now)} · <b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b> <span class="faint">open</span>`}</div>
       <div class="small faint" style="margin-top:2px">${esc(t.edge)}</div></div>`;
   const op = (P.open||[]), cl = (P.closed||[]).slice(0, all ? 40 : 12);
-  const rows = cl.map(t => `<tr><td>${esc(d(t.closed||t.opened))}</td><td>${esc(t.market)}</td><td>${esc(t.rule_label)}</td><td class="${t.side==="long"?"pos":"neg"}">${esc(t.side)}</td>
-      <td>${f(t.entry)} → ${f(t.exit)}</td><td style="min-width:260px;max-width:420px">${legsHtml(t)}</td><td>${esc(t.exit_reason||"")}</td><td><b class="${sg(t.pnl)}">${money(t.pnl, t.ccy)}</b>${t.r!=null?` <span class="faint">${t.r>0?"+":""}${t.r}R</span>`:""}</td></tr>`).join("");
+  // 2026-11-06 (Nikhil): same columns as DOM Setups - live P&L (open trades), why taken, what went right / wrong, where to improve
+  const rv = t => t.review ? `${t.review.right?`<span class="pos">✓ ${esc(t.review.right)}</span>`:""}${t.review.right&&t.review.wrong?"<br>":""}${t.review.wrong?`<span class="neg">✗ ${esc(t.review.wrong)}</span>`:""}` : '<span class="faint">–</span>';
+  const live = t => t.pnl_open!=null ? `<b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b>${t.now!=null?` <span class="faint">now ${f(t.now)}</span>`:""}` : t.status==="open" ? '<span class="faint">no live price</span>' : '<span class="faint">–</span>';
+  const row = t => `<tr><td>${esc(d(t.status==="open"?t.opened:(t.closed||t.opened)))}</td><td>${esc(t.market)}</td><td>${esc(t.rule_label)}</td><td class="${t.side==="long"?"pos":"neg"}">${esc(t.side)}</td>
+      <td>${f(t.entry)} → ${t.status==="open"?"open":f(t.exit)}</td><td style="min-width:260px;max-width:420px">${legsHtml(t)}</td><td>${live(t)}</td><td>${t.status==="open"?'<span class="pill p-accent">open</span>':esc(t.exit_reason||"")}</td>
+      <td>${t.status==="open"?"–":`<b class="${sg(t.pnl)}">${money(t.pnl, t.ccy)}</b>${t.r!=null?` <span class="faint">${t.r>0?"+":""}${t.r}R</span>`:""}`}</td>
+      <td style="min-width:200px;max-width:300px">${esc(t.why||"")}</td><td style="min-width:240px;max-width:360px">${t.status==="open"?'<span class="faint">trade open</span>':rv(t)}</td>
+      <td style="min-width:180px;max-width:280px">${t.review?esc(t.review.improve||"–"):'<span class="faint">–</span>'}</td></tr>`;
+  const rows = op.concat(cl).map(row).join("");
   const tot = (P.totals||[]).map(z => `<span style="margin-right:14px"><b>${esc(z.rule)}</b> ${z.n} closed · won ${z.wins} · <b class="${sg(z.pnl)}">${money(z.pnl, z.ccy)}</b>${z.today_n?` <span class="faint">(today ${money(z.today_pnl, z.ccy)})</span>`:""}</span>`).join("");
   const err = Object.keys(P.errors||{}).length ? `<p class="small neg">Not loaded: ${esc(Object.entries(P.errors).map(([k,v])=>k+": "+v).join(" · "))}</p>` : "";
   return `<div class="spread"><h2>${esc(title||"Paper trades")} <span class="small muted">paper only · never orders</span></h2>
@@ -1513,8 +1529,8 @@ function ptRender(P, title, all){
     <div class="eyebrow" style="margin-top:6px">Open now (${op.length})</div>
     ${op.length ? `<div class="row" style="gap:10px;flex-wrap:wrap;margin:4px 0 8px">${op.map(card).join("")}</div>` : `<p class="small muted" style="margin:2px 0 8px">No open paper trade.</p>`}
     ${tot?`<div class="small" style="margin:4px 0">${tot}</div>`:""}
-    ${rows?`<details ${all?"open":""} style="margin-top:6px"><summary class="small muted" style="cursor:pointer">Closed paper trades (${cl.length})</summary>
-      <table class="small" style="width:100%;margin-top:4px"><tr class="muted"><td>Closed (IST)</td><td>Market</td><td>Rule</td><td>Side</td><td>Entry → exit</td><td>Instrument · strikes · premiums (entry → exit)</td><td>Exit</td><td>Result</td></tr>${rows}</table></details>`:""}
+    ${rows?`<details ${all?"open":""} style="margin-top:6px"><summary class="small muted" style="cursor:pointer">Paper trades: ${op.length} open + ${cl.length} closed · why taken, what went right / wrong, where to improve</summary>
+      <div class="tscroll"><table class="small" style="width:100%;margin-top:4px"><tr class="muted"><td>Closed (IST)</td><td>Market</td><td>Rule</td><td>Side</td><td>Entry → exit</td><td>Instrument · strikes · premiums (entry → exit)</td><td>Live P&amp;L</td><td>Exit</td><td>Result</td><td>Why taken</td><td title="from the trade's own price path: best / worst point, what price did after the exit, day move">What went right / wrong</td><td title="ideas to test - nothing changes in the rules without Nikhil's approval">Where to improve</td></tr>${rows}</table></div></details>`:""}
     ${err}<p class="small faint" style="margin:6px 0 0">${esc(P.note||"")}</p>`;
 }
 async function suLoad(){
@@ -2314,6 +2330,22 @@ async function loadPulse(){
   DATA = await r.json(); renderPage();
 }
 let PAGE_SIG = null, PAGE_CHECK = 0;
+// 2026-11-06 (Nikhil: "intraday page is refreshing and takes me to the top every few seconds"): the page reloads itself when the server's
+// page changes (new panels). That reload dropped you at the top. Now the scroll position is saved and put back after the reload, once the
+// sections have loaded (tried for up to 15 s; stops as soon as you scroll yourself).
+function scrollSave(){ try { sessionStorage.setItem("mp.scroll", JSON.stringify({y: scrollY, tab: window.CUR_TAB || "", t: Date.now()})); } catch(e){} }
+window.addEventListener("beforeunload", scrollSave);
+(function scrollRestore(){
+  let S = null; try { S = JSON.parse(sessionStorage.getItem("mp.scroll") || "null"); sessionStorage.removeItem("mp.scroll"); } catch(e){}
+  if (!S || !S.y || Date.now() - S.t > 120000) return;
+  let stop = false; const quit = () => { stop = true; };
+  ["wheel", "touchstart", "keydown", "mousedown"].forEach(ev => window.addEventListener(ev, quit, {once: true, passive: true}));
+  const t0 = Date.now(), iv = setInterval(() => {
+    if (stop || Date.now() - t0 > 15000){ clearInterval(iv); return; }
+    if (S.tab && window.CUR_TAB && S.tab !== window.CUR_TAB) return;
+    if (document.documentElement.scrollHeight >= S.y + innerHeight * 0.5 && Math.abs(scrollY - S.y) > 4) window.scrollTo(0, S.y);
+  }, 250);
+})();
 async function checkPageVersion(){
   // the server serves this page fresh each time: when its layout changes, reload so new panels appear
   if (!LIVE || Date.now() - PAGE_CHECK < 60000) return;
@@ -2322,7 +2354,7 @@ async function checkPageVersion(){
     const t = await fetch("/", {cache:"no-store"}).then(r=>r.text());
     let h = 0; for (let i=0;i<t.length;i+=7) h = (h*31 + t.charCodeAt(i)) | 0;
     const sig = t.length + ":" + h;
-    if (PAGE_SIG && sig !== PAGE_SIG) location.reload();
+    if (PAGE_SIG && sig !== PAGE_SIG){ scrollSave(); location.reload(); }
     PAGE_SIG = sig;
   } catch(e){}
 }

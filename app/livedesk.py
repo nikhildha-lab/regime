@@ -335,7 +335,9 @@ def fp_tf(bars: list, tf: int, desk: str, src: int = 15) -> list:
             sess, run = b["d"], 0.0
         run += b["real_delta"]
         b["cvd"] = run
-    return out[-24:]
+    # 2026-11-06 (Nikhil: all candles for the day): every bar of the latest session (was the last 24 only)
+    n_last = sum(1 for b in out if out and b["d"] == out[-1]["d"])
+    return out[-max(24, n_last):]
 
 
 def tf_flow(bars_tf: list, spot) -> dict | None:
@@ -479,6 +481,10 @@ def poll_once():
                     _hot("overnight").tick()
                 except Exception as e:
                     _STATE["overnight_error"] = str(e)[:160]
+                try:                               # 2026-11-06 (Nikhil): one CSV of every paper trade, all rules / tabs, every 5 min (app/tradelog.py)
+                    _hot("tradelog").tick(_hot, {})
+                except Exception as e:
+                    _STATE["tradelog_error"] = str(e)[:160]
                 try:                               # 2026-11-05: Stocks in Play ORB paper rule (app/stockorb.py), MIS 5x, new - nothing else changed
                     _hot("stockorb").tick()
                 except Exception as e:
