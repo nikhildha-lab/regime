@@ -37,7 +37,7 @@ from datetime import datetime
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "data_store", "livedesk", "domcards")
 TRADES = os.path.join(OUT, "trades.json")
-OFD = os.path.join(os.path.expanduser("~"), "Documents", "dhan", "orderflow", "data")
+OFD = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data")
 EOD = os.path.join(ROOT, "data_store", "market_data", "nse_stocks_eod.csv")
 INDEX = ("NIFTY", "BANKNIFTY")
 # 2026-11-04 (Nikhil trades the index with 0.6-delta next-week options, not futures): index cost = option round trip in index-point
