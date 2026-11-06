@@ -250,10 +250,16 @@ def _open(k, setup, side, entry, stop, zone, zones, t, why):
     today = [x for x in S["trades"] if x["day"] == S["day"]]
     closed_r = sum(x["r"] for x in today if x["status"] == "closed" and x.get("plan"))
     plan = sum(1 for x in today if x.get("plan")) < P["plan_n"] and closed_r > P["plan_stop"]
+    # 2026-11-06 (Nikhil: "separate out stocks ... focus on Nifty, Bank Nifty"): an INDEX-ONLY plan account beside the old one -
+    # first 3 index trades a day, stops for the day at -2R of those. The old mixed plan account is unchanged.
+    plan_ix = None
+    if k in INDEX:
+        ix = [x for x in today if x["key"] in INDEX and x.get("plan_ix")]
+        plan_ix = len(ix) < P["plan_n"] and sum(x["r"] for x in ix if x["status"] == "closed") > P["plan_stop"]
     S["trades"].append({"id": f"{k}-{S['day']}-{_hm(t)}-{setup}", "day": S["day"], "key": k, "setup": setup, "side": side,
                         "opened": f"{S['day']} {_hm(t)}", "t0": t, "entry": round(entry, 2), "stop": round(stop, 2), "target": round(tgt, 2),
                         "target_note": tnote, "risk": risk, "cost_r": round(_cost_r(k, entry, risk), 3), "level": zone["name"],
-                        "zone": [zone["lo"], zone["hi"]], "why": why, "plan": plan, "status": "open",
+                        "zone": [zone["lo"], zone["hi"]], "why": why, "plan": plan, "plan_ix": plan_ix, "status": "open",
                         "kind": "futures" if k in INDEX else "stock",
                         # 2026-11-03 audit (look-ahead): index levels (blocks, OI walls, basis) are fixed when first read. If that
                         # happened after this trade's time (a restart mid-day), the trade used levels it could not have known.
@@ -432,6 +438,22 @@ def tick(hot=None, views=None):
     S["at"] = now.isoformat(timespec="seconds")
     if S.get("changed"):
         _save()
+
+
+def plan_ix_fill(T):
+    """Index plan account for trades recorded before 6 Nov (no plan_ix field): replayed in time order with the same rule -
+    first 3 index trades a day, a trade counts only if the closed R of the earlier plan trades is above -2R when it opens.
+    Returns copies; the saved file is not changed."""
+    out, by = [], {}
+    for x in sorted(T, key=lambda r: (r["day"], r["opened"])):
+        if x["key"] in INDEX and "plan_ix" not in x and not x.get("late_levels"):
+            prev = by.setdefault(x["day"], [])
+            r_closed = sum(p["r"] for p in prev if p.get("status") == "closed" and str(p.get("closed", "")) <= x["opened"])
+            x = dict(x, plan_ix=len(prev) < P["plan_n"] and r_closed > P["plan_stop"])
+        if x["key"] in INDEX and x.get("plan_ix"):
+            by.setdefault(x["day"], []).append(x)
+        out.append(x)
+    return out
 
 
 def _rec(rows):
@@ -630,6 +652,16 @@ def _with_legs(x):
         return dict(x, legs_text=f"legs not priced ({type(e).__name__})")
 
 
+def _rec_split(cl, index):
+    """2026-11-06: DOM Index (Nifty, Bank Nifty) and DOM Stocks kept apart - full-history record for each."""
+    rows = [x for x in plan_ix_fill(cl) if (x["key"] in INDEX) == index]
+    out = {"all": _rec(rows), "days": len({x["day"] for x in rows}), "since": min((x["day"] for x in rows), default=None)}
+    if index:
+        out.update(plan=_rec([x for x in rows if x.get("plan_ix")]), by_key={k: _rec([x for x in rows if x["key"] == k]) for k in INDEX},
+                   by_day={d: _rec([x for x in rows if x["day"] == d]) for d in sorted({x["day"] for x in rows})})
+    return out
+
+
 def api() -> dict:
     T = trades() or []
     px = _live_px()
@@ -640,7 +672,7 @@ def api() -> dict:
     for x in cl:
         by.setdefault(f"{x['setup']} · {'index' if x['key'] in INDEX else 'stocks'}", []).append(x)
     lv = S.get("lv") or {}
-    today = [_with_live(x, px) for x in T if x["day"] == day][::-1]
+    today = [_with_live(x, px) for x in plan_ix_fill([x for x in T if x["day"] == day])][::-1]
     today = [dict(x, review=_rev_cached(x)) if x["status"] == "closed" else x for x in today]
     today = [_with_legs(x) for x in today]               # 2026-11-06: exact strikes + premiums (app/legs.py, read-only)
     return {"open": [_with_live(x, px) for x in T if x["status"] == "open"], "today": today, "review_summary": _rev_summary(today),
@@ -656,5 +688,6 @@ def api() -> dict:
                      "BREAK = out the far side and beyond for 30 s, book leaning the break way, index delta >= 15% / stock wall pulled 30%. "
                      "Target next level (>= 2R), stop beyond the level, out after 60 min or 15:20, entries 09:30-15:00. "
                      "Index = synthetic future (buy ATM call + sell ATM put, next-week expiry), 1 lot (Nifty 65, Bank Nifty 30), P&L in Rs after about 4.5 pts (Nifty) / 12.5 pts (Bank Nifty) round-trip cost; 0.6-delta option shown for comparison. Stocks: Rs 1,000 risk a trade, 0.08% cost.",
+            "record_index": _rec_split(cl, True), "record_stocks": _rec_split(cl, False),
             "label": LABEL, "edge": EDGE, "late_levels_n": sum(1 for x in T if x.get("late_levels")),
             "note": "Paper only - never orders. Index trades opened before that day's levels were first read (restart mid-day) are kept but not counted (look-ahead). Judge after 30-40 sessions: positive after costs in both halves, 30+ trades."}

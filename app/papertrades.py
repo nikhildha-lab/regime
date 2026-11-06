@@ -23,12 +23,22 @@ RULES = {
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
     "touch": {"label": "Touch-minute option (Nifty only from 6 Nov)", "edge": "lead - forward test; Bank Nifty removed 6 Nov (no edge in 2-year study); option P&L uses the market-priced entry from 6 Nov (old zero-carry figure kept as pnl_old_bs)"},
     "dom": {"label": "DOM hold / break (plan account)", "edge": "lead - paper test (judge after 30-40 sessions)"},
+    "dom_ix": {"label": "DOM Index (Nifty, Bank Nifty · synthetic)", "edge": "lead - +0.66R a trade over the first 3 sessions; judge after 30-40"},
+    "dom_stocks": {"label": "DOM Stocks (record only)", "edge": "loss-making (-0.18R a trade, 312 trades) - needs new logic, not traded"},
     "touchdom": {"label": "Touch + DOM v1 (synthetic)", "edge": "FAILED history check (4 Nov) - paper record only, not a lead"},
     "sbt": {"label": "Strong Block Touch v2 (synthetic)", "edge": "new - history 8 trades, -Rs 2,002 (too few); forward paper test from 5 Nov"},
     "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic, Nifty only from 6 Nov)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
     "ovn": {"label": "Overnight hold · synthetic (15:13 -> next 09:16)", "edge": "new 6 Nov - 2-yr spot study positive at the open (t 2.4), weak by 09:20; real option prices 6 Oct-5 Nov: 12 nights -Rs 56,464 - paper test"},
     "ovn_h20": {"label": "Overnight hold · synthetic + 0.2-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 46,054"},
     "ovn_h30": {"label": "Overnight hold · synthetic + 0.3-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 40,010"},
+    "vcy_night": {"label": "Vol cycle · night: buy ATM straddle (15:25 -> next 09:45)", "edge": "new 6 Nov - recorded chain 5 Oct-5 Nov: 13 nights +26.7 pts/unit gross, net +Rs 1,458/lot, halves +14 / +37 (one trending month) - paper test"},
+    "vcy_day": {"label": "Vol cycle · day: sell ATM straddle (10:30 -> 15:25)", "edge": "new 6 Nov - recorded chain: 14 days +10.3 pts/unit gross, net +Rs 399/lot, halves +8 / +13 - paper test"},
+    "vcy_day_w": {"label": "Vol cycle · day with 2 % wings (iron fly)", "edge": "new 6 Nov - record beside naked: +6.0 pts gross but -Rs 117/lot net (4 legs of costs)"},
+    "vcy_night_ts": {"label": "Vol cycle · night tilt: bull call / bear put spread on strong / weak closes", "edge": "record only 6 Nov - replay 7 nights +23.3 pts avg but median +7.5, ex-best +0.3 (spread removes the gamma that works)"},
+    "vcy_night_tx": {"label": "Vol cycle · night straddle + extra leg in the close direction", "edge": "record only 6 Nov - replay 7 nights +100 pts avg, all from the 4 Nov gap; ex-best +23 vs straddle +19"},
+    "vcy_day_sk": {"label": "Vol cycle · day skew: credit spread on the side away from the 09:15-10:30 trend (0.3 %)", "edge": "record only 6 Nov - replay 14 days +25.0 pts vs +10.3 straddle, but from 3 down-trend days; fades at 0.4-0.5 %"},
+    "vcy_day_bw": {"label": "Vol cycle · day broken-wing fly (1 % trend side / 3 % other)", "edge": "record only 6 Nov - replay 14 days +19.2 pts, net +Rs 736/lot; fades at 0.5 %"},
+    "vcy_day_dh": {"label": "Vol cycle · day straddle, delta-hedged (synthetic, band ±1 lot on a 4-lot book)", "edge": "record only 6 Nov - replay 14 days +12.5 pts vs +10.3 plain, worst day -33.7 vs -52.4, net +Rs 493/lot, 1.4 hedges/day; band picked from 4 tried"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -333,6 +343,73 @@ def _ovn(hot):
     return out
 
 
+def _vcy_greeks(r, v):
+    """Live greeks line for an open vol-cycle row (from volcycle._monitor), rupees for 1 lot."""
+    m = (r.get("mon") or {}).get(v) or {}; n = m.get("now"); a = m.get("attr") or {}
+    if r.get("status") != "open" or not n:
+        return ""
+    L = 65
+    s = (f" · live {n['ts'][11:16]}: Δ {n['delta'] * L:+.0f} qty, Γ {n['gamma'] * L * 100:+.2f} Δ/100pt, Θ ₹{n['theta'] * L:+,.0f}/day, "
+         f"Vega ₹{n['vega'] * L:+,.0f}/vol · P&L ₹{n['pnl_pts'] * L:+,.0f} = Δ {a.get('delta', 0) * L:+,.0f} Γ {a.get('gamma', 0) * L:+,.0f} "
+         f"Θ {a.get('theta', 0) * L:+,.0f} Vega {a.get('vega', 0) * L:+,.0f}")
+    h = (r.get("mon") or {}).get("hedge_now")
+    if v == "dhedge" and h:
+        last = ((r.get("mon") or {}).get("hedge_log") or [{}])[-1]
+        s += f" · hedge: holding {h['held_lots']:+.0f} synthetic lot(s), book delta {h['book_delta_lots']:+.2f} lots" + (f", last: {last.get('action')} at {last.get('ts')}" if last else "")
+    return s
+
+
+def _vcy(hot):
+    """2026-11-06: Nifty day / night vol cycle (app/volcycle.py) - night long straddle, day short straddle (naked + wings), each its own row."""
+    V = hot("volcycle"); out = []
+    for r in V.trades():
+        if r.get("status") not in ("open", "closed"):
+            continue
+        for v, rule in ((("plain", "vcy_night"), ("tilt_spread", "vcy_night_ts"), ("tilt_straddle", "vcy_night_tx")) if r["rule"] == "night"
+                        else (("plain", "vcy_day"), ("wings", "vcy_day_w"), ("skew", "vcy_day_sk"), ("bwing", "vcy_day_bw"), ("dhedge", "vcy_day_dh"))):
+            X = (r.get("versions") or {}).get(v)
+            if not X:
+                continue
+            legs = " + ".join(f"{'buy' if lg['qty'] > 0 else 'sell'} {lg['strike']:.0f} {lg['cp']}" for lg in X["legs"].values())
+            ctx = r.get("context") or {}
+            side = ("long" if r["rule"] == "night" else "short") if v in ("plain", "wings") else \
+                   ("long" if ctx.get("signal") == "strong close" or ctx.get("trend") == "up" else "short" if ctx.get("signal") == "weak close" or ctx.get("trend") == "down" else "short")
+            t = {"rule": rule, "key": r["key"], "side": side, "opened": f"{r['day']} {r['snap']}",
+                 "entry": r["spot"], "stop": None, "target": None,
+                 "how": ("exit next trading day at the first snapshot >= 09:45" if r["rule"] == "night" else "exit at the last snapshot <= 15:25 (no stop; worst move recorded)")
+                        + f" · net delta {X['net_delta']}" + _vcy_greeks(r, v),
+                 "instrument": f"{NAME.get(r['key'], r['key'])} {r.get('expiry')} options, 1 lot: {legs}", "size": None, "ccy": "₹",
+                 "status": r["status"], "why": r.get("why", ""), "_src": ("vcy", (r, v))}
+            if r["status"] == "closed":
+                t.update(exit=r.get("exit_spot"), exit_reason="time exit", closed=r.get("closed"), pnl=X.get("pnl"))
+            out.append(t)
+    return out
+
+
+def _dom_ix(hot):
+    """2026-11-06 (Nikhil: "separate out stocks ... focus on Nifty, Bank Nifty"): EVERY DOM index trade (Nifty / Bank Nifty), synthetic
+    future 1 lot, rupees after costs. "plan" = the index-only plan account (first 3 index trades a day, -2R day stop)."""
+    D = hot("domcards")
+    out = []
+    try:
+        lpx = D._live_px()
+    except Exception:
+        lpx = None
+    for x in [t for t in D.plan_ix_fill(D.trades() or []) if t["key"] in D.INDEX and not t.get("late_levels")]:
+        if x["status"] == "open" and lpx:
+            x = D._with_live(x, lpx)
+        t = {"rule": "dom_ix", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
+             "how": f"{x['setup']} · target {x['target_note']} · out after 60 min or 15:20" + (" · index plan account" if x.get("plan_ix") else ""),
+             "instrument": NAME.get(x["key"], x["key"]) + " synthetic future, 1 lot", "plan": bool(x.get("plan_ix")),
+             "size": None, "ccy": "₹", "status": x["status"], "why": x.get("why", ""), "_src": ("dom", x)}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
 def _dom(hot):
     """2026-11-03: DOM hold / break paper test (app/domcards.py). Rs = R after costs x Rs 1,000 risk.
     Only the plan account (first 3 trades a day, -2R day stop) is listed here; every DOM trade (~50-90 a day) is in the DOM Setups card."""
@@ -372,7 +449,7 @@ def _add_legs(hot, show, allt):
         kind, src = t.get("_src") or (None, None)
         try:
             L = (LG.for_touch(src) if kind == "touch" else LG.for_touch(src, synth=True) if kind == "touchsyn" else LG.for_sbt(src) if kind == "sbt"
-                 else LG.for_dom(src) if kind == "dom" else LG.for_ovn(*src) if kind == "ovn" else None) if LG else None
+                 else LG.for_dom(src) if kind == "dom" else LG.for_ovn(*src) if kind == "ovn" else LG.for_vcy(*src) if kind == "vcy" else None) if LG else None
         except Exception as e:
             L = {"ok": False, "why": f"legs: {type(e).__name__}"}
         if L:
@@ -413,7 +490,7 @@ def _add_review(hot, show):
         if t.get("status") != "closed":
             continue
         try:
-            if t.get("rule") == "dom" and (t.get("_src") or (None, None))[0] == "dom":
+            if t.get("rule") in ("dom", "dom_ix", "dom_stocks") and (t.get("_src") or (None, None))[0] == "dom":
                 r = hot("domcards")._rev_cached(t["_src"][1])        # DOM trades: the DOM card's own review
             else:
                 r = TR.cached(t, _risk_pts(t))
@@ -428,16 +505,17 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("touchdom", lambda: _touchdom(hot)),
-                   ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot))):
+                   ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot))):
         try:
             allt += fn()
         except Exception as e:
             errs[nm] = str(e)[:120]
     try:
         D = hot("domcards")
-        for x in (D._load() or []):
-            t = {"rule": "dom", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
-                 "how": f"{x['setup']} · target {x.get('target_note', '')} · out after 60 min or 15:20", "plan": bool(x.get("plan")),
+        for x in D.plan_ix_fill(D._load() or []):
+            ix = x["key"] in D.INDEX
+            t = {"rule": "dom_ix" if ix else "dom_stocks", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
+                 "how": f"{x['setup']} · target {x.get('target_note', '')} · out after 60 min or 15:20", "plan": bool(x.get("plan_ix") if ix else x.get("plan")),
                  "instrument": NAME.get(x["key"], x["key"]) + (" synthetic future, 1 lot" if x["key"] in D.INDEX else " (stock)"),
                  "ccy": "₹", "status": x["status"], "why": x.get("why", ""), "_src": ("dom", x)}
             if x["status"] == "closed":
@@ -454,7 +532,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("dom", lambda: _dom(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touch", lambda: _touch(hot)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("touchdom", lambda: _touchdom(hot)), ("sbt", lambda: _sbt(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot))):
         try:
             allt += fn()
         except Exception as e:
