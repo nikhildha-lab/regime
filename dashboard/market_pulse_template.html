@@ -1216,10 +1216,15 @@ function fxNormalize(V){
     // moved every spot level AND re-anchored the price rows (cells regrouped). Hold the basis steady: update only on a > 4 pt change or every 5 min.
     // 2026-11-06 v2: the raw gap swings 14-30 pts within 30 s (the tracker's futures quote lags spot), so a 4-pt rule still jumped.
     // Use the median of the last ~3 min of readings (90 polls) and only move the shown value when that median moves >= 1.5 pts.
-    FX.bs = FX.bs || {}; FX.bh = FX.bh || {}; { const raw = fut - spot, h = FX.bh[V.key] || (FX.bh[V.key] = []);
-      if (isFinite(raw)) { h.push(raw); if (h.length > 90) h.shift(); }
+    // v3 (Nikhil: "PDH is still moving 24,600-24,603"): lock the basis for the session. Median of the last ~10 min (300 polls), whole points,
+    // shown value changes only on a >= 5 pt move of that median; remembered per day in this browser so a refresh does not re-settle it.
+    FX.bs = FX.bs || {}; FX.bh = FX.bh || {}; { const raw = fut - spot, h = FX.bh[V.key] || (FX.bh[V.key] = []), day = new Date().toISOString().slice(0,10);
+      if (isFinite(raw)) { h.push(raw); if (h.length > 300) h.shift(); }
+      if (!FX.bs[V.key]) { try { const m = JSON.parse(localStorage.getItem("mp.basis." + V.key) || "null"); if (m && m.d === day && isFinite(m.v)) FX.bs[V.key] = {v: m.v, t: Date.now(), final: true}; } catch(e){} }
       const sr = h.slice().sort((a,b)=>a-b), med = sr.length ? sr[Math.floor(sr.length/2)] : raw, pv = FX.bs[V.key];
-      if (!pv || Math.abs(med - pv.v) >= 1.5) FX.bs[V.key] = {v: Math.round(med*2)/2, t: Date.now()}; }
+      const ready = h.length >= 30;                       // first value is provisional; replaced once by the 1-minute median
+      if (!pv || (ready && !pv.final) || (ready && Math.abs(med - pv.v) >= 5)) { FX.bs[V.key] = {v: Math.round(med), t: Date.now(), final: ready};
+        if (ready) try { localStorage.setItem("mp.basis." + V.key, JSON.stringify({d: day, v: FX.bs[V.key].v})); } catch(e){} } }
     const bs = FX.bs[V.key].v, sh = v => v==null ? v : +v + bs, L = Object.assign({}, V.levels||{}), SR = Object.assign({}, V.sr||{});
     ["VWAP","IB high","IB low"].forEach(k => { if (L[k]!=null) L[k] = sh(L[k]); });
     SR.support = (SR.support||[]).map(sh); SR.resistance = (SR.resistance||[]).map(sh); ["PDH","PDL","PWH","PWL"].forEach(k => { if (SR[k]!=null) SR[k] = sh(SR[k]); });
