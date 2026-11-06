@@ -8,7 +8,7 @@ volume and the 5-level book. Front-month futures (nearest expiry at least 3 days
 Trades come from volume steps between packets; side = at / above the ask -> buy, at / below the bid -> sell, else tick rule.
 Every second, per contract: data/mcx/<date>/sec_<UNDERLYING>.csv
     t, bid, ask, mid, last, buy_vol, sell_vol, imb5, bidq5, askq5      (imb5 = (bid qty - ask qty) / total, 5 levels)
-Status every 5 s: data/mcx/live.json.  Session 08:58-23:58 IST; outside it the process sleeps.
+Status every 5 s: data/mcx/live.json.  Session 15:40-23:58 IST (evening only since 2026-11-06); outside it the process sleeps.
 Run: <dhan venv>/bin/python -u mcx_recorder.py   (Market Pulse's live desk starts it in MCX hours if it is not running)
 """
 from __future__ import annotations
@@ -26,7 +26,19 @@ from common import HERE, connect, scrip_master
 
 UNDER = ["GOLDM", "SILVERM", "CRUDEOILM", "NATGASMINI", "COPPER", "ALUMINIUM", "ZINC"]
 OUT_ROOT = HERE / "data" / "mcx"
-START_AT, STOP_AT = "08:58", "23:58"
+# 2026-11-06 (Nikhil: "record mcx in the evening"): 08:58 start failed all day - during NSE hours Dhan closed the MCX socket at once
+# (connections in use by the tracker + order-flow engine) and the 10 s retries drew HTTP 429s. Now: evening session only, from 15:40
+# (the order-flow engine stops at 15:31), and only once the engine's live.json has gone quiet; retries back off 10 s -> 5 min.
+START_AT, STOP_AT = "15:40", "23:58"
+OF_LIVE = HERE / "data" / "of" / "live.json"
+
+
+def _nse_busy():
+    """True while the NSE order-flow engine is still writing (it holds Dhan connections)."""
+    try:
+        return time.time() - os.path.getmtime(OF_LIVE) < 90
+    except OSError:
+        return False
 LOCK = threading.Lock()
 ST = {"feed": "starting", "detail": "", "contracts": {}, "last_tick": {}, "started": None}
 BOOK, LAST, AGG = {}, {}, {}
@@ -54,11 +66,13 @@ def front_months():
 def feed_loop(ctx, ids):
     from dhanhq import MarketFeed
     vol_prev = {}
+    wait = 10
     while datetime.now().strftime("%H:%M") < STOP_AT:
         feed = None
         try:
             feed = MarketFeed(ctx, [(MarketFeed.MCX, i, MarketFeed.Full) for i in ids], "v2")
             ST.update(feed="connected", detail="")
+            got = False
             while datetime.now().strftime("%H:%M") < STOP_AT:
                 feed.run_forever()
                 d = feed.get_data()
@@ -96,10 +110,13 @@ def feed_loop(ctx, ids):
                     elif ltp > 0 and u not in LAST:
                         LAST[u] = (ltp, 1)
                     ST["last_tick"][u] = datetime.now().strftime("%H:%M:%S")
+                if not got:
+                    got = True; wait = 10                       # data flowing again - reset the back-off
         except Exception as e:
             ST.update(feed="dropped", detail=str(e)[:160])
-            print(f"{datetime.now():%H:%M:%S} feed drop: {str(e)[:150]} - reconnecting in 10s", flush=True)
-            time.sleep(10)
+            print(f"{datetime.now():%H:%M:%S} feed drop: {str(e)[:150]} - reconnecting in {wait}s", flush=True)
+            time.sleep(wait)
+            wait = min(300, wait * 2)
         finally:
             try:
                 feed and feed.close_connection()
@@ -110,8 +127,8 @@ def feed_loop(ctx, ids):
 def main():
     while True:
         now = datetime.now()
-        if now.weekday() >= 5 or not (START_AT <= now.strftime("%H:%M") < STOP_AT):
-            ST.update(feed="closed", detail="outside MCX hours")
+        if now.weekday() >= 5 or not (START_AT <= now.strftime("%H:%M") < STOP_AT) or _nse_busy():
+            ST.update(feed="closed", detail="waiting for the evening session (15:40-23:58, after the NSE engine stops)")
             write_live()
             time.sleep(60)
             continue
