@@ -1512,7 +1512,10 @@ function ptRender(P, title, all){
         <span class="faint">${esc(t.how||"")}</span></div>
       <div style="margin-top:4px">${t.pnl_open==null?`<span class="pill p-accent">open</span>`:`Now ${f(t.now)} · <b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b> <span class="faint">open</span>`}</div>
       <div class="small faint" style="margin-top:2px">${esc(t.edge)}</div></div>`;
-  const op = (P.open||[]), cl = (P.closed||[]).slice(0, all ? 40 : 12);
+  // 2026-11-06 (Nikhil: "show only performance for today, not history"): closed trades and totals = today (IST) only. Open trades stay
+  // (an overnight trade opened yesterday is still live). Full history: data_store/livedesk/trade_log.csv.
+  const todayIST = new Date(Date.now() + 330*60000).toISOString().slice(0,10);
+  const op = (P.open||[]), cl = (P.closed||[]).filter(t => String(t.closed||"").slice(0,10) === todayIST);
   // 2026-11-06 (Nikhil): same columns as DOM Setups - live P&L (open trades), why taken, what went right / wrong, where to improve
   const rv = t => t.review ? `${t.review.right?`<span class="pos">✓ ${esc(t.review.right)}</span>`:""}${t.review.right&&t.review.wrong?"<br>":""}${t.review.wrong?`<span class="neg">✗ ${esc(t.review.wrong)}</span>`:""}` : '<span class="faint">–</span>';
   const live = t => t.pnl_open!=null ? `<b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b>${t.now!=null?` <span class="faint">now ${f(t.now)}</span>`:""}` : t.status==="open" ? '<span class="faint">no live price</span>' : '<span class="faint">–</span>';
@@ -1522,14 +1525,17 @@ function ptRender(P, title, all){
       <td style="min-width:200px;max-width:300px">${esc(t.why||"")}</td><td style="min-width:240px;max-width:360px">${t.status==="open"?'<span class="faint">trade open</span>':rv(t)}</td>
       <td style="min-width:180px;max-width:280px">${t.review?esc(t.review.improve||"–"):'<span class="faint">–</span>'}</td></tr>`;
   const rows = op.concat(cl).map(row).join("");
-  const tot = (P.totals||[]).map(z => `<span style="margin-right:14px"><b>${esc(z.rule)}</b> ${z.n} closed · won ${z.wins} · <b class="${sg(z.pnl)}">${money(z.pnl, z.ccy)}</b>${z.today_n?` <span class="faint">(today ${money(z.today_pnl, z.ccy)})</span>`:""}</span>`).join("");
+  const totT = Object.values(cl.reduce((m, t) => { const k = t.rule_label + "|" + t.ccy, z = m[k] || (m[k] = {rule: t.rule_label, ccy: t.ccy, n: 0, wins: 0, pnl: 0});
+    z.n++; z.wins += (t.pnl||0) > 0; z.pnl = Math.round((z.pnl + (t.pnl||0))*100)/100; return m; }, {}));
+  const tot = totT.length ? `<b>Today:</b> ` + totT.map(z => `<span style="margin-right:14px"><b>${esc(z.rule)}</b> ${z.n} closed · won ${z.wins} · <b class="${sg(z.pnl)}">${money(z.pnl, z.ccy)}</b></span>`).join("") : `<span class="faint">No trade closed today yet.</span>`;
+  const totOld = (P.totals||[]).map(z => `<span style="margin-right:14px"><b>${esc(z.rule)}</b> ${z.n} closed · won ${z.wins} · <b class="${sg(z.pnl)}">${money(z.pnl, z.ccy)}</b>${z.today_n?` <span class="faint">(today ${money(z.today_pnl, z.ccy)})</span>`:""}</span>`).join("");
   const err = Object.keys(P.errors||{}).length ? `<p class="small neg">Not loaded: ${esc(Object.entries(P.errors).map(([k,v])=>k+": "+v).join(" · "))}</p>` : "";
   return `<div class="spread"><h2>${esc(title||"Paper trades")} <span class="small muted">paper only · never orders</span></h2>
       ${all?"":`<a class="small" href="#" onclick="showView('logbook');return false">All paper trades →</a>`}</div>
     <div class="eyebrow" style="margin-top:6px">Open now (${op.length})</div>
     ${op.length ? `<div class="row" style="gap:10px;flex-wrap:wrap;margin:4px 0 8px">${op.map(card).join("")}</div>` : `<p class="small muted" style="margin:2px 0 8px">No open paper trade.</p>`}
     ${tot?`<div class="small" style="margin:4px 0">${tot}</div>`:""}
-    ${rows?`<details ${all?"open":""} style="margin-top:6px"><summary class="small muted" style="cursor:pointer">Paper trades: ${op.length} open + ${cl.length} closed · why taken, what went right / wrong, where to improve</summary>
+    ${rows?`<details ${all?"open":""} style="margin-top:6px"><summary class="small muted" style="cursor:pointer">Today: ${op.length} open + ${cl.length} closed · why taken, what went right / wrong, where to improve</summary>
       <div class="tscroll"><table class="small" style="width:100%;margin-top:4px"><tr class="muted"><td>Closed (IST)</td><td>Market</td><td>Rule</td><td>Side</td><td>Entry → exit</td><td>Instrument · strikes · premiums (entry → exit)</td><td>Live P&amp;L</td><td>Exit</td><td>Result</td><td>Why taken</td><td title="from the trade's own price path: best / worst point, what price did after the exit, day move">What went right / wrong</td><td title="ideas to test - nothing changes in the rules without Nikhil's approval">Where to improve</td></tr>${rows}</table></div></details>`:""}
     ${err}<p class="small faint" style="margin:6px 0 0">${esc(P.note||"")}</p>`;
 }
@@ -1894,9 +1900,12 @@ async function dsLoad(){
   const today = D.today||[];
   setKeep(c, `<div class="spread"><h2>DOM Setups · Paper Test</h2><span class="small muted">${D.at?`updated ${esc(String(D.at).slice(11,19))}`:"runs 09:15–15:35 IST"} · <span class="pill p-neutral" title="${esc(D.note||"")}">${esc(D.edge||"")}</span></span></div>
     <p class="small" style="margin:4px 0">Level first, DOM second: a <b>hold</b> (price tests a level and bounces, book and market orders on our side) or a <b>break</b> (price goes through and stays, the defending wall pulled). Nifty, Bank Nifty as a synthetic future (buy ATM call + sell ATM put, 1 lot, rupees) + 48 stocks (₹1,000 risk a trade). Paper only.</p>
-    <div class="small" style="line-height:1.7"><b>All trades:</b> ${rec(A)}<br><b>Plan account</b> (first 3 a day, stop at −2R): ${rec(PL)}<br>${(R.index_vehicle||{}).synthetic_future && R.index_vehicle.synthetic_future.n ? `<b>Index, 1 lot:</b> synthetic future ${rs(R.index_vehicle.synthetic_future.rs)} vs 0.6-delta option ${rs((R.index_vehicle["option_0.6d"]||{}).rs)} (${R.index_vehicle.synthetic_future.n} trades, after costs)<br>` : ""}
+    <div class="small" style="line-height:1.7">${(() => {          // 2026-11-06 (Nikhil): today only, no history
+        const cl = today.filter(t => t.status==="closed"), ix = cl.filter(t => ["NIFTY","BANKNIFTY"].includes(t.key)), st = cl.filter(t => !["NIFTY","BANKNIFTY"].includes(t.key)), pl = cl.filter(t => t.plan);
+        const one = x => x.length ? `${x.length} closed · ${Math.round(100*x.filter(t => (t.pnl||0) > 0).length/x.length)}% won · ${rs(x.reduce((a,t) => a + (t.pnl||0), 0))}` : "none closed yet";
+        return `<b>Today, all trades:</b> ${one(cl)} · ${today.length - cl.length} open<br><b>Index (1 lot, synthetic):</b> ${one(ix)} · <b>Stocks (₹1,000 risk):</b> ${one(st)}<br><b>Plan account</b> (first 3 today, stop at −2R): ${one(pl)}<br>`; })()}
       ${(() => { const S = D.review_summary; if (!S) return ""; return `<b>Today's review:</b> ${S.stops} stopped out - ${S.never_worked} never moved our way, ${S.reversed_after_1r} were +1R then reversed, ${S.target_after_stop} hit the target after the stop · ${S.against_day} trades went against the day's move.${(S.top_ideas||[]).length ? ` <b>Most common ideas to test:</b> ${S.top_ideas.map(([k,n]) => `${esc(k)} (${n})`).join(" · ")}.` : ""} <span class="faint">Ideas only - rules unchanged.</span><br>`; })()}
-      <span class="faint">${R.sessions||0} session${R.sessions===1?"":"s"} since ${esc(R.since||"–")} · judge after 30–40 sessions (positive after costs in both halves, 30+ trades). Under that = too early.</span></div>
+      <span class="faint">Today only. History is kept in the trade log (data_store/livedesk/trade_log.csv) · judge the rule after 30–40 sessions.</span></div>
     ${today.length ? (() => { const hd = `<tr><th>Time</th><th>Market</th><th>Setup</th><th>Level</th><th>Entry / stop / target</th><th title="open trades: at the latest price (order-flow engine, every 2 s), after costs - same money rules as the result">Live P&amp;L</th><th>Result (after costs)</th><th title="✓ = counts in the plan account (first 3 a day). Below: the instrument deployed, exact strikes and premiums (market-anchored), and a premium check">Plan · instrument</th><th>Why taken</th><th title="from the trade's own price path: best / worst point, time, day move, what price did after the exit">What went right / wrong</th><th title="ideas to test - nothing changes in the rules without Nikhil's approval">Where to improve</th></tr>`,
         first = today.filter(t => t.status==="open").concat(today.filter(t => t.status!=="open")), top = first.slice(0, 15), more = first.slice(15);
       return `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px">${hd}${top.map(row).join("")}</table></div>${more.length ? `<details class="more"><summary class="small">${more.length} more trades today</summary><div class="tscroll"><table class="ld-tbl">${hd}${more.map(row).join("")}</table></div></details>` : ""}`; })()
