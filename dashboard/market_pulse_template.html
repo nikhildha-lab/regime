@@ -1471,7 +1471,7 @@ async function ptLoad(){
     // 2026-11-04 (Nikhil): the all-markets card follows the tab (crypto tab -> crypto trades only, same rule on every tab)
     const grp = !el.dataset.keys && MKT_TABS.includes(VIEW) ? VIEW : "";
     let P; try { P = await fetch("/api/livedesk/papertrades?keys=" + encodeURIComponent(el.dataset.keys||"") + (grp ? "&group=" + grp : "")).then(r=>r.json()); } catch(e){ continue; }
-    el.innerHTML = ptRender(P, grp ? `All paper trades · ${TAB_LABEL[grp]||grp} · every rule` : el.dataset.title, !el.dataset.keys);
+    setKeep(el, ptRender(P, grp ? `All paper trades · ${TAB_LABEL[grp]||grp} · every rule` : el.dataset.title, !el.dataset.keys));
   }
 }
 function ptRender(P, title, all){
@@ -1605,10 +1605,10 @@ async function lvlLoad(){
   const tone = t => t==="hold" ? "pos" : t==="break" ? "neg" : "muted";
   const old = O.day && O.at ? staleBadge(O.day, O.at, 30) : "";
   const live = W && W.zone ? `Live 1-minute test: <b>${W.zone.side==="R"?"resistance":"support"} ${fmt(W.zone.lo,0)}–${fmt(W.zone.hi,0)}</b> (futures) · ${esc(W.status||"")} ${(() => { const [d,t] = istOf(W.at, W.tz); return d ? staleBadge(d, t, 20) : ""; })()}` : "";
-  box.innerHTML = `<div class="spread"><h2>Levels & blocks · ${esc(SHORT[key]||key)}</h2><span class="small muted">index ${fmt(O.spot,0)}${O.spot_at?` (${esc(String(O.spot_at).slice(11,16))})`:""} · OI read ${esc(O.at||"")} ${old}</span></div>
+  setKeep(box, `<div class="spread"><h2>Levels & blocks · ${esc(SHORT[key]||key)}</h2><span class="small muted">index ${fmt(O.spot,0)}${O.spot_at?` (${esc(String(O.spot_at).slice(11,16))})`:""} · OI read ${esc(O.at||"")} ${old}</span></div>
     ${B.length ? `<table class="ld-tbl small" style="margin-top:6px"><tr><th>Block</th><th>Strength</th><th>Where</th><th>Option writers (OI)</th></tr>${B.map(b => `<tr><td><b>${esc(b.range)}</b>${(b.alerts||[]).length?" ★":""}</td><td>${esc(b.strength)}</td><td>${esc(b.side)}${b.side==="price inside"?"":` · ${fmt(Math.abs(b.dist_pct),2)}% ${b.dist_pct>0?"above":"below"}`}</td><td class="${tone(b.tone)}">${esc(b.read||"")}</td></tr>`).join("")}</table>` : `<p class="small muted">No blocks near price.</p>`}
     <p class="small" style="margin:6px 0 0">${live}</p>
-    <p class="small faint" style="margin:4px 0 0">Strong blocks held 77-80% in 2024-26 - use them for stops / targets, not as entries. ★ = week / month high-low. The detail cards are inside 'Details'.</p>`;
+    <p class="small faint" style="margin:4px 0 0">Strong blocks held 77-80% in 2024-26 - use them for stops / targets, not as entries. ★ = week / month high-low. The detail cards are inside 'Details'.</p>`);
 }
 setInterval(() => { if (!document.hidden && VIEW === "india") lvlLoad(); }, 10000);   // 2026-11-06: 60 s -> 10 s
 function showView(v){
@@ -1834,6 +1834,18 @@ async function domLoad(){
 function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.body.dataset.tab === "intraday" && document.body.dataset.sub === "india"){ domLoad(); DOM.t = setInterval(() => { if (!document.hidden) domLoad(); }, 2000);
   dsLoad(); DOM.s = setInterval(() => { if (!document.hidden) dsLoad(); }, 2000); } }   // 2026-11-06 (Nikhil: speed up cheap ones): 10 s -> 2 s
 /* 2026-11-03 (Nikhil: Live trackers v2 -> new cards on the DOM setups): hold / break at a level, paper only (app/domcards.py) */
+// 2026-11-06 (Nikhil: "'62 more trades today' collapsed section unable to open as DOM refreshes every 2 seconds"): sections that refresh
+// every few seconds rebuild their HTML, which closed any <details> the user had opened and reset table scroll. setKeep() re-applies the
+// open state (keyed by the summary text with numbers removed, so "62 more trades" = "63 more trades") and each table's scroll position.
+function setKeep(el, html){
+  if (!el) return;
+  const k = d => ((d.querySelector("summary")||{}).textContent||"").replace(/[0-9.,]+/g, "#").trim();
+  const open = new Set([...el.querySelectorAll("details")].filter(d => d.open).map(k));
+  const sc = [...el.querySelectorAll(".tscroll, .fx-scroll")].map(x => [x.scrollLeft, x.scrollTop]);
+  el.innerHTML = html;
+  el.querySelectorAll("details").forEach(d => { if (open.has(k(d))) d.open = true; });
+  el.querySelectorAll(".tscroll, .fx-scroll").forEach((x, i) => { if (sc[i]) { x.scrollLeft = sc[i][0]; x.scrollTop = sc[i][1]; } });
+}
 async function dsLoad(){
   const c = $("#domSetups"); if (!c) return;
   let D; try { D = await fetch("/api/livedesk/domcards").then(r=>r.json()); } catch(e){ return; }
@@ -1845,18 +1857,21 @@ async function dsLoad(){
   const row = t => `<tr title="${esc(t.why||"")}"><td>${esc(String(t.opened||"").slice(11,16))}</td><td><b>${esc(nm(t.key))}</b></td><td>${esc(t.setup)} <span class="${t.side==="long"?"pos":"neg"}">${t.side==="long"?"▲ long":"▼ short"}</span></td>
     <td class="small">${esc(t.level||"")}</td><td>${fmt(t.entry,2)} / <span class="neg">${fmt(t.stop,2)}</span> / <span class="pos">${fmt(t.target,2)}</span></td>
     <td>${t.status==="open" && t.pnl_open!=null ? `<b>${rs(t.pnl_open)}</b> <span class="faint small">${r(t.r_open)} · now ${fmt(t.now,2)}</span>` : t.status==="open" ? '<span class="faint small">no live price</span>' : '<span class="faint">–</span>'}</td>
-    <td>${t.status==="open" ? '<span class="pill p-accent">open</span>' : `<b>${rs(t.pnl)}</b> <span class="faint small">${t.lot ? "1 lot · " : ""}${r(t.r)} · ${esc(t.exit_reason||"")} ${esc(String(t.closed||"").slice(11,16))}</span>`}</td><td>${t.plan?"✓":""}</td></tr>`;
+    <td>${t.status==="open" ? '<span class="pill p-accent">open</span>' : `<b>${rs(t.pnl)}</b> <span class="faint small">${t.lot ? "1 lot · " : ""}${r(t.r)} · ${esc(t.exit_reason||"")} ${esc(String(t.closed||"").slice(11,16))}</span>`}</td><td>${t.plan?"✓":""}</td><td class="small" style="min-width:220px;max-width:320px">${esc(t.why||"")}</td>
+    <td class="small" style="min-width:260px;max-width:380px">${t.review ? `${t.review.right?`<span class="pos">✓ ${esc(t.review.right)}</span>`:""}${t.review.right&&t.review.wrong?"<br>":""}${t.review.wrong?`<span class="neg">✗ ${esc(t.review.wrong)}</span>`:""}` : t.status==="open" ? '<span class="faint">trade open</span>' : '<span class="faint">–</span>'}</td>
+    <td class="small" style="min-width:200px;max-width:300px">${t.review ? esc(t.review.improve||"–") : '<span class="faint">–</span>'}</td></tr>`;
   const today = D.today||[];
-  c.innerHTML = `<div class="spread"><h2>DOM Setups · Paper Test</h2><span class="small muted">${D.at?`updated ${esc(String(D.at).slice(11,19))}`:"runs 09:15–15:35 IST"} · <span class="pill p-neutral" title="${esc(D.note||"")}">${esc(D.edge||"")}</span></span></div>
+  setKeep(c, `<div class="spread"><h2>DOM Setups · Paper Test</h2><span class="small muted">${D.at?`updated ${esc(String(D.at).slice(11,19))}`:"runs 09:15–15:35 IST"} · <span class="pill p-neutral" title="${esc(D.note||"")}">${esc(D.edge||"")}</span></span></div>
     <p class="small" style="margin:4px 0">Level first, DOM second: a <b>hold</b> (price tests a level and bounces, book and market orders on our side) or a <b>break</b> (price goes through and stays, the defending wall pulled). Nifty, Bank Nifty as a synthetic future (buy ATM call + sell ATM put, 1 lot, rupees) + 48 stocks (₹1,000 risk a trade). Paper only.</p>
     <div class="small" style="line-height:1.7"><b>All trades:</b> ${rec(A)}<br><b>Plan account</b> (first 3 a day, stop at −2R): ${rec(PL)}<br>${(R.index_vehicle||{}).synthetic_future && R.index_vehicle.synthetic_future.n ? `<b>Index, 1 lot:</b> synthetic future ${rs(R.index_vehicle.synthetic_future.rs)} vs 0.6-delta option ${rs((R.index_vehicle["option_0.6d"]||{}).rs)} (${R.index_vehicle.synthetic_future.n} trades, after costs)<br>` : ""}
+      ${(() => { const S = D.review_summary; if (!S) return ""; return `<b>Today's review:</b> ${S.stops} stopped out - ${S.never_worked} never moved our way, ${S.reversed_after_1r} were +1R then reversed, ${S.target_after_stop} hit the target after the stop · ${S.against_day} trades went against the day's move.${(S.top_ideas||[]).length ? ` <b>Most common ideas to test:</b> ${S.top_ideas.map(([k,n]) => `${esc(k)} (${n})`).join(" · ")}.` : ""} <span class="faint">Ideas only - rules unchanged.</span><br>`; })()}
       <span class="faint">${R.sessions||0} session${R.sessions===1?"":"s"} since ${esc(R.since||"–")} · judge after 30–40 sessions (positive after costs in both halves, 30+ trades). Under that = too early.</span></div>
-    ${today.length ? (() => { const hd = `<tr><th>Time</th><th>Market</th><th>Setup</th><th>Level</th><th>Entry / stop / target</th><th title="open trades: at the latest price (order-flow engine, every 2 s), after costs - same money rules as the result">Live P&amp;L</th><th>Result (after costs)</th><th title="counts in the plan account">Plan</th></tr>`,
+    ${today.length ? (() => { const hd = `<tr><th>Time</th><th>Market</th><th>Setup</th><th>Level</th><th>Entry / stop / target</th><th title="open trades: at the latest price (order-flow engine, every 2 s), after costs - same money rules as the result">Live P&amp;L</th><th>Result (after costs)</th><th title="counts in the plan account">Plan</th><th>Why taken</th><th title="from the trade's own price path: best / worst point, time, day move, what price did after the exit">What went right / wrong</th><th title="ideas to test - nothing changes in the rules without Nikhil's approval">Where to improve</th></tr>`,
         first = today.filter(t => t.status==="open").concat(today.filter(t => t.status!=="open")), top = first.slice(0, 15), more = first.slice(15);
       return `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px">${hd}${top.map(row).join("")}</table></div>${more.length ? `<details class="more"><summary class="small">${more.length} more trades today</summary><div class="tscroll"><table class="ld-tbl">${hd}${more.map(row).join("")}</table></div></details>` : ""}`; })()
       : `<p class="small muted" style="margin:8px 0 0">No DOM trade today yet.</p>`}
     <details class="more" style="margin-top:6px"><summary class="small">Rules and costs</summary><p class="small" style="margin:4px 0">${esc(D.rules||"")}</p>
-      <p class="small faint" style="margin:2px 0">Levels today: ${Object.entries(D.levels||{}).filter(([,n])=>n).length} markets with fixed levels. Hover a row for why it fired.</p></details>`;
+      <p class="small faint" style="margin:2px 0">Levels today: ${Object.entries(D.levels||{}).filter(([,n])=>n).length} markets with fixed levels. Hover a row for why it fired.</p></details>`);
 }
 const IDS = (() => { let x = null; try { x = JSON.parse(localStorage.getItem("mp.ids")||"null"); } catch(e){}
   return x && x.sub ? x : {sub:"india", sel:{india:"NIFTY", us:"ES", crypto:"BTC"}}; })();

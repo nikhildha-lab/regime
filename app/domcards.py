@@ -490,6 +490,128 @@ def _with_live(x: dict, px: dict) -> dict:
     return y
 
 
+# ------------------------------------------------------------------ trade review (2026-11-06, Nikhil: "add reasoning columns, what went right and
+# what went wrong if sl was hit, and where we can improve the strategy"). Descriptive, from each closed trade's own price path - ideas to test,
+# never rule changes. Path = index futures mid (per second) or stock best bid / ask mid (every 5 s), same files the engine trades on.
+_PATH: dict = {}
+REVIEW_POST_MIN = 30
+
+
+def _path(day, key):
+    """(epochs, prices) for one market on one day, cached 60 s (the stock file is large)."""
+    ck = _PATH.get((day, key))
+    if ck and time.time() - ck[0] < 60:
+        return ck[1]
+    ts, px = [], []
+    try:
+        if key in INDEX:
+            for l in open(os.path.join(OFD, "of", day, f"sec_{key}.csv")):
+                c = l.split(",")
+                if c[0] == "t" or len(c) < 5: continue
+                m = _f(c[4])
+                if m: ts.append(int(c[0])); px.append(m)
+        else:
+            allp = _PATH.get((day, "__stocks"))
+            if not allp or time.time() - allp[0] > 60:
+                per = {}
+                for l in open(os.path.join(OFD, "stocks_depth", f"{day}.csv")):
+                    c = l.split(",")
+                    if c[0] == "time" or len(c) < 4: continue
+                    b_, a_ = _f(c[2]), _f(c[3])
+                    if not b_ or not a_ or b_ <= 0 or a_ <= b_ * 0.999 or (a_ - b_) / b_ > 0.005: continue
+                    try: t = int(datetime.fromisoformat(c[0]).timestamp())
+                    except ValueError: continue
+                    per.setdefault(c[1], ([], []))
+                    per[c[1]][0].append(t); per[c[1]][1].append((b_ + a_) / 2)
+                _PATH[(day, "__stocks")] = allp = (time.time(), per)
+            ts, px = allp[1].get(key, ([], []))
+    except OSError:
+        pass
+    _PATH[(day, key)] = (time.time(), (ts, px))
+    return ts, px
+
+
+def _review(x):
+    """{'right','wrong','improve','mfe','mae',...} for a closed trade."""
+    if x.get("status") != "closed" or not x.get("risk"):
+        return None
+    ts, px = _path(x["day"], x["key"])
+    if not ts:
+        return None
+    sd = 1 if x["side"] == "long" else -1; e, R = x["entry"], x["risk"]
+    t0 = int(x.get("t0") or datetime.strptime(x["opened"], "%Y-%m-%d %H:%M").timestamp())
+    t1 = int(datetime.strptime(x["closed"], "%Y-%m-%d %H:%M").timestamp()) + 59
+    inside = [sd * (p - e) / R for t, p in zip(ts, px) if t0 <= t <= t1]
+    post = [sd * (p - e) / R for t, p in zip(ts, px) if t1 < t <= t1 + REVIEW_POST_MIN * 60]
+    if not inside:
+        return None
+    mfe, mae = max(inside), min(inside); dopen = px[0]
+    dm = sd * (e / dopen - 1) * 100                                     # + = traded with the day's move so far, - = against it
+    mins = max(1, (t1 - 59 - t0) // 60)
+    tr_r = sd * (x["target"] - e) / R if x.get("target") else 2.0
+    post_best = max(post) if post else None
+    post_done = time.time() > t1 + REVIEW_POST_MIN * 60
+    right, wrong, imp = [], [], []
+    why = x.get("exit_reason")
+    if why == "target":
+        right.append(f"Level {'held' if x['setup'] == 'hold' else 'broke'} as read - reached the target (+{tr_r:.1f}R) in {mins} min")
+        if post_best is not None and post_best > tr_r + 1:
+            right.append(f"price kept going to +{post_best:.1f}R within 30 min"); imp.append("Book half at target and trail the rest")
+    elif why == "stop":
+        if mfe >= 1:
+            wrong.append(f"Was +{mfe:.1f}R, then came all the way back to the stop"); imp.append("Move the stop to entry at +1R (breakeven)")
+        elif mfe >= 0.3:
+            wrong.append(f"Only a small move our way (+{mfe:.1f}R), then failed")
+        else:
+            wrong.append(f"Never moved our way (best +{mfe:.1f}R) - the level {'did not hold' if x['setup'] == 'hold' else 'break did not follow through'}")
+            imp.append("Wait for a second confirmation (a close away from the level) before entering")
+        if post_best is not None and post_best >= tr_r:
+            wrong.append(f"after the stop, price did reach the target within {REVIEW_POST_MIN} min"); imp.append("Stop was too tight here - test a stop 1 band wider")
+        right.append(f"Loss capped at {x.get('r', -1):.2f}R by the stop")
+    else:
+        right.append(f"No stop hit in {mins} min (worst {mae:.1f}R)")
+        wrong.append(f"Target never reached (best +{mfe:.1f}R)")
+        if mfe >= 1 and (x.get("r") or 0) < 0.3: imp.append("Take profit at +1R or trail - the gain was given back")
+        elif mfe < tr_r * 0.6: imp.append(f"Move was too small for a {tr_r:.1f}R target - test a nearer target")
+    if dm <= -0.5:
+        wrong.append(f"traded against the day's move ({dm:+.1f}% from the open)"); imp.append("Skip setups against a strong day move (> 0.5%)")
+    if str(x["opened"])[11:16] < "09:45":
+        (wrong if why == "stop" else right).append("taken in the first 30 min (noisy open)")
+    return {"right": "; ".join(right), "wrong": "; ".join(wrong), "improve": " · ".join(dict.fromkeys(imp)) or "-",
+            "mfe": round(mfe, 2), "mae": round(mae, 2), "day_move_pct": round(dm, 2), "post_best": None if post_best is None else round(post_best, 2),
+            "final": post_done}
+
+
+_REV: dict = {}
+
+
+def _rev_cached(x):
+    r = _REV.get(x["id"])
+    if r and r.get("final"):
+        return r
+    try:
+        r = _review(x)
+    except Exception as e:
+        r = {"right": "", "wrong": "", "improve": "-", "err": str(e)[:80]}
+    if r: _REV[x["id"]] = r
+    return r
+
+
+def _rev_summary(rows):
+    st = [x for x in rows if x.get("exit_reason") == "stop" and x.get("review")]
+    if not rows: return None
+    out = {"stops": len(st), "never_worked": sum(1 for x in st if x["review"].get("mfe", 0) < 0.3),
+           "reversed_after_1r": sum(1 for x in st if x["review"].get("mfe", 0) >= 1),
+           "target_after_stop": sum(1 for x in st if "did reach the target" in x["review"].get("wrong", "")),
+           "against_day": sum(1 for x in rows if x.get("review") and (x["review"].get("day_move_pct") or 0) <= -0.5)}
+    ideas = {}
+    for x in rows:
+        for i in (x.get("review") or {}).get("improve", "-").split(" · "):
+            if i and i != "-": ideas[i] = ideas.get(i, 0) + 1
+    out["top_ideas"] = sorted(ideas.items(), key=lambda kv: -kv[1])[:3]
+    return out
+
+
 def api() -> dict:
     T = trades() or []
     px = _live_px()
@@ -500,7 +622,9 @@ def api() -> dict:
     for x in cl:
         by.setdefault(f"{x['setup']} · {'index' if x['key'] in INDEX else 'stocks'}", []).append(x)
     lv = S.get("lv") or {}
-    return {"open": [_with_live(x, px) for x in T if x["status"] == "open"], "today": [_with_live(x, px) for x in T if x["day"] == day][::-1],
+    today = [_with_live(x, px) for x in T if x["day"] == day][::-1]
+    today = [dict(x, review=_rev_cached(x)) if x["status"] == "closed" else x for x in today]
+    return {"open": [_with_live(x, px) for x in T if x["status"] == "open"], "today": today, "review_summary": _rev_summary(today),
             "live_px_at": datetime.fromtimestamp(_LPX["mt"]).strftime("%H:%M:%S") if px else None,
             "record": {"all": _rec(cl), "plan": _rec([x for x in cl if x.get("plan")]), "by": {k: _rec(v) for k, v in sorted(by.items())},
                        "sessions": len(days), "since": days[0] if days else None,
