@@ -1280,15 +1280,20 @@ function fxChart(V){
   // 2026-11-06: row size from the BARS' range only (+ room for levels) and rows on a fixed price grid, so a level line moving by a point
   // can no longer change the grouping or the row edges (cells used to regroup on every refresh).
   let rows0 = Math.round((hi0 - lo0 + 6*step)/step) + 1, grp = 1; while (rows0/grp > 46) grp++;
-  const RS = step*grp; hi = Math.ceil(hi/RS - 1e-9)*RS; lo = Math.floor(lo/RS + 1e-9)*RS;
+  const RS = step*grp; hi = Math.ceil(hi/RS - 1e-9)*RS + RS; lo = Math.floor(lo/RS + 1e-9)*RS - RS;   // 2026-11-06: one spare row above / below the bars
   const rows = Math.round((hi - lo)/step) + 1, nR = Math.round((hi - lo)/RS) + 1, RH = Math.round(Math.max(18, Math.min(28, 860/nR)));
   let maxLen = 5;
   bars.forEach(b => { const cl = {}; b.bins.forEach(c => { const k = Math.floor((hi - c.p)/RS); const o = cl[k] || (cl[k] = {b:0,s:0}); o.b += +c.b; o.s += +c.s; });
     Object.values(cl).forEach(c => { maxLen = Math.max(maxLen, (fxK(c.s) + " × " + fxK(c.b)).length); }); });
+  // 2026-11-06 (Nikhil: "text overlapping on top of the order-flow chart ... all elements and text should be clear"): marks get their
+  // own strips ABOVE the price area - tracker flips (up to 3 a bar + "more"), then absorption / big-print / exhaustion tags - so nothing is
+  // drawn over the footprint cells any more. Labels are cut to the column width; the full text is in the hover tooltip.
+  const EVH = (V.events||[]).length ? 3*13 + 12 : 0, MKH = ((V.rev||[]).length || bars.some(b => b.burst) || (V.div && V.div.pivot_t)) ? 41 : 0, TOP = 4 + EVH + MKH;
   const X0 = 8, LW = 160, AW = 62, avail = Math.max(640, (FX.availW || 1100) - 4);   // AW = price axis (y axis) column, 2026-11-04 (Nikhil)
   const need = Math.ceil(maxLen*6.7) + 34, fill = Math.floor((avail - X0 - LW - AW)/bars.length);
-  const CW = Math.max(need, 86, Math.min(fill, 150)), W = X0 + bars.length*CW + AW + LW, PH = nR*RH + 6, CP = 58, H = PH + 58 + CP;   // 4 label rows (time, Δ, CVD, OI tag)   // price area, 3 label rows, CVD panel
-  const y = p => 4 + (hi - p)/RS*RH;
+  const CW = Math.max(need, 86, Math.min(fill, 150)), W = X0 + bars.length*CW + AW + LW, PH = TOP + nR*RH + 6, CP = 58, H = PH + 58 + CP;   // 4 label rows (time, Δ, CVD, OI tag)   // price area, 3 label rows, CVD panel
+  const y = p => TOP + (hi - p)/RS*RH;
+  const fit = (t, w, px = 5.9) => { t = String(t); const n = Math.max(3, Math.floor(w / px)); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
   const mx = Math.max(...bars.flatMap(b => b.bins.map(x => (+x.b)+(+x.s))), 1);
   let g = "";
   bars.forEach((b,i) => {
@@ -1298,7 +1303,7 @@ function fxChart(V){
     const bi = new Set((b.buy_imb||[]).map(p=>Math.floor((hi-p)/RS))), si = new Set((b.sell_imb||[]).map(p=>Math.floor((hi-p)/RS)));
     const pk = b.poc!=null ? Math.floor((hi - b.poc)/RS) : null;
     Object.entries(cells).forEach(([k,c]) => {
-      const yy = 4 + k*RH, tot = c.b + c.s, a = (est ? 0.04 : 0.08) + (est ? 0.18 : 0.42)*tot/mx, buy = c.b >= c.s;
+      const yy = TOP + k*RH, tot = c.b + c.s, a = (est ? 0.04 : 0.08) + (est ? 0.18 : 0.42)*tot/mx, buy = c.b >= c.s;
       g += `<rect x="${x+18}" y="${yy}" width="${CW-22}" height="${RH-2}" rx="2" shape-rendering="crispEdges" fill="${buy?"var(--bull)":"var(--bear)"}" fill-opacity="${a.toFixed(2)}" ${+k===pk?'stroke="var(--ink)" stroke-width="1.5"':""}/>`;
       g += `<text x="${x+18+(CW-22)/2}" y="${Math.round(yy+(RH-2)/2+4)}" text-anchor="middle" font-size="${RH>=22?12:11}" fill="var(--ink)" font-weight="${bi.has(+k)||si.has(+k)?700:400}"><tspan fill="${si.has(+k)?"var(--bear)":"var(--ink)"}">${fxK(c.s)}</tspan> × <tspan fill="${bi.has(+k)?"var(--bull)":"var(--ink)"}">${fxK(c.b)}</tspan></text>`;
     });
@@ -1309,8 +1314,8 @@ function fxChart(V){
     { const T = {NL:["new longs","var(--bull)"], SC:["short cover","var(--wait)"], NS:["new shorts","var(--bear)"], LX:["longs exit","var(--muted)"]}[b.oi_tag];   // 2026-10-25 chart marks
       if (T) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${T[1]}"><title>OI ${b.oi_pct>0?"+":""}${b.oi_pct}% over this bar · price ${b.c>=b.o?"up":"down"}</title>${T[0]} ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
       else if (b.oi_pct!=null) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" fill="var(--muted)">OI ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
-      if (b.burst){ const ks = Object.keys(cells).map(Number), ty = 4 + Math.min(...ks)*RH - 4, buyB = (b.delta||0) >= 0;
-        g += `<text x="${x+18+(CW-22)/2}" y="${Math.max(10, ty)}" text-anchor="middle" font-size="11" font-weight="700" fill="${buyB?"var(--bull)":"var(--bear)"}"><title>Δ ${fxK(b.delta)} - at least 3x the usual bar</title>⚡ big ${buyB?"buying":"selling"}</text>`; } }
+      if (b.burst){ const buyB = (b.delta||0) >= 0;
+        g += `<text x="${x+6}" y="${4+EVH+37}" font-size="10" font-weight="700" fill="${buyB?"var(--bull)":"var(--bear)"}"><title>Δ ${fxK(b.delta)} - at least 3x the usual bar</title>${esc(fit("⚡ big " + (buyB?"buying":"selling"), CW-10))}</text>`; } }
     const cv = b.cvd;
     g += `<text x="${x+CW/2+4}" y="${PH+12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(V.desk==="nifty" ? (b.t||"") : utcToIst(b.t))}${i===bars.length-1 && fxLiveBar(V, b) ? " · live" : b.partial?"…":""}${est?" est.":""}</text>`
        + `<text x="${x+CW/2+4}" y="${PH+26}" text-anchor="middle" font-size="11" font-weight="600" fill="${b.delta>=0?"var(--bull)":"var(--bear)"}">Δ ${b.delta>=0?"+":"-"}${fxK(b.delta||0)}</text>`
@@ -1320,7 +1325,7 @@ function fxChart(V){
   { const cvs = bars.map(b => b.cvd).filter(v => v!=null);
     if (cvs.length){
       const top = PH + 60, bot = H - 4, cmx = Math.max(...cvs.map(Math.abs), 1), cy = v => Math.round(top + (bot-top)/2 - v/cmx*(bot-top)/2);
-      g += `<line x1="${X0}" x2="${lx}" y1="${cy(0)}" y2="${cy(0)}" stroke="var(--line)"/><text x="${lx+6}" y="${cy(0)+4}" font-size="11" fill="var(--muted)">CVD 0</text>`;
+      g += `<line x1="${X0}" x2="${lx}" y1="${cy(0)}" y2="${cy(0)}" stroke="var(--line)"/>${Math.abs(cy(bars.at(-1).cvd ?? 0) - cy(0)) >= 13 ? `<text x="${lx+6}" y="${cy(0)+4}" font-size="11" fill="var(--muted)">CVD 0</text>` : ""}`;
       let path = "";
       bars.forEach((b,i) => { if (b.cvd==null) return; const cx = X0 + i*CW + CW/2 + 4, newSess = i===0 || bars[i-1].d !== b.d;
         path += `${newSess?"M":"L"}${cx} ${cy(b.cvd)} `;
@@ -1341,7 +1346,7 @@ function fxChart(V){
     const [w0, w1] = V.__win || [-Infinity, Infinity];
     BK.filter(b => b.lo!=null && b.hi+off >= lo-RS && b.lo+off <= hi+RS && b.hi+off >= w0 && b.lo+off <= w1).forEach(b => { const y1 = y(b.hi+off)+RH/2, y2 = y(b.lo+off)+RH/2, col = b.side==="R" ? "var(--bear)" : b.side==="IN" ? "var(--wait)" : "var(--bull)";
       g = `<rect x="${X0}" y="${Math.min(y1,y2)-2}" width="${lx-X0}" height="${Math.max(4, Math.abs(y2-y1)+4)}" fill="${col}" fill-opacity="${op[b.strength]||.08}"><title>${esc(b.strength)} block ${esc(b.range)}${off?" (spot; shifted by the futures basis)":""}</title></rect>
-        <text x="${X0+4}" y="${Math.min(y1,y2)-4}" font-size="10.5" font-weight="${b.strength==="strong"?700:500}" fill="${col}" opacity=".85">${b.side==="R"?"R block":b.side==="IN"?"Price in block":"S block"} ${esc(b.range)} · ${esc(b.strength)}${b.star?" ★":""}</text>` + g; });
+        <text x="${X0+4}" y="${Math.max(TOP+10, Math.min(y1,y2)-4)}" font-size="10.5" font-weight="${b.strength==="strong"?700:500}" fill="${col}" opacity=".85">${b.side==="R"?"R block":b.side==="IN"?"Price in block":"S block"} ${esc(b.range)} · ${esc(b.strength)}${b.star?" ★":""}</text>` + g; });
     const tfm = FX.tf[V.desk] || 15;
     const EVB = {};
     (V.events||[]).forEach(e => { const at = String(e.at||""); let d, hm;
@@ -1351,9 +1356,10 @@ function fxChart(V){
       (EVB[i] = EVB[i] || []).push(e); });
     Object.entries(EVB).forEach(([i, es]) => {          // one stacked list per bar (the tracker can flip several times inside one bar)
       const cx = X0 + (+i)*CW + 10;
-      es.slice(-3).forEach((e, n) => { const col = e.side==="long" ? "var(--bull)" : "var(--bear)", yy = 4 + n*14;
-        g += `<g><title>${esc(String(e.at).slice(11,16))} tracker: ${esc(e.side)} ${esc(e.setup||"")} at ${esc(e.level||"")} (grade ${esc(e.grade||"–")}, ${esc(e.state)})</title><path d="M${cx} ${yy} l5 5 l-5 5 l-5 -5z" fill="${col}"/><text x="${cx+8}" y="${yy+9}" font-size="10" font-weight="600" fill="${col}">${esc(String(e.at).slice(11,16))} ${esc(e.side)} · ${esc(e.level||"")}</text></g>`; });
-      if (es.length > 3) g += `<text x="${cx+8}" y="${4+3*14+9}" font-size="10" fill="var(--muted)">+${es.length-3} more flips</text>`; }); }
+      es.slice(-3).forEach((e, n) => { const col = e.side==="long" ? "var(--bull)" : "var(--bear)", yy = 4 + n*13;
+        g += `<g><title>${esc(String(e.at).slice(11,16))} tracker: ${esc(e.side)} ${esc(e.setup||"")} at ${esc(e.level||"")} (grade ${esc(e.grade||"–")}, ${esc(e.state)})</title><path d="M${cx} ${yy} l5 5 l-5 5 l-5 -5z" fill="${col}"/><text x="${cx+8}" y="${yy+9}" font-size="10" font-weight="600" fill="${col}">${esc(fit(`${String(e.at).slice(11,16)} ${e.side==="long"?"▲":"▼"} ${e.level||""}`, CW-22))}</text></g>`; });
+      if (es.length > 3) g += `<text x="${cx+8}" y="${4+3*13+9}" font-size="10" fill="var(--muted)">${esc(fit(`+${es.length-3} more`, CW-22))}</text>`; });
+    if (EVH) g += `<line x1="${X0}" x2="${X0 + bars.length*CW}" y1="${EVH+2}" y2="${EVH+2}" stroke="var(--line)" stroke-dasharray="2 3"/>`; }
   { // 2026-10-31 (Nikhil): same marks as the crypto tracker dashboard. Absorption = price tagged a level and the flow flipped
     // (closed back through it with net buying / selling); strong = heavy volume. Exhaustion = swing delta divergence.
     const tfm = FX.tf[V.desk] || 15, off = V.desk==="nifty" ? 555 : 0;
@@ -1365,13 +1371,12 @@ function fxChart(V){
       if (!cur || (r.strength==="strong" && cur.strength!=="strong") || Math.abs(r.delta||0) > Math.abs(cur.delta||0)) o[r.side] = r; });
     Object.entries(RV).forEach(([i, o]) => Object.values(o).forEach(r => {
       const b = bars[+i], cx = X0 + (+i)*CW + 8, strong = r.strength==="strong", col = r.side==="long" ? "var(--bull)" : "var(--bear)";
-      const yy = r.side==="long" ? Math.min(PH-4, y(b.l)+RH+4) : Math.max(10, y(b.h)-2);
+      const yy = r.side==="long" ? Math.min(PH-4, y(b.l)+RH+4) : Math.max(TOP+10, y(b.h)-2);
       const tri = r.side==="long" ? `M${cx} ${yy} l-6 9 l12 0z` : `M${cx} ${yy} l-6 -9 l12 0z`;
       g += `<g><title>${esc(r.note||"")} · ${strong?"strong (heavy volume)":"moderate"}</title><path d="${tri}" fill="${col}" fill-opacity="${strong?1:0.4}" stroke="${col}" stroke-width="${strong?1.5:0}"/>`
-         + `<text x="${cx+9}" y="${r.side==="long"?yy+9:yy-1}" font-size="10" font-weight="${strong?700:500}" fill="${col}" opacity="${strong?1:0.7}">${r.side==="long"?"buyers absorb":"sellers absorb"}${strong?" ●":""}</text></g>`; }));
+         + `<text x="${X0 + (+i)*CW + 6}" y="${4+EVH+(r.side==="long"?11:24)}" font-size="10" font-weight="${strong?700:500}" fill="${col}" opacity="${strong?1:0.75}">${esc(fit((r.side==="long"?"▲ buyers absorb":"▼ sellers absorb") + (strong?" ●":""), CW-10))}</text></g>`; }));
     const D = V.div; if (D && D.pivot_t){ const i = at(D.pivot_t); if (i >= 0){ const b = bars[i], bull = D.type==="bullish_div", cx = X0 + i*CW + CW/2 + 4, col = bull ? "var(--bull)" : "var(--bear)";
-      const yy = bull ? Math.min(PH-2, y(b.l)+RH+22) : Math.max(12, y(b.h)-16);
-      g += `<g><title>${esc(D.note||"")} (${esc(D.strength||"")})</title><text x="${cx}" y="${yy}" text-anchor="middle" font-size="11" font-weight="700" fill="${col}">⇅ ${bull?"sellers exhausted":"buyers exhausted"}</text></g>`; } }
+      g += `<g><title>${esc(D.note||"")} (${esc(D.strength||"")})</title><text x="${cx}" y="${4+EVH+(bull?11:24)}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}">${esc(fit("⇅ " + (bull?"sellers exhausted":"buyers exhausted"), CW-10))}</text></g>`; } }
   }
   const lcol = k => k==="Call wall" ? "var(--bear)" : k==="Put wall" ? "var(--bull)" : k==="VWAP" ? "var(--accent)" : "var(--muted)";
   // support (green) / resistance (red) zones: thick translucent bands under the other lines
@@ -1379,18 +1384,34 @@ function fxChart(V){
     const yy = y(v)+RH/2; g = `<rect x="${X0}" y="${yy-3}" width="${lx-X0}" height="6" fill="${sup?"var(--bull)":"var(--bear)"}" fill-opacity="0.13"/><line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="${sup?"var(--bull)":"var(--bear)"}" stroke-width="1.3" stroke-dasharray="2 3" opacity="0.85"/>` + g; });
   const lcol2 = k => k==="S"||k==="PDL"||k==="PWL" ? "var(--bull)" : k==="R"||k==="PDH"||k==="PWH" ? "var(--bear)" : lcol(k);
   const nm = k => ({S:"Support", R:"Resistance", PDH:"Prev day high", PDL:"Prev day low", PWH:"Prev week high", PWL:"Prev week low"})[k] || k;
-  const lab = []; [...LV, ...WL, ...SRL].filter(([k,v]) => v>=lo-RS && v<=hi+RS).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
-    let yy = y(v) + RH/2; if (lab.length && yy - lab.at(-1) < 14) yy = lab.at(-1) + 14; lab.push(yy);
-    const wall = k.includes("wall");
-    const srk = ["S","R","PDH","PDL","PWH","PWL"].includes(k);
-    if (!srk) g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+RH/2}" y2="${y(v)+RH/2}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
-    g += `<text x="${lx+AW+6}" y="${Math.round(yy+4)}" font-size="11.5" font-weight="${wall||srk?700:500}" fill="${lcol2(k)}">${esc(nm(k))} ${ldPx(v)}</text>`;
-  });
-  if (V.spot!=null && V.spot>=lo && V.spot<=hi){ const yy=y(V.spot)+RH/2; g += `<line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="var(--ink)" stroke-width="1.4"/><rect x="${lx+AW+2}" y="${yy-8}" width="${LW-6}" height="16" rx="4" fill="var(--ink)"/><text x="${lx+AW+8}" y="${yy+4}" font-size="11" font-weight="700" fill="var(--surface)">${ldPx(V.spot)}</text>`; }
+  { // 2026-11-06: right-hand labels laid out so they never overlap: levels in the same row are merged into one line, lines keep 15 px
+    // apart inside the price area (down first, then pushed back up at the bottom), the live price tag takes its own slot, and a label
+    // moved away from its price gets a thin leader line back to it.
+    const items = [];
+    [...LV, ...WL, ...SRL].filter(([k,v]) => v>=lo-RS && v<=hi+RS).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
+      const wall = k.includes("wall"), srk = ["S","R","PDH","PDL","PWH","PWL"].includes(k);
+      if (!srk) g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+RH/2}" y2="${y(v)+RH/2}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
+      const last = items.at(-1);
+      if (last && !last.spot && Math.abs(last.v - v) < RS*0.75){ if (!last.names.includes(nm(k))) last.names.push(nm(k)); last.bold = last.bold || wall || srk; return; }
+      items.push({v, names:[nm(k)], col: lcol2(k), bold: wall || srk, want: y(v) + RH/2});
+    });
+    const spotIn = V.spot!=null && V.spot>=lo && V.spot<=hi;
+    if (spotIn){ const sy = y(V.spot) + RH/2; items.push({v: +V.spot, spot: true, want: sy}); items.sort((a,b) => b.v - a.v);
+      g += `<line x1="${X0}" x2="${lx}" y1="${sy}" y2="${sy}" stroke="var(--ink)" stroke-width="1.4"/>`; }
+    const GAP = 15, top = TOP + 6, bot = PH - 4;
+    items.forEach((it, j) => { it.yy = Math.max(it.want, top, j ? items[j-1].yy + GAP : -1e9); });
+    for (let j = items.length - 1; j >= 0; j--){ const lim = j === items.length - 1 ? bot : items[j+1].yy - GAP; if (items[j].yy > lim) items[j].yy = lim; }
+    const tx = lx + AW + 6;
+    items.forEach(it => {
+      if (Math.abs(it.yy - it.want) > 3) g += `<line x1="${lx+AW-2}" y1="${it.want}" x2="${tx-2}" y2="${it.yy}" stroke="var(--muted)" stroke-width="0.8" opacity="0.7"/>`;
+      if (it.spot) g += `<rect x="${tx-4}" y="${it.yy-8}" width="${LW-6}" height="16" rx="4" fill="var(--ink)"/><text x="${tx+2}" y="${it.yy+4}" font-size="11" font-weight="700" fill="var(--surface)">${ldPx(V.spot)}</text>`;
+      else { const t = `${ldPx(it.v)} ${it.names.join(" · ")}`;        // price first, so a cut label never loses the number
+        g += `<text x="${tx}" y="${Math.round(it.yy+4)}" font-size="11.5" font-weight="${it.bold?700:500}" fill="${it.col}"><title>${esc(t)}</title>${esc(fit(t, LW-8, 6.4))}</text>`; } });
+  }
   { // 2026-11-04 (Nikhil): price (y) axis on the right of the bars - one label every ~40 px, aligned to the footprint rows
     const every = Math.max(1, Math.ceil(40/RH));
-    let ax = `<line x1="${lx+1}" x2="${lx+1}" y1="2" y2="${PH}" stroke="var(--line)"/>`;
-    for (let k = 0; k < nR; k += every){ const yy = 4 + k*RH + RH/2;
+    let ax = `<line x1="${lx+1}" x2="${lx+1}" y1="${TOP-2}" y2="${PH}" stroke="var(--line)"/>`;
+    for (let k = 0; k < nR; k += every){ const yy = TOP + k*RH + RH/2;
       ax += `<line x1="${lx+1}" x2="${lx+5}" y1="${yy}" y2="${yy}" stroke="var(--muted)"/><text x="${lx+8}" y="${Math.round(yy+4)}" font-size="11" font-family="IBM Plex Mono,monospace" fill="var(--muted)">${ldPx(hi - k*RS)}</text>`; }
     g += ax; }
   // full width; when there are more candles than fit, the chart keeps its size and scrolls (opens at the latest bar)
