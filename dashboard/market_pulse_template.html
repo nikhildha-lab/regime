@@ -1209,8 +1209,13 @@ function fxNormalize(V){
   }
   out.fp = (out.fp || fp).slice(-FX_BARS);                      // 2026-11-04 (Nikhil): only the last 12 candles, every timeframe
   const lastC = +(out.fp||fp).at(-1).c, fut = +V.fut, spot = +V.spot;
-  if (V.desk === "nifty" && fut && spot && Math.abs(lastC - fut) < Math.abs(lastC - spot)){
-    const bs = fut - spot, sh = v => v==null ? v : +v + bs, L = Object.assign({}, V.levels||{}), SR = Object.assign({}, V.sr||{});
+  // 2026-11-06: the order-flow engine's bars (of1m) are ALWAYS futures - shift every time. The old "is the last close nearer fut or spot"
+  // test flipped between polls when the last close sat between them, so all levels jumped by the whole basis (~18 pts) and rows regrouped.
+  if (V.desk === "nifty" && fut && spot && (V.fp_src === "of1m" || Math.abs(lastC - fut) < Math.abs(lastC - spot))){
+    // 2026-11-06 (Nikhil: "footprint values are fluctuating every few seconds"): the live fut - spot gap moves 1-2 pts between polls, which
+    // moved every spot level AND re-anchored the price rows (cells regrouped). Hold the basis steady: update only on a > 4 pt change or every 5 min.
+    FX.bs = FX.bs || {}; { const raw = fut - spot, pv = FX.bs[V.key]; if (!pv || Math.abs(raw - pv.v) > 4 || Date.now() - pv.t > 300000) FX.bs[V.key] = {v: Math.round(raw*2)/2, t: Date.now()}; }
+    const bs = FX.bs[V.key].v, sh = v => v==null ? v : +v + bs, L = Object.assign({}, V.levels||{}), SR = Object.assign({}, V.sr||{});
     ["VWAP","IB high","IB low"].forEach(k => { if (L[k]!=null) L[k] = sh(L[k]); });
     SR.support = (SR.support||[]).map(sh); SR.resistance = (SR.resistance||[]).map(sh); ["PDH","PDL","PWH","PWL"].forEach(k => { if (SR[k]!=null) SR[k] = sh(SR[k]); });
     out = Object.assign(out, {spot: V.fp_src === "of1m" ? lastC : fut, spot_idx: spot, basis: bs, levels: L, sr: SR,   // of1m = the order-flow engine's latest futures trade
@@ -1236,8 +1241,11 @@ function fxChart(V){
   const lo0 = lo, hi0 = hi;
   [...LV, ...WL, ...SRL].forEach(([k,v]) => { if (v >= lo0 - 3*step && v <= hi0 + 3*step) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
   // 2026-10-23 crisp layout: drawn at 1:1 pixels (never stretched or shrunk), whole-pixel rows, columns sized to the numbers
-  let rows = Math.round((hi - lo)/step) + 1, grp = 1; while (rows/grp > 46) grp++;
-  const RS = step*grp, nR = Math.ceil(rows/grp), RH = Math.round(Math.max(18, Math.min(28, 860/nR)));
+  // 2026-11-06: row size from the BARS' range only (+ room for levels) and rows on a fixed price grid, so a level line moving by a point
+  // can no longer change the grouping or the row edges (cells used to regroup on every refresh).
+  let rows0 = Math.round((hi0 - lo0 + 6*step)/step) + 1, grp = 1; while (rows0/grp > 46) grp++;
+  const RS = step*grp; hi = Math.ceil(hi/RS - 1e-9)*RS; lo = Math.floor(lo/RS + 1e-9)*RS;
+  const rows = Math.round((hi - lo)/step) + 1, nR = Math.round((hi - lo)/RS) + 1, RH = Math.round(Math.max(18, Math.min(28, 860/nR)));
   let maxLen = 5;
   bars.forEach(b => { const cl = {}; b.bins.forEach(c => { const k = Math.floor((hi - c.p)/RS); const o = cl[k] || (cl[k] = {b:0,s:0}); o.b += +c.b; o.s += +c.s; });
     Object.values(cl).forEach(c => { maxLen = Math.max(maxLen, (fxK(c.s) + " × " + fxK(c.b)).length); }); });
