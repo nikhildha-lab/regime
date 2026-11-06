@@ -955,6 +955,15 @@ def handle_get(path: str, q: dict):
         keys = [k for k in (q.get("keys") or "").split(",") if k] or None
         grp = (q.get("group") or "").strip().lower() or None      # 2026-11-04: tab filter for the "All paper trades" card
         return _hot("papertrades").api(_hot, px, keys, grp)
+    if path == "/api/livedesk/tradecharts":   # 2026-11-06 (Nikhil): paper trades with their own price charts (app/tradecharts.py)
+        px = {}
+        for desk in ("crypto", "nifty", "metals"):
+            for k, v in (((_STATE.get("views") or {}).get(desk) or {}).items()):
+                n = _num((v or {}).get("spot")) or _num((v or {}).get("price")) or _num((v or {}).get("ltp"))
+                if n: px[k] = n
+        grp = (q.get("group") or "").strip().lower() or None
+        days = int(q.get("days") or 1) if str(q.get("days") or "1").isdigit() else 1
+        return _hot("tradecharts").api(_hot, px, grp, max(1, min(days, 10)))
     if path == "/api/livedesk/prep":
         return _setups_mod().PREP.prep()
     if path == "/api/livedesk/view":

@@ -402,6 +402,9 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 .fx-svg text{font-family:inherit}
 /* card strip on top of the chart (2026-10-23): newest on the left, scroll right for older cards */
 .fx-scroll{overflow-x:auto}
+.tc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr));gap:12px;margin-top:10px}
+.tc-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.tc-card svg{display:block;width:100%;height:auto;margin:6px 0}
 
 #domCard .dom{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:12.5px;margin:6px auto 0;min-width:520px}
 #domCard .dom td{padding:2px 8px;text-align:right;white-space:nowrap}
@@ -558,6 +561,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 </div>
 <div class="view" id="viewLogbook" hidden>
   <section class="card ptCard" id="ptAll" data-keys="" data-title="All paper trades · every rule, every market"></section>
+  <section class="card" id="ptCharts" style="margin-top:12px"></section>
 </div>
 </div>
 
@@ -1187,6 +1191,15 @@ const LD = {desk:null, t:null};
 const ldPx = (v,d) => v==null ? "–" : Number(v).toLocaleString("en-IN",{maximumFractionDigits:d??(Math.abs(v)<10?4:Math.abs(v)<1000?2:1)});
 /* ---------- Focus chart (2026-10-20): footprint + levels + OI walls, CVD strip, OI change strip ---------- */
 const FX = {sel:{nifty:"NIFTY", crypto:"BTC", metals:"GOLD"}, tf:{}, data:{}};
+// 2026-11-06 (Nikhil: "yes for all"): chart layers you can switch on / off (kept in this browser), paper trades drawn on the chart,
+// day volume profile, moving VWAP, stacked imbalances, hover detail per cell, and a "Fit day" view that squeezes the day onto one screen.
+FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, fit:0};
+  try { return Object.assign(d, JSON.parse(localStorage.getItem("mp.fxlayers") || "{}")); } catch(e){ return d; } })();
+function fxLayer(k, desk){ FX.L[k] = FX.L[k] ? 0 : 1; try { localStorage.setItem("mp.fxlayers", JSON.stringify(FX.L)); } catch(e){} ldLoad(desk); }
+FX.trd = {};
+async function fxTrades(key){ const c = FX.trd[key]; if (c && Date.now() - c.t < 15000) return c.v;
+  try { const P = await fetch("/api/livedesk/papertrades?keys=" + encodeURIComponent(key)).then(r => r.json()); const v = (P.open||[]).concat(P.closed||[]); FX.trd[key] = {t: Date.now(), v}; return v; }
+  catch(e){ return c ? c.v : []; } }
 const FXTF = [[15,"15m"],[30,"30m"],[240,"4h"]];
 const fxK = v => { v = Math.abs(v); return v>=1e7?(v/1e7).toFixed(1)+"Cr":v>=1e5?(v/1e5).toFixed(1)+"L":v>=1e3?(v/1e3).toFixed(v>=1e4?0:1)+"k":v>=10?Math.round(v)+"":v>=1?v.toFixed(1):v===0?"0":v.toFixed(1); };
 /* 2026-11-03 (Nikhil: "order-flow chart not refreshing"): crypto / metals bars are bucketed in UTC; show the bar time in IST like the rest of the page */
@@ -1267,6 +1280,8 @@ function fxChart(V){
   const WL = [["Call wall", V.walls&&V.walls.call], ["Put wall", V.walls&&V.walls.put]].filter(x => x[1]!=null).map(([k,v]) => [k, +v]);
   const SR = V.sr||{}, SRL = [...(SR.support||[]).map(v => ["S", +v]), ...(SR.resistance||[]).map(v => ["R", +v]),
     ...["PDH","PDL","PWH","PWL"].filter(k => SR[k]!=null).map(k => [k, +SR[k]])];
+  if (!FX.L.levels){ LV.length = 0; WL.length = 0; SRL.length = 0; }
+  if (FX.L.vwap){ const iv = LV.findIndex(([k]) => k === "VWAP"); if (iv >= 0) LV.splice(iv, 1); }     // the moving VWAP line replaces the flat one
   let ps = bars.flatMap(b => b.bins.map(x => +x.p)); const step = Math.min(...ps.slice(1).map((p,i)=>Math.abs(p-ps[i])).filter(d=>d>0)) || 1;
   let lo = Math.min(...ps), hi = Math.max(...ps);
   // 2026-10-25 (Nikhil): only levels close to the current print - far lines just waste space. Window = max(0.5% of price, 6 rows) around the last price,
@@ -1288,48 +1303,94 @@ function fxChart(V){
   // 2026-11-06 (Nikhil: "text overlapping on top of the order-flow chart ... all elements and text should be clear"): marks get their
   // own strips ABOVE the price area - tracker flips (up to 3 a bar + "more"), then absorption / big-print / exhaustion tags - so nothing is
   // drawn over the footprint cells any more. Labels are cut to the column width; the full text is in the hover tooltip.
-  const EVH = (V.events||[]).length ? 3*13 + 12 : 0, MKH = ((V.rev||[]).length || bars.some(b => b.burst) || (V.div && V.div.pivot_t)) ? 41 : 0, TOP = 4 + EVH + MKH;
+  const EVH = FX.L.signals && (V.events||[]).length ? 3*13 + 12 : 0, MKH = FX.L.signals && ((V.rev||[]).length || bars.some(b => b.burst) || (V.div && V.div.pivot_t)) ? 41 : 0, TOP = 4 + EVH + MKH;
   const X0 = 8, LW = 160, AW = 62, avail = Math.max(640, (FX.availW || 1100) - 4);   // AW = price axis (y axis) column, 2026-11-04 (Nikhil)
-  const need = Math.ceil(maxLen*6.7) + 34, fill = Math.floor((avail - X0 - LW - AW)/bars.length);
-  const CW = Math.max(need, 86, Math.min(fill, 150)), W = X0 + bars.length*CW + AW + LW, PH = TOP + nR*RH + 6, CP = 58, H = PH + 58 + CP;   // 4 label rows (time, Δ, CVD, OI tag)   // price area, 3 label rows, CVD panel
+  const PW = FX.L.profile ? 78 : 0, FIT = !!FX.L.fit;
+  const need = Math.ceil(maxLen*6.7) + 34, fill = Math.floor((avail - X0 - LW - AW - PW)/bars.length);
+  const CW = FIT ? Math.max(10, Math.min(fill, 150)) : Math.max(need, 86, Math.min(fill, 150)), TXT = CW >= 60, CL = TXT ? 18 : Math.max(4, Math.round(CW*0.35));
+  const W = X0 + bars.length*CW + PW + AW + LW, PH = TOP + nR*RH + 6, CP = FX.L.cvd ? 58 : 0, H = PH + 58 + CP;   // CL = candle lane, PW = day-profile column
   const y = p => TOP + (hi - p)/RS*RH;
-  const fit = (t, w, px = 5.9) => { t = String(t); const n = Math.max(3, Math.floor(w / px)); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+  const fit = (t, w, px = 5.9) => { if (w < 24) return ""; t = String(t); const n = Math.max(3, Math.floor(w / px)); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
   const mx = Math.max(...bars.flatMap(b => b.bins.map(x => (+x.b)+(+x.s))), 1);
   let g = "";
   bars.forEach((b,i) => {
     const x = X0 + i*CW, cells = {}, est = !!b.approx;
     if (est) g += `<rect x="${x+1}" y="0" width="${CW-2}" height="${PH}" fill="var(--muted)" fill-opacity="0.06"/>`;
     b.bins.forEach(c => { const k = Math.floor((hi - c.p)/RS); const o = cells[k] || (cells[k] = {b:0,s:0,p:hi-k*RS}); o.b += +c.b; o.s += +c.s; });
+    const btot = b.bins.reduce((a, c) => a + (+c.b) + (+c.s), 0) || 1;
     const bi = new Set((b.buy_imb||[]).map(p=>Math.floor((hi-p)/RS))), si = new Set((b.sell_imb||[]).map(p=>Math.floor((hi-p)/RS)));
     const pk = b.poc!=null ? Math.floor((hi - b.poc)/RS) : null;
     Object.entries(cells).forEach(([k,c]) => {
       const yy = TOP + k*RH, tot = c.b + c.s, a = (est ? 0.04 : 0.08) + (est ? 0.18 : 0.42)*tot/mx, buy = c.b >= c.s;
-      g += `<rect x="${x+18}" y="${yy}" width="${CW-22}" height="${RH-2}" rx="2" shape-rendering="crispEdges" fill="${buy?"var(--bull)":"var(--bear)"}" fill-opacity="${a.toFixed(2)}" ${+k===pk?'stroke="var(--ink)" stroke-width="1.5"':""}/>`;
-      g += `<text x="${x+18+(CW-22)/2}" y="${Math.round(yy+(RH-2)/2+4)}" text-anchor="middle" font-size="${RH>=22?12:11}" fill="var(--ink)" font-weight="${bi.has(+k)||si.has(+k)?700:400}"><tspan fill="${si.has(+k)?"var(--bear)":"var(--ink)"}">${fxK(c.s)}</tspan> × <tspan fill="${bi.has(+k)?"var(--bull)":"var(--ink)"}">${fxK(c.b)}</tspan></text>`;
+      g += `<rect x="${x+CL}" y="${yy}" width="${CW-CL-4}" height="${RH-2}" rx="2" shape-rendering="crispEdges" fill="${buy?"var(--bull)":"var(--bear)"}" fill-opacity="${a.toFixed(2)}" ${+k===pk?'stroke="var(--ink)" stroke-width="1.5"':""}><title>${ldPx(c.p - RS + step)}${RS > step ? "–" + ldPx(c.p) : ""} · ${esc(V.desk==="nifty" ? b.t : utcToIst(b.t))} · sell ${fxK(c.s)} · buy ${fxK(c.b)} · Δ ${c.b>=c.s?"+":"−"}${fxK(c.b-c.s)} · ${Math.round(100*tot/btot)}% of the bar${+k===pk?" · bar POC":""}${bi.has(+k)?" · buy imbalance":""}${si.has(+k)?" · sell imbalance":""}</title></rect>`;
+      if (TXT) g += `<text x="${x+CL+(CW-CL-4)/2}" y="${Math.round(yy+(RH-2)/2+4)}" text-anchor="middle" font-size="${RH>=22?12:11}" fill="var(--ink)" font-weight="${bi.has(+k)||si.has(+k)?700:400}"><tspan fill="${si.has(+k)?"var(--bear)":"var(--ink)"}">${fxK(c.s)}</tspan> × <tspan fill="${bi.has(+k)?"var(--bull)":"var(--ink)"}">${fxK(c.b)}</tspan></text>`;
     });
+    { // stacked imbalances: 3+ imbalance rows in a row on one side = a strong push -> a bar on the cell's right edge
+      const run = (set, col, side) => { const ks = [...set].sort((p, q) => p - q); let s0 = null, pv = null;
+        const flush = () => { if (s0 != null && pv - s0 >= 2) g += `<rect x="${x+CW-6}" y="${TOP+s0*RH}" width="3" height="${(pv-s0+1)*RH-2}" fill="${col}"><title>stacked ${side} imbalance: ${pv-s0+1} rows in a row</title></rect>`; };
+        ks.forEach(k => { if (pv != null && k === pv + 1) pv = k; else { flush(); s0 = pv = k; } }); flush(); };
+      run(bi, "var(--bull)", "buy"); run(si, "var(--bear)", "sell"); }
     const up = b.c >= b.o, yo = y(Math.max(b.o,b.c)) + RH/2, yc = y(Math.min(b.o,b.c)) + RH/2;
     { const cc = up?"var(--bull)":"var(--bear)", doji = Math.abs(b.c-b.o) < 1e-9;
-      g += `<line x1="${x+8}" x2="${x+8}" y1="${y(b.h)+RH/2}" y2="${y(b.l)+RH/2}" stroke="${doji?"var(--muted)":cc}" stroke-width="1.6"/>`;
-      g += doji ? `<rect x="${x+2}" width="12" y="${yo-1.5}" height="3" fill="var(--ink)"/>` : `<rect x="${x+3}" width="10" y="${yo}" height="${Math.max(3,yc-yo)}" rx="1" fill="${cc}"/>`; }
+      g += `<line x1="${x+CL/2}" x2="${x+CL/2}" y1="${y(b.h)+RH/2}" y2="${y(b.l)+RH/2}" stroke="${doji?"var(--muted)":cc}" stroke-width="1.6"/>`;
+      g += doji ? `<rect x="${x+CL/2-Math.min(6,CL/2)}" width="${Math.min(12,CL)}" y="${yo-1.5}" height="3" fill="var(--ink)"/>` : `<rect x="${x+CL/2-Math.min(5,CL/2-1)}" width="${Math.min(10,CL-2)}" y="${yo}" height="${Math.max(3,yc-yo)}" rx="1" fill="${cc}"/>`; }
     { const T = {NL:["new longs","var(--bull)"], SC:["short cover","var(--wait)"], NS:["new shorts","var(--bear)"], LX:["longs exit","var(--muted)"]}[b.oi_tag];   // 2026-10-25 chart marks
-      if (T) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${T[1]}"><title>OI ${b.oi_pct>0?"+":""}${b.oi_pct}% over this bar · price ${b.c>=b.o?"up":"down"}</title>${T[0]} ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
-      else if (b.oi_pct!=null) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" fill="var(--muted)">OI ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
-      if (b.burst){ const buyB = (b.delta||0) >= 0;
+      if (T && TXT) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${T[1]}"><title>OI ${b.oi_pct>0?"+":""}${b.oi_pct}% over this bar · price ${b.c>=b.o?"up":"down"}</title>${T[0]} ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
+      else if (b.oi_pct!=null && TXT) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" fill="var(--muted)">OI ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
+      if (b.burst && FX.L.signals){ const buyB = (b.delta||0) >= 0;
         g += `<text x="${x+6}" y="${4+EVH+37}" font-size="10" font-weight="700" fill="${buyB?"var(--bull)":"var(--bear)"}"><title>Δ ${fxK(b.delta)} - at least 3x the usual bar</title>${esc(fit("⚡ big " + (buyB?"buying":"selling"), CW-10))}</text>`; } }
     const cv = b.cvd;
-    g += `<text x="${x+CW/2+4}" y="${PH+12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(V.desk==="nifty" ? (b.t||"") : utcToIst(b.t))}${i===bars.length-1 && fxLiveBar(V, b) ? " · live" : b.partial?"…":""}${est?" est.":""}</text>`
-       + `<text x="${x+CW/2+4}" y="${PH+26}" text-anchor="middle" font-size="11" font-weight="600" fill="${b.delta>=0?"var(--bull)":"var(--bear)"}">Δ ${b.delta>=0?"+":"-"}${fxK(b.delta||0)}</text>`
+    if (TXT || i % Math.ceil(56/CW) === 0) g += `<text x="${x+CW/2+4}" y="${PH+12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(V.desk==="nifty" ? (b.t||"") : utcToIst(b.t))}${i===bars.length-1 && fxLiveBar(V, b) ? " · live" : b.partial?"…":""}${est?" est.":""}</text>`;
+    if (TXT) g += `<text x="${x+CW/2+4}" y="${PH+26}" text-anchor="middle" font-size="11" font-weight="600" fill="${b.delta>=0?"var(--bull)":"var(--bear)"}">Δ ${b.delta>=0?"+":"-"}${fxK(b.delta||0)}</text>`
        + (cv==null ? "" : est ? `<text x="${x+CW/2+4}" y="${PH+40}" text-anchor="middle" font-size="11" fill="var(--muted)">CVD –</text>` : `<text x="${x+CW/2+4}" y="${PH+40}" text-anchor="middle" font-size="11" fill="${cv>=0?"var(--bull)":"var(--bear)"}">CVD ${cv>=0?"+":"-"}${fxK(cv)}</text>`);
   });
-  const lx = X0 + bars.length*CW;
+  const bx = X0 + bars.length*CW, lx = bx + PW;
+  if (PW){ // day volume profile: volume per price row over the bars shown; darker = value area (70 % of volume), outlined = POC
+    const vol = {}; bars.forEach(b => b.bins.forEach(c => { const k = Math.floor((hi - c.p)/RS); vol[k] = (vol[k]||0) + (+c.b) + (+c.s); }));
+    const ks = Object.keys(vol).map(Number), vals = Object.values(vol), vmx = Math.max(...vals, 1), tot = vals.reduce((a, v) => a + v, 0) || 1;
+    const poc = ks.reduce((a, k) => vol[k] > (vol[a] || 0) ? k : a, ks[0]), va = new Set([poc]); let acc = vol[poc], u = poc - 1, dn = poc + 1;
+    while (acc < tot*0.7 && (vol[u] != null || vol[dn] != null)){ const a1 = vol[u] || 0, a2 = vol[dn] || 0; if (a1 >= a2){ va.add(u); acc += a1; u--; } else { va.add(dn); acc += a2; dn++; } }
+    ks.forEach(k => { const w = Math.max(1, vol[k]/vmx*(PW-14));
+      g += `<rect x="${bx+6}" y="${TOP+k*RH+1}" width="${w.toFixed(1)}" height="${RH-3}" fill="var(--accent)" fill-opacity="${va.has(k)?0.45:0.18}" ${k===poc?'stroke="var(--ink)" stroke-width="1"':""}><title>${ldPx(hi-k*RS)} · ${fxK(vol[k])} traded (${Math.round(100*vol[k]/tot)}%)${k===poc?" · POC":va.has(k)?" · value area":""}</title></rect>`; });
+    g += `<text x="${bx+6}" y="${Math.max(10, TOP-3)}" font-size="9.5" fill="var(--muted)">Profile</text>`; }
+  let VWm = null;
+  if (FX.L.vwap){ let pv = 0, vv = 0, sess = null; const pts = [];
+    bars.forEach((b, i) => { if (b.d !== sess){ sess = b.d; pv = 0; vv = 0; } b.bins.forEach(c => { const q = (+c.b) + (+c.s); pv += (+c.p)*q; vv += q; }); if (vv) pts.push([X0 + i*CW + CW/2 + 4, pv/vv]); });
+    const vis = pts.filter(q => q[1] >= lo && q[1] <= hi);
+    if (vis.length > 1) g += `<path d="${vis.map((q, j) => `${j?"L":"M"}${q[0]} ${(y(q[1])+RH/2).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.8" opacity="0.9"><title>VWAP, bar by bar (volume-weighted price so far today)</title></path>`;
+    if (pts.length) VWm = pts.at(-1)[1]; }
+  if (FX.L.trades && (V.trades||[]).length){ // paper trades of every rule on this market: entry ▲▼, stop / target lines until the exit, exit ○ with the result
+    const tfm = FX.tf[V.desk] || 15, nif = V.desk === "nifty";
+    const SPOT = new Set(["touchv2","ovn_h30","vcy_night","vcy_day","vcy_day_sk","vcy_day_bw","vcy_day_dh"]);
+    const TAGS = {dom_ix:"DOM", touchv2:"T2", sorb:"ORB", ovn_h30:"OVN", vcy_night:"VCn", vcy_day:"VCd", vcy_day_sk:"VCs", vcy_day_bw:"VCb", vcy_day_dh:"VCh", b4h:"4H", b4h_v4:"4Hv4", b4h_h2:"4Hh2", b4h_g2:"G2"};
+    const xAt = s0 => { if (!s0) return null; const u = new Date(String(s0).slice(0,16).replace(" ", "T") + ":00+05:30"); if (isNaN(u)) return null;
+      let d, m, o0; if (nif){ const ist = new Date(u.getTime() + 330*60000); d = ist.toISOString().slice(0,10); m = ist.getUTCHours()*60 + ist.getUTCMinutes(); o0 = 555; }
+      else { d = u.toISOString().slice(0,10); m = u.getUTCHours()*60 + u.getUTCMinutes(); o0 = 0; }
+      const st = Math.floor((m - o0)/tfm)*tfm + o0, sm = ((st % 1440) + 1440) % 1440, hm = `${String(Math.floor(sm/60)).padStart(2,"0")}:${String(sm%60).padStart(2,"0")}`;
+      const i = bars.findIndex(b => b.d === d && b.t === hm); if (i < 0) return null;
+      return X0 + i*CW + CL + Math.min(1, Math.max(0, (m - st)/tfm))*(CW - CL - 4); };
+    V.trades.forEach(t => {
+      const xe = xAt(t.opened); if (xe == null) return;
+      const xx = t.status === "closed" ? (xAt(t.closed) ?? bx) : bx, sd = t.side === "long" ? 1 : -1;
+      const sh = (nif && V.basis != null && SPOT.has(t.rule)) ? +V.basis : 0, P = v => v == null ? null : +v + sh;
+      const col = sd > 0 ? "var(--bull)" : "var(--bear)", e = P(t.entry); if (e == null || e < lo || e > hi) return;
+      const seg = (v, c, da, nm) => { if (v == null || v < lo || v > hi) return; const yy = y(v) + RH/2;
+        g += `<line x1="${xe}" x2="${Math.max(xx, xe + 6)}" y1="${yy}" y2="${yy}" stroke="${c}" stroke-width="1.6" stroke-dasharray="${da}"><title>${esc(t.rule_label)} · ${nm} ${ldPx(v)}</title></line>`; };
+      seg(e, "var(--ink)", "", "entry"); seg(P(t.stop), "var(--bear)", "5 3", "stop");
+      (t.targets || (t.target != null ? [t.target] : [])).forEach(v => seg(P(v), "var(--bull)", "5 3", "target"));
+      const ye = y(e) + RH/2, tag = TAGS[t.rule] || t.rule;
+      g += `<g><title>${esc(t.rule_label)} · ${esc(t.side)} ${ldPx(t.entry)}${sh ? ` (spot price, drawn +${sh} on the futures chart)` : ""} · ${esc(String(t.opened).slice(11,16))}${t.status === "closed" ? ` → ${esc(String(t.closed||"").slice(11,16))} ${esc(t.exit_reason||"")} ${t.pnl != null ? (t.pnl >= 0 ? "+" : "−") + fxK(t.pnl) : ""}` : " · open"}</title><path d="${sd > 0 ? `M${xe} ${ye+3} l-6 10 l12 0z` : `M${xe} ${ye-3} l-6 -10 l12 0z`}" fill="${col}" stroke="var(--surface)" stroke-width="1"/>${TXT ? `<text x="${xe+8}" y="${sd > 0 ? ye+14 : ye-6}" font-size="10" font-weight="700" fill="${col}" stroke="var(--surface)" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${esc(tag)}</text>` : ""}</g>`;
+      if (t.status === "closed" && t.exit != null){ const x2 = P(t.exit); if (x2 >= lo && x2 <= hi){ const yx = y(x2) + RH/2, pc = (t.pnl || 0) >= 0 ? "var(--bull)" : "var(--bear)";
+        g += `<circle cx="${xx}" cy="${yx}" r="4.5" fill="var(--surface)" stroke="${pc}" stroke-width="2"><title>${esc(t.rule_label)} exit ${ldPx(t.exit)} · ${esc(t.exit_reason||"")}</title></circle>`;
+        if (TXT) g += `<text x="${xx+7}" y="${yx+4}" font-size="10" font-weight="700" fill="${pc}" stroke="var(--surface)" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${t.pnl != null ? (t.pnl >= 0 ? "+" : "−") + fxK(t.pnl) : ""}</text>`; } } }); }
   { const cvs = bars.map(b => b.cvd).filter(v => v!=null);
-    if (cvs.length){
+    if (cvs.length && FX.L.cvd){
       const top = PH + 60, bot = H - 4, cmx = Math.max(...cvs.map(Math.abs), 1), cy = v => Math.round(top + (bot-top)/2 - v/cmx*(bot-top)/2);
       g += `<line x1="${X0}" x2="${lx}" y1="${cy(0)}" y2="${cy(0)}" stroke="var(--line)"/>${Math.abs(cy(bars.at(-1).cvd ?? 0) - cy(0)) >= 13 ? `<text x="${lx+6}" y="${cy(0)+4}" font-size="11" fill="var(--muted)">CVD 0</text>` : ""}`;
       let path = "";
       bars.forEach((b,i) => { if (b.cvd==null) return; const cx = X0 + i*CW + CW/2 + 4, newSess = i===0 || bars[i-1].d !== b.d;
         path += `${newSess?"M":"L"}${cx} ${cy(b.cvd)} `;
-        g += `<rect x="${X0 + i*CW + 18}" y="${Math.min(cy(0), cy(b.real_delta||0))}" width="${CW-22}" height="${Math.max(1, Math.abs(cy(b.real_delta||0)-cy(0)))}" fill="${(b.real_delta||0)>=0?"var(--bull)":"var(--bear)"}" opacity=".35"/>`;
+        g += `<rect x="${X0 + i*CW + CL}" y="${Math.min(cy(0), cy(b.real_delta||0))}" width="${CW-CL-4}" height="${Math.max(1, Math.abs(cy(b.real_delta||0)-cy(0)))}" fill="${(b.real_delta||0)>=0?"var(--bull)":"var(--bear)"}" opacity=".35"/>`;
         if (newSess && i) g += `<line x1="${X0+i*CW+2}" x2="${X0+i*CW+2}" y1="${top}" y2="${bot}" stroke="var(--muted)" stroke-dasharray="2 3"/>`; });
       g += `<path d="${path}" fill="none" stroke="var(--ink)" stroke-width="1.8"/>`;
       const OL = V.oi_line||[]; if (OL.length > 1){ const ov = OL.map(p=>p[1]), omn = Math.min(...ov), omx = Math.max(...ov), oy = v => Math.round(bot - 3 - (omx>omn ? (v-omn)/(omx-omn) : .5)*(bot-top-6));
@@ -1337,7 +1398,7 @@ function fxChart(V){
         const ch = (OL.at(-1)[1]/OL[0][1]-1)*100; g += `<text x="${lx+70}" y="${cy(0)+4}" font-size="11" font-weight="700" fill="var(--wait)">OI ${ch>0?"+":""}${fmt(ch,2)}%</text>`; }
       const last = bars.at(-1).cvd; if (last!=null) g += `<text x="${lx+6}" y="${cy(last)+4}" font-size="11.5" font-weight="700" fill="${last>=0?"var(--bull)":"var(--bear)"}">CVD ${last>=0?"+":"-"}${fxK(last)}</text>`;
     } }
-  { const hv = (HV.d && HV.d.markets && (HV.d.markets[V.key] || STK_HV[V.key])) || null, BK = ((hv||{}).pressure||{}).chart || [];   // 2026-10-25: blocks (weak / medium / strong) as bands
+  { const hv = (HV.d && HV.d.markets && (HV.d.markets[V.key] || STK_HV[V.key])) || null, BK = FX.L.blocks ? (((hv||{}).pressure||{}).chart || []) : [];   // 2026-10-25: blocks (weak / medium / strong) as bands
     // blocks are spot levels; the Nifty chart is futures. 2026-11-06: shift by the same steady basis as the other levels (V.basis from
     // fxNormalize). The old offset (chart price - the hourly verdict's stored price) also carried the price move since that verdict (up to an
     // hour), so the bands slid with every tick.
@@ -1349,7 +1410,7 @@ function fxChart(V){
         <text x="${X0+4}" y="${Math.max(TOP+10, Math.min(y1,y2)-4)}" font-size="10.5" font-weight="${b.strength==="strong"?700:500}" fill="${col}" opacity=".85">${b.side==="R"?"R block":b.side==="IN"?"Price in block":"S block"} ${esc(b.range)} · ${esc(b.strength)}${b.star?" ★":""}</text>` + g; });
     const tfm = FX.tf[V.desk] || 15;
     const EVB = {};
-    (V.events||[]).forEach(e => { const at = String(e.at||""); let d, hm;
+    (FX.L.signals ? (V.events||[]) : []).forEach(e => { const at = String(e.at||""); let d, hm;
       if (V.desk==="nifty"){ d = at.slice(0,10); const [h,m] = at.slice(11,16).split(":").map(Number), md = h*60+m, bk = Math.floor((md-555)/tfm)*tfm+555; hm = `${String(Math.floor(bk/60)).padStart(2,"0")}:${String(bk%60).padStart(2,"0")}`; }
       else { const u = new Date(at); d = u.toISOString().slice(0,10); const md = u.getUTCHours()*60+u.getUTCMinutes(), bk = Math.floor(md/tfm)*tfm; hm = `${String(Math.floor(bk/60)).padStart(2,"0")}:${String(bk%60).padStart(2,"0")}`; }
       const i = bars.findIndex(b => b.d===d && b.t===hm); if (i < 0) return;
@@ -1367,7 +1428,7 @@ function fxChart(V){
       return `${String(Math.floor(st/60)).padStart(2,"0")}:${String(st%60).padStart(2,"0")}`; };
     const at = t => { const k = bk(t); for (let i = bars.length-1; i >= 0; i--) if (bars[i].t === k) return i; return -1; };
     const RV = {};
-    (V.rev||[]).forEach(r => { const i = at(r.t); if (i < 0) return; const o = RV[i] || (RV[i] = {}); const cur = o[r.side];
+    (FX.L.signals ? (V.rev||[]) : []).forEach(r => { const i = at(r.t); if (i < 0) return; const o = RV[i] || (RV[i] = {}); const cur = o[r.side];
       if (!cur || (r.strength==="strong" && cur.strength!=="strong") || Math.abs(r.delta||0) > Math.abs(cur.delta||0)) o[r.side] = r; });
     Object.entries(RV).forEach(([i, o]) => Object.values(o).forEach(r => {
       const b = bars[+i], cx = X0 + (+i)*CW + 8, strong = r.strength==="strong", col = r.side==="long" ? "var(--bull)" : "var(--bear)";
@@ -1375,22 +1436,23 @@ function fxChart(V){
       const tri = r.side==="long" ? `M${cx} ${yy} l-6 9 l12 0z` : `M${cx} ${yy} l-6 -9 l12 0z`;
       g += `<g><title>${esc(r.note||"")} · ${strong?"strong (heavy volume)":"moderate"}</title><path d="${tri}" fill="${col}" fill-opacity="${strong?1:0.4}" stroke="${col}" stroke-width="${strong?1.5:0}"/>`
          + `<text x="${X0 + (+i)*CW + 6}" y="${4+EVH+(r.side==="long"?11:24)}" font-size="10" font-weight="${strong?700:500}" fill="${col}" opacity="${strong?1:0.75}">${esc(fit((r.side==="long"?"▲ buyers absorb":"▼ sellers absorb") + (strong?" ●":""), CW-10))}</text></g>`; }));
-    const D = V.div; if (D && D.pivot_t){ const i = at(D.pivot_t); if (i >= 0){ const b = bars[i], bull = D.type==="bullish_div", cx = X0 + i*CW + CW/2 + 4, col = bull ? "var(--bull)" : "var(--bear)";
+    const D = FX.L.signals ? V.div : null; if (D && D.pivot_t){ const i = at(D.pivot_t); if (i >= 0){ const b = bars[i], bull = D.type==="bullish_div", cx = X0 + i*CW + CW/2 + 4, col = bull ? "var(--bull)" : "var(--bear)";
       g += `<g><title>${esc(D.note||"")} (${esc(D.strength||"")})</title><text x="${cx}" y="${4+EVH+(bull?11:24)}" text-anchor="middle" font-size="10" font-weight="700" fill="${col}">${esc(fit("⇅ " + (bull?"sellers exhausted":"buyers exhausted"), CW-10))}</text></g>`; } }
   }
-  const lcol = k => k==="Call wall" ? "var(--bear)" : k==="Put wall" ? "var(--bull)" : k==="VWAP" ? "var(--accent)" : "var(--muted)";
+  const lcol = k => k==="Call wall" ? "var(--bear)" : k==="Put wall" ? "var(--bull)" : k==="VWAP" || k==="VWAP·" ? "var(--accent)" : "var(--muted)";
+  if (VWm != null && VWm >= lo && VWm <= hi) LV.push(["VWAP·", VWm]);
   // support (green) / resistance (red) zones: thick translucent bands under the other lines
   SRL.filter(([k,v]) => v>=lo-RS && v<=hi+RS).forEach(([k,v]) => { const sup = k==="S" || k==="PDL" || k==="PWL" || (k!=="R" && k!=="PDH" && k!=="PWH" && V.spot!=null && v < V.spot);
     const yy = y(v)+RH/2; g = `<rect x="${X0}" y="${yy-3}" width="${lx-X0}" height="6" fill="${sup?"var(--bull)":"var(--bear)"}" fill-opacity="0.13"/><line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="${sup?"var(--bull)":"var(--bear)"}" stroke-width="1.3" stroke-dasharray="2 3" opacity="0.85"/>` + g; });
   const lcol2 = k => k==="S"||k==="PDL"||k==="PWL" ? "var(--bull)" : k==="R"||k==="PDH"||k==="PWH" ? "var(--bear)" : lcol(k);
-  const nm = k => ({S:"Support", R:"Resistance", PDH:"Prev day high", PDL:"Prev day low", PWH:"Prev week high", PWL:"Prev week low"})[k] || k;
+  const nm = k => ({"VWAP·":"VWAP", S:"Support", R:"Resistance", PDH:"Prev day high", PDL:"Prev day low", PWH:"Prev week high", PWL:"Prev week low"})[k] || k;
   { // 2026-11-06: right-hand labels laid out so they never overlap: levels in the same row are merged into one line, lines keep 15 px
     // apart inside the price area (down first, then pushed back up at the bottom), the live price tag takes its own slot, and a label
     // moved away from its price gets a thin leader line back to it.
     const items = [];
     [...LV, ...WL, ...SRL].filter(([k,v]) => v>=lo-RS && v<=hi+RS).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
       const wall = k.includes("wall"), srk = ["S","R","PDH","PDL","PWH","PWL"].includes(k);
-      if (!srk) g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+RH/2}" y2="${y(v)+RH/2}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
+      if (!srk && k !== "VWAP·") g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+RH/2}" y2="${y(v)+RH/2}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
       const last = items.at(-1);
       if (last && !last.spot && Math.abs(last.v - v) < RS*0.75){ if (!last.names.includes(nm(k))) last.names.push(nm(k)); last.bold = last.bold || wall || srk; return; }
       items.push({v, names:[nm(k)], col: lcol2(k), bold: wall || srk, want: y(v) + RH/2});
@@ -1448,12 +1510,14 @@ async function fxLoad(desk){
   if (follow) FX.sel[desk] = state.market;   // market tab: the chart follows the market chosen at the top
   else if (!keys.includes(FX.sel[desk])) FX.sel[desk] = keys[0];
   const I = ins[FX.sel[desk]] || {};
+  if (FX.L.trades && FX.sel[desk]) { try { I.trades = await fxTrades(FX.sel[desk]); } catch(e){} }
   // 2026-10-23: many instruments (Nifty desk now has 10 stocks) -> index buttons + a stock dropdown
   const IDX = desk==="crypto" ? ["BTC","ETH","SOL"] : ["NIFTY","BANKNIFTY"], btnKeys = keys.length > 4 ? keys.filter(k => IDX.includes(k)) : keys, ddKeys = keys.length > 4 ? keys.filter(k => !IDX.includes(k)) : [];
   const dd = ddKeys.length ? `<select class="fx-sel" onchange="${desk==="crypto"?`FX.pick['${desk}']=this.value||null;if(!this.value){FX.sel['${desk}']=null}`:""}if(this.value){FX.sel['${desk}']=this.value};ldLoad('${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:${ddKeys.includes(FX.sel[desk])?"var(--ink)":"var(--surface)"};color:${ddKeys.includes(FX.sel[desk])?"var(--surface)":"var(--ink)"}">
       <option value="">${desk==="crypto"?(FX.pick[desk]?"← back to "+esc(state.market||"BTC"):"More coins ▾"):desk==="nifty"?"Stocks ▾":"Markets ▾"}</option>${ddKeys.map(k=>`<option value="${esc(k)}" ${k===FX.sel[desk]?"selected":""}>${esc(k)} ${ldPx(ins[k].spot)}</option>`).join("")}</select>` : "";
   const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}')">${l}</button>`).join("")}</span>`;
-  const head = `<div class="fx-head">${tfb}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
+  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["trades","Trades"],["cvd","CVD"],["profile","Profile"],["vwap","VWAP"],["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
+  const head = `<div class="fx-head">${tfb}${lyr}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
     ${I.last_session?`<span class="fx-chip" style="background:var(--wait-soft);color:var(--wait)">tracker off · last session ${esc(I.last_session)} (real order flow)</span>`:""}${I.regime?`<span class="fx-chip">${esc(I.regime)}${I.stance?" · "+esc(I.stance):""}</span>`:""}${I.day_type?`<span class="fx-chip">${esc(I.day_type)}</span>`:""}
     ${I.setup&&I.setup.state?`<span class="fx-chip">setup: ${esc(I.setup.state)} ${esc(I.setup.grade||"")} ${esc(I.setup.side||"")}</span>`:""}${I.depth&&!I.depth.stale&&I.depth.imb20_1m!=null?`<span class="fx-chip" title="20-level order book (futures): (bids - asks) / total, 1-min average. Biggest bid ${ldPx(I.depth.bid_wall_px)} x${I.depth.bid_wall_qty}, ask ${ldPx(I.depth.ask_wall_px)} x${I.depth.ask_wall_qty}. Context only.">book ${I.depth.imb20_1m>0?"+":""}${fmt(I.depth.imb20_1m,2)} ${I.depth.imb20_1m>=0.15?"bids heavy":I.depth.imb20_1m<=-0.15?"asks heavy":"balanced"}</span>`:""}<span class="small faint" style="margin-left:auto">updated ${esc((V.at||"").slice(11,19))}</span></div>`;
   const ofh = `<div class="spread" style="margin:0 0 8px"><h2>Order Flow <span class="small muted">${esc(SHORT[FX.sel[desk]]||FX.sel[desk]||"")}</span></h2></div>`;   // 2026-11-04 (Nikhil)
@@ -1493,8 +1557,66 @@ const SU = {data:null};
 const SU_NAME = {NIFTY:"Nifty", BANKNIFTY:"Bank Nifty"};
 // 2026-10-30 (Nikhil): ALL PAPER TRADES in one list (4H break, Touch-minute option, DOM hold / break) - full list in the Log book,
 // each market tab shows its own markets. Paper only, never orders. Shadow trades are NOT shown here.
-function ptStart(v){ clearInterval(ptStart.t); if (v!=="metals" && document.body.dataset.tab!=="intraday") return;   /* 2026-10-31: crypto / India cards are hidden there */
-  ptLoad(); ptStart.t = setInterval(() => { if (!document.hidden) ptLoad(); }, 5000); }   // 2026-11-06: 30 s -> 5 s
+// 2026-11-06 (Nikhil: "new section for strategies paper trade with charts"): one chart per paper trade (app/tradecharts.py) -
+// candles from 30 min before the entry to 30 min after the exit, entry / stop / target / exit drawn, plus why / right / wrong / improve.
+const TC = {f: "All", days: 1, d: null};
+function tcChart(t){
+  const C = (t.chart||{}).candles || [], st = (t.chart||{}).step || 60;
+  if (!C.length) return `<p class="small muted" style="margin:20px 0;text-align:center">No stored price path for this market / day${(t.chart||{}).err ? " (" + esc(t.chart.err) + ")" : ""}.</p>`;
+  const off = +(t.chart.off || 0), sh = v => v == null || !isFinite(+v) ? null : +v + off;
+  const W = 420, H = 210, L = 6, R = 104, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
+  const tg = (t.targets && t.targets.length ? t.targets : (t.target != null ? [t.target] : [])).map(sh).filter(v => v != null);
+  const lines = [["Entry", sh(t.entry), "var(--ink)", ""], ["Stop", sh(t.stop), "var(--bear)", "4 3"],
+    ...tg.map((v, i) => [tg.length > 1 ? `T${i+1}` : "Target", v, "var(--bull)", "4 3"]),
+    ...(t.status === "closed" && t.exit != null ? [["Exit", sh(t.exit), (t.pnl||0) >= 0 ? "var(--bull)" : "var(--bear)", "1 2"]] : [])].filter(x => x[1] != null);
+  let lo = Math.min(...C.map(c => c[3])), hi = Math.max(...C.map(c => c[2])); const rg = (hi - lo) || 1;
+  lines.forEach(([, v]) => { if (v >= lo - rg && v <= hi + rg){ lo = Math.min(lo, v); hi = Math.max(hi, v); } });   // a far target does not squash the candles
+  const pd = (hi - lo)*0.06 || 1; lo -= pd; hi += pd;
+  const x0 = C[0][0], x1 = C.at(-1)[0] + st, X = s0 => L + (s0 - x0)/(x1 - x0)*pw, Y = p => T + (hi - p)/(hi - lo)*ph;
+  const cw = Math.max(1, Math.min(7, pw/C.length*0.7)), te = t.chart.t0, tx = t.chart.t1 || x1, hhmm = s0 => new Date((s0 + 19800)*1000).toISOString().slice(11,16);
+  let g = `<rect x="${X(Math.max(te, x0))}" y="${T}" width="${Math.max(1, X(Math.min(tx, x1)) - X(Math.max(te, x0)))}" height="${ph}" fill="var(--accent)" fill-opacity="0.07"/>`;
+  C.forEach(c => { const xc = X(c[0] + st/2), col = c[4] >= c[1] ? "var(--bull)" : "var(--bear)";
+    g += `<line x1="${xc.toFixed(1)}" x2="${xc.toFixed(1)}" y1="${Y(c[2]).toFixed(1)}" y2="${Y(c[3]).toFixed(1)}" stroke="${col}"/><rect x="${(xc - cw/2).toFixed(1)}" y="${Y(Math.max(c[1], c[4])).toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, Math.abs(Y(c[1]) - Y(c[4]))).toFixed(1)}" fill="${col}"/>`; });
+  const labs = [];
+  lines.forEach(([nm, v, col, da]) => { if (v < lo || v > hi){ labs.push({nm, v, col, want: v > hi ? T + 6 : T + ph - 2, far: v > hi ? "↑" : "↓"}); return; }
+    g += `<line x1="${X(Math.max(te, x0)).toFixed(1)}" x2="${L + pw}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="${col}" stroke-width="${nm === "Entry" ? 1.5 : 1.1}" stroke-dasharray="${da}"/>`;
+    labs.push({nm, v, col, want: Y(v)}); });
+  labs.sort((a, b) => a.want - b.want); labs.forEach((q, j) => { q.y = Math.max(q.want, T + 6, j ? labs[j-1].y + 13 : -1e9); });
+  for (let j = labs.length - 1; j >= 0; j--){ const lim = j === labs.length - 1 ? T + ph : labs[j+1].y - 13; if (labs[j].y > lim) labs[j].y = lim; }
+  labs.forEach(q => { g += `<text x="${L + pw + 6}" y="${(q.y + 4).toFixed(1)}" font-size="10.5" font-weight="600" fill="${q.col}">${esc(q.nm)} ${ldPx(q.v)}${q.far ? " " + q.far : ""}</text>`; });
+  const sd = t.side === "long" ? 1 : -1;
+  if (sh(t.entry) != null && te >= x0){ const xe = X(te), ye = Y(Math.min(hi, Math.max(lo, sh(t.entry))));
+    g += `<path d="${sd > 0 ? `M${xe} ${ye+3} l-5 9 l10 0z` : `M${xe} ${ye-3} l-5 -9 l10 0z`}" fill="${sd > 0 ? "var(--bull)" : "var(--bear)"}"/>`; }
+  if (t.status === "closed" && sh(t.exit) != null && t.chart.t1){ const v = sh(t.exit); if (v >= lo && v <= hi) g += `<circle cx="${X(t.chart.t1).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4" fill="var(--surface)" stroke="${(t.pnl||0) >= 0 ? "var(--bull)" : "var(--bear)"}" stroke-width="2"/>`; }
+  const tk = [[x0, "start"], [te, "in"], [t.chart.t1, "out"], [x1, "end"]].filter(q => q[0] && q[0] >= x0 && q[0] <= x1); let lastX = -99;
+  tk.forEach(([s0, k]) => { const xx = X(s0); if (xx - lastX < 38) return; lastX = xx;
+    g += `<text x="${Math.min(L + pw - 14, Math.max(L + 14, xx)).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="${k === "in" || k === "out" ? 700 : 400}">${hhmm(s0)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.market)} ${esc(t.tag)} trade chart">${g}</svg>${off ? `<div class="small faint">futures candles - the trade's spot prices are drawn ${off > 0 ? "+" : ""}${off} pts higher to line up</div>` : ""}`;
+}
+async function tcLoad(){
+  const el = $("#ptCharts"); if (!el || el.offsetParent === null) return;
+  const grp = MKT_TABS.includes(VIEW) ? VIEW : "india";
+  let D; try { D = await fetch(`/api/livedesk/tradecharts?group=${grp}&days=${TC.days}`).then(r => r.json()); } catch(e){ return; }
+  TC.d = D; tcRender();
+}
+function tcRender(){
+  const el = $("#ptCharts"), D = TC.d; if (!el || !D) return;
+  const all = D.trades || [], tags = [...new Set(all.map(t => t.tag))], show = all.filter(t => TC.f === "All" || t.tag === TC.f);
+  const money = (v, c) => v == null ? "–" : (v < 0 ? "−" : "+") + (c || "") + fmt(Math.abs(v), c === "₹" ? 0 : 2), sg = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
+  const card = t => `<div class="tc-card"><div class="spread"><b>${esc(t.market)} <span class="${t.side === "long" ? "pos" : "neg"}">${t.side === "long" ? "▲ long" : "▼ short"}</span></b><span class="pill p-neutral" title="${esc(t.rule_label||"")}">${esc(t.tag)}</span></div>
+      <div class="small muted">${esc(String(t.opened||"").slice(5,16))} → ${t.status === "open" ? "open" : esc(String(t.closed||"").slice(5,16))} · ${t.status === "open" ? (t.pnl_open != null ? `<b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b> open` : "open") : `<b class="${sg(t.pnl)}">${money(t.pnl, t.ccy)}</b>${t.r != null ? ` · ${t.r > 0 ? "+" : ""}${t.r}R` : ""} · ${esc(t.exit_reason||"")}`}</div>
+      ${tcChart(t)}
+      ${t.legs_text ? `<div class="small" style="margin-bottom:4px">${esc(t.legs_text)}</div>` : ""}
+      <div class="small"><b>Why:</b> ${esc(t.why||"–")}</div>
+      ${t.review ? `<div class="small" style="margin-top:3px">${t.review.right ? `<span class="pos">✓ ${esc(t.review.right)}</span><br>` : ""}${t.review.wrong ? `<span class="neg">✗ ${esc(t.review.wrong)}</span><br>` : ""}<b>Improve:</b> ${esc(t.review.improve||"–")}</div>` : t.status === "open" ? `<div class="small faint">trade open</div>` : ""}</div>`;
+  setKeep(el, `<div class="spread"><h2>Strategy Paper Trades · Charts <span class="small muted">paper only · never orders</span></h2><span class="small muted">updated ${esc(D.at||"")}</span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><div class="ld-btns" style="margin:0">${["All", ...tags].map(k => `<button class="${k === TC.f ? "on" : ""}" onclick="TC.f='${esc(k)}';tcRender()">${esc(k)}${k === "All" ? ` (${all.length})` : ` (${all.filter(t => t.tag === k).length})`}</button>`).join("")}</div>
+      <div class="ld-btns" style="margin:0">${[[1,"Today"],[5,"Last 5 days"]].map(([n, l]) => `<button class="${n === TC.days ? "on" : ""}" onclick="TC.days=${n};tcLoad()">${l}</button>`).join("")}</div></div>
+    ${show.length ? `<div class="tc-grid">${show.map(card).join("")}</div>` : `<p class="small muted" style="margin:8px 0 0">No paper trade ${TC.days === 1 ? "today" : "in these days"} yet.</p>`}`);
+}
+function ptStart(v){ clearInterval(ptStart.t); clearInterval(ptStart.t2); if (v!=="metals" && document.body.dataset.tab!=="intraday") return;   /* 2026-10-31: crypto / India cards are hidden there */
+  ptLoad(); ptStart.t = setInterval(() => { if (!document.hidden) ptLoad(); }, 5000);
+  if (document.body.dataset.tab === "intraday"){ setTimeout(tcLoad, 800); ptStart.t2 = setInterval(() => { if (!document.hidden) tcLoad(); }, 30000); } }   // 2026-11-06: 30 s -> 5 s
 // 2026-11-06 (Nikhil): the instrument actually deployed - option buying / selling, synthetic with or without hedge, exact strikes
 // and premiums (app/legs.py, market-anchored), plus a premium check. Never changes a trade's own result.
 function legsHtml(t){
