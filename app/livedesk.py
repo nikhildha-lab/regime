@@ -473,10 +473,7 @@ def poll_once():
                     _hot("domcards").tick(_hot, views)
                 except Exception as e:
                     _STATE["domcards_error"] = str(e)[:160]
-                try:                               # 2026-11-04: Strong Block Touch v2 paper rule (app/strongblock.py), new - nothing else changed
-                    _hot("strongblock").tick()
-                except Exception as e:
-                    _STATE["strongblock_error"] = str(e)[:160]
+                # 2026-11-06 (Nikhil: "retire and fully remove"): Strong Block Touch v2 retired - no longer ticked (code + data moved to _archive/2026-11-03/backups/2026-11-06_retire)
                 try:                               # 2026-11-06: Overnight hold paper rule (app/overnight.py): signal 15:13, exit next day ~09:16
                     _hot("overnight").tick()
                 except Exception as e:

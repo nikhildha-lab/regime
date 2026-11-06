@@ -376,18 +376,6 @@ def for_touch(c, synth=False):
                   card_entry=c.get("prem_entry")))
 
 
-def for_sbt(x):
-    """Strong block touch: synthetic on the futures scale."""
-    closed = x.get("status") == "closed"
-    day = str(x["opened"])[:10]
-    t0 = _epoch(day, str(x["opened"])[11:16])
-    t1 = _epoch(day, str(x.get("closed", ""))[11:16]) if closed else None
-    sd = 1 if x["side"] == "long" else -1
-    pts = sd * (x["exit"] - x["entry"]) if closed and x.get("exit") is not None else None
-    return cached(f"sbt:{x.get('id') or x['key'] + x['opened']}", closed, lambda: synthetic(x["key"], day, x["side"], t0, t1,
-                  fut0=x["entry"], fut1=x.get("exit"), pts_result=pts))
-
-
 def for_ovn(r, v):
     """Overnight: the legs are already priced by overnight.py - just lay them out."""
     V = (r.get("versions") or {}).get(v) or {}
@@ -395,6 +383,22 @@ def for_ovn(r, v):
              "exit": (V.get("exit_px") or {}).get(n), "src": "LTP", "snap_in": lg.get("snap") or r.get("snap"), "snap_out": V.get("exit_snap")}
             for n, lg in (V.get("legs") or {}).items()]
     kind = "synthetic" if v == "plain" else f"synthetic + {v[1:]}-delta hedge"
+    return {"kind": kind, "ok": bool(legs), "expiry": r.get("expiry"), "lot": LOT.get(r["key"]), "legs": legs,
+            "gross": V.get("gross"), "costs": V.get("costs"), "net": V.get("pnl"), "flags": []}
+
+
+def for_vcy(r, v):
+    """2026-11-06 vol cycle: legs already priced by volcycle.py - just lay them out."""
+    V = (r.get("versions") or {}).get(v) or {}
+    legs = [{"act": "buy" if lg["qty"] > 0 else "sell", "strike": lg["strike"], "cp": lg["cp"], "entry": lg.get("entry"),
+             "exit": (V.get("exit_px") or {}).get(n), "src": "LTP", "snap_in": r.get("snap"), "snap_out": r.get("closed")}
+            for n, lg in (V.get("legs") or {}).items()]
+    kind = {"plain": "long straddle" if r.get("rule") == "night" else "short straddle", "wings": "short iron fly (2 % wings)",
+            "tilt_spread": "debit spread (close direction)", "tilt_straddle": "long straddle + extra leg (close direction)",
+            "skew": "credit spread (away from the morning trend)", "bwing": "broken-wing fly (1 % / 3 % wings)",
+            "dhedge": "short straddle, delta-hedged with synthetic futures"}.get(v, v)
+    if v in ("skew", "bwing") and (r.get("context") or {}).get("trend") == "none":
+        kind = "short straddle (no morning trend, same as plain)" if v == "skew" else "short iron fly (no morning trend, 2 % wings)"
     return {"kind": kind, "ok": bool(legs), "expiry": r.get("expiry"), "lot": LOT.get(r["key"]), "legs": legs,
             "gross": V.get("gross"), "costs": V.get("costs"), "net": V.get("pnl"), "flags": []}
 

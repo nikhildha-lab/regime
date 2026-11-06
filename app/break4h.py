@@ -29,7 +29,7 @@ GOLD_CSV = os.path.join(ROOT, "data_store", "market_data", "synaptic_crypto_gold
 MKTS = {"ETH": "ETHUSDT", "BTC": "BTCUSDT", "GOLD": None}      # SOL removed 2026-10-30 (Nikhil: stop SOL trades)
 # 2026-11-04 (Nikhil: "add for other coins and keep recording"): the same v3 rule as a FORWARD PAPER TEST on the other coins.
 # NOT backtested on these coins -> proven False, shown "unproven"; uses ETH's exit (block stop, trail 1.5 ATR after +1R).
-ALTS = {"XRP": "XRPUSDT", "BNB": "BNBUSDT", "LINK": "LINKUSDT", "UNI": "UNIUSDT", "ZEC": "ZECUSDT", "DASH": "DASHUSDT"}
+ALTS = {"ZEC": "ZECUSDT", "DASH": "DASHUSDT"}      # 2026-11-06 (Nikhil: "retire and fully remove"): XRP, BNB, LINK, UNI retired (negative 90-day check)
 MKTS.update(ALTS)
 ROUND = {"BTC": 1000, "ETH": 50, "SOL": 5, "GOLD": 50}
 

@@ -32,7 +32,7 @@ LOT = {"NIFTY": 65, "BANKNIFTY": 30}
 DHAN_IDX = {"NIFTY": "nifty", "BANKNIFTY": "banknifty"}
 YSYM = {"NIFTY": "^NSEI", "BANKNIFTY": "^NSEBANK"}
 HI, LO_, AT, MIN_DAYS = 0.80, 0.20, "15:13", 7
-VERS = {"plain": None, "h20": 0.20, "h30": 0.30}
+VERS = {"h30": 0.30}            # 2026-11-06 (Nikhil: "retire and fully remove"): plain synthetic + 0.2-delta hedge retired; old rows keep theirs
 S: dict = {"t": 0}
 
 
