@@ -216,6 +216,36 @@ def of_min_bars(sym: str, days: int = 20) -> list:
     return out
 
 
+_VP5: dict = {}
+
+
+def vp5(desk: str, key: str, raw: dict, days: int = 5) -> dict:
+    """2026-11-06 (Nikhil: "volume profile (rolling last 5 days) on the left side"): traded volume per price over the last `days` sessions
+    (Nifty / Bank Nifty: the order-flow engine's 1-min futures footprint; other markets: the stored + live 15-min footprint bars).
+    {"days": [...], "bins": [[price, volume], ...], "poc": price}. Cached 60 s per market."""
+    ck = (desk, key)
+    h = _VP5.get(ck)
+    if h and time.time() - h[0] < 60:
+        return h[1]
+    if desk == "nifty" and key in ("NIFTY", "BANKNIFTY"):
+        bars = of_min_bars(key, days=days + 2)
+    else:
+        bars = fp_hist(desk, key, (raw.get("footprint") or {}).get("bars") or raw.get("fp") or [])
+    ds = sorted({b.get("d") for b in bars if b.get("d")})[-days:]
+    vol: dict = {}
+    for b in bars:
+        if b.get("d") not in ds:
+            continue
+        for c in b.get("bins") or []:
+            try:
+                p = float(c["p"]); vol[p] = vol.get(p, 0.0) + float(c.get("b") or 0) + float(c.get("s") or 0)
+            except Exception:
+                continue
+    out = {"days": ds, "bins": sorted([[p, round(v, 1)] for p, v in vol.items()]), "poc": max(vol, key=vol.get) if vol else None}
+    _VP5[ck] = (time.time(), out)
+    return out
+
+
 _FLV: dict = {}
 
 
@@ -751,6 +781,12 @@ def view(desk: str, tf: int = 15, want=None) -> dict:
                               "sr": {}, "levels": {}, "walls": {}, "chain": [], "oi": {}, "last_session": last}
             except Exception:
                 pass
+    for k, v in ins.items():           # 2026-11-06 (Nikhil): rolling 5-day volume profile for the chart's left side
+        if isinstance(v, dict) and v.get("fp"):
+            try:
+                v["vp5"] = vp5(desk, k, ((_STATE.get("views") or {}).get(desk) or {}).get(k) or {})
+            except Exception as e:
+                _STATE["vp5_error"] = str(e)[:120]
     try:                               # 2026-10-25: OI tag / burst per bar, OI line, logged setup events (chartmarks)
         CM = _hot("chartmarks")
         for k, v in ins.items():

@@ -1197,6 +1197,11 @@ FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profi
   try { return Object.assign(d, JSON.parse(localStorage.getItem("mp.fxlayers") || "{}")); } catch(e){ return d; } })();
 function fxLayer(k, desk){ FX.L[k] = FX.L[k] ? 0 : 1; try { localStorage.setItem("mp.fxlayers", JSON.stringify(FX.L)); } catch(e){} ldLoad(desk); }
 FX.trd = {};
+// 2026-11-06 (Nikhil: "drop down to select strategy for trades, default is DOM index"): which strategy's paper trades the chart draws
+const FX_TS = [["dom_ix","DOM Index",["dom_ix"]],["touchv2","Touch v2",["touchv2"]],["sorb","Stocks ORB",["sorb"]],["ovn","Overnight",["ovn_h30"]],
+  ["vcy","Vol cycle",["vcy_night","vcy_day","vcy_day_sk","vcy_day_bw","vcy_day_dh"]],["b4h","4H break",["b4h","b4h_v4","b4h_h2","b4h_g2"]],["all","All strategies",null],["none","No trades",[]]];
+FX.ts = (() => { try { return localStorage.getItem("mp.fxtrades") || "dom_ix"; } catch(e){ return "dom_ix"; } })();
+function fxTs(v, desk){ FX.ts = v; try { localStorage.setItem("mp.fxtrades", v); } catch(e){} ldLoad(desk); }
 async function fxTrades(key){ const c = FX.trd[key]; if (c && Date.now() - c.t < 15000) return c.v;
   try { const P = await fetch("/api/livedesk/papertrades?keys=" + encodeURIComponent(key)).then(r => r.json()); const v = (P.open||[]).concat(P.closed||[]); FX.trd[key] = {t: Date.now(), v}; return v; }
   catch(e){ return c ? c.v : []; } }
@@ -1305,7 +1310,7 @@ function fxChart(V){
   // drawn over the footprint cells any more. Labels are cut to the column width; the full text is in the hover tooltip.
   const EVH = FX.L.signals && (V.events||[]).length ? 3*13 + 12 : 0, MKH = FX.L.signals && ((V.rev||[]).length || bars.some(b => b.burst) || (V.div && V.div.pivot_t)) ? 41 : 0, TOP = 4 + EVH + MKH;
   const X0 = 8, LW = 160, AW = 62, avail = Math.max(640, (FX.availW || 1100) - 4);   // AW = price axis (y axis) column, 2026-11-04 (Nikhil)
-  const PW = FX.L.profile ? 78 : 0, FIT = !!FX.L.fit;
+  const PW = 0, FIT = !!FX.L.fit;          // 2026-11-06: the day profile column moved to a 5-day overlay on the left (see the return)
   const need = Math.ceil(maxLen*6.7) + 34, fill = Math.floor((avail - X0 - LW - AW - PW)/bars.length);
   const CW = FIT ? Math.max(10, Math.min(fill, 150)) : Math.max(need, 86, Math.min(fill, 150)), TXT = CW >= 60, CL = TXT ? 18 : Math.max(4, Math.round(CW*0.35));
   const W = X0 + bars.length*CW + PW + AW + LW, PH = TOP + nR*RH + 6, CP = FX.L.cvd ? 58 : 0, H = PH + 58 + CP;   // CL = candle lane, PW = day-profile column
@@ -1349,7 +1354,7 @@ function fxChart(V){
     const vol = {}; bars.forEach(b => b.bins.forEach(c => { const k = Math.floor((hi - c.p)/RS); vol[k] = (vol[k]||0) + (+c.b) + (+c.s); }));
     const ks = Object.keys(vol).map(Number), vals = Object.values(vol), vmx = Math.max(...vals, 1), tot = vals.reduce((a, v) => a + v, 0) || 1;
     const poc = ks.reduce((a, k) => vol[k] > (vol[a] || 0) ? k : a, ks[0]), va = new Set([poc]); let acc = vol[poc], u = poc - 1, dn = poc + 1;
-    while (acc < tot*0.7 && (vol[u] != null || vol[dn] != null)){ const a1 = vol[u] || 0, a2 = vol[dn] || 0; if (a1 >= a2){ va.add(u); acc += a1; u--; } else { va.add(dn); acc += a2; dn++; } }
+    while (acc < tot*0.7 && (vol[u] != null || vol[dn] != null)){ const a1 = vol[u] != null ? vol[u] : -1, a2 = vol[dn] != null ? vol[dn] : -1; if (a1 >= a2){ va.add(u); acc += Math.max(0, a1); u--; } else { va.add(dn); acc += Math.max(0, a2); dn++; } }
     ks.forEach(k => { const w = Math.max(1, vol[k]/vmx*(PW-14));
       g += `<rect x="${bx+6}" y="${TOP+k*RH+1}" width="${w.toFixed(1)}" height="${RH-3}" fill="var(--accent)" fill-opacity="${va.has(k)?0.45:0.18}" ${k===poc?'stroke="var(--ink)" stroke-width="1"':""}><title>${ldPx(hi-k*RS)} · ${fxK(vol[k])} traded (${Math.round(100*vol[k]/tot)}%)${k===poc?" · POC":va.has(k)?" · value area":""}</title></rect>`; });
     g += `<text x="${bx+6}" y="${Math.max(10, TOP-3)}" font-size="9.5" fill="var(--muted)">Profile</text>`; }
@@ -1359,7 +1364,7 @@ function fxChart(V){
     const vis = pts.filter(q => q[1] >= lo && q[1] <= hi);
     if (vis.length > 1) g += `<path d="${vis.map((q, j) => `${j?"L":"M"}${q[0]} ${(y(q[1])+RH/2).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.8" opacity="0.9"><title>VWAP, bar by bar (volume-weighted price so far today)</title></path>`;
     if (pts.length) VWm = pts.at(-1)[1]; }
-  if (FX.L.trades && (V.trades||[]).length){ // paper trades of every rule on this market: entry ▲▼, stop / target lines until the exit, exit ○ with the result
+  if ((V.trades||[]).length){ // paper trades of every rule on this market: entry ▲▼, stop / target lines until the exit, exit ○ with the result
     const tfm = FX.tf[V.desk] || 15, nif = V.desk === "nifty";
     const SPOT = new Set(["touchv2","ovn_h30","vcy_night","vcy_day","vcy_day_sk","vcy_day_bw","vcy_day_dh"]);
     const TAGS = {dom_ix:"DOM", touchv2:"T2", sorb:"ORB", ovn_h30:"OVN", vcy_night:"VCn", vcy_day:"VCd", vcy_day_sk:"VCs", vcy_day_bw:"VCb", vcy_day_dh:"VCh", b4h:"4H", b4h_v4:"4Hv4", b4h_h2:"4Hh2", b4h_g2:"G2"};
@@ -1441,6 +1446,8 @@ function fxChart(V){
   }
   const lcol = k => k==="Call wall" ? "var(--bear)" : k==="Put wall" ? "var(--bull)" : k==="VWAP" || k==="VWAP·" ? "var(--accent)" : "var(--muted)";
   if (VWm != null && VWm >= lo && VWm <= hi) LV.push(["VWAP·", VWm]);
+  const VP = FX.L.profile ? (V.vp5 || null) : null;
+  if (VP && VP.poc != null && VP.poc >= lo && VP.poc <= hi) LV.push(["5d POC", +VP.poc]);
   // support (green) / resistance (red) zones: thick translucent bands under the other lines
   SRL.filter(([k,v]) => v>=lo-RS && v<=hi+RS).forEach(([k,v]) => { const sup = k==="S" || k==="PDL" || k==="PWL" || (k!=="R" && k!=="PDH" && k!=="PWH" && V.spot!=null && v < V.spot);
     const yy = y(v)+RH/2; g = `<rect x="${X0}" y="${yy-3}" width="${lx-X0}" height="6" fill="${sup?"var(--bull)":"var(--bear)"}" fill-opacity="0.13"/><line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="${sup?"var(--bull)":"var(--bear)"}" stroke-width="1.3" stroke-dasharray="2 3" opacity="0.85"/>` + g; });
@@ -1477,7 +1484,23 @@ function fxChart(V){
       ax += `<line x1="${lx+1}" x2="${lx+5}" y1="${yy}" y2="${yy}" stroke="var(--muted)"/><text x="${lx+8}" y="${Math.round(yy+4)}" font-size="11" font-family="IBM Plex Mono,monospace" fill="var(--muted)">${ldPx(hi - k*RS)}</text>`; }
     g += ax; }
   // full width; when there are more candles than fit, the chart keeps its size and scrolls (opens at the latest bar)
-  return `<div class="fx-scroll" data-w="${W}"><svg class="fx-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" text-rendering="geometricPrecision" style="display:block;max-width:none">${g}</svg></div>`;
+  // 2026-11-06 (Nikhil: "volume profile (rolling last 5 days) on left side, translucent, can overlap a bit on candles"): drawn in its own
+  // layer pinned to the left edge of the visible chart (it stays there while you scroll), same price rows as the footprint.
+  let ov = "";
+  if (VP && (VP.bins||[]).length){
+    const vol = {}; VP.bins.forEach(([p, q]) => { const k = Math.floor((hi - p)/RS + 1e-9); vol[k] = (vol[k]||0) + (+q); });
+    const ks = Object.keys(vol).map(Number), vals = Object.values(vol), vmx = Math.max(...vals, 1), tot = vals.reduce((a, v) => a + v, 0) || 1;
+    const poc = ks.reduce((a, k) => vol[k] > (vol[a]||0) ? k : a, ks[0]), va = new Set([poc]); let acc = vol[poc], u = poc - 1, dn = poc + 1;
+    const kmin = Math.min(...ks), kmax = Math.max(...ks);
+    while (acc < tot*0.7 && (u >= kmin || dn <= kmax)){ const a1 = u >= kmin ? (vol[u]||0) : -1, a2 = dn <= kmax ? (vol[dn]||0) : -1;   // -1 = that side is used up
+      if (a1 >= a2){ va.add(u); acc += Math.max(0, a1); u--; } else { va.add(dn); acc += Math.max(0, a2); dn++; } }
+    const MAXW = 170;
+    ks.filter(k => k >= 0 && k < nR).forEach(k => { const w = Math.max(1, vol[k]/vmx*MAXW);
+      ov += `<rect x="0" y="${TOP+k*RH+1}" width="${w.toFixed(1)}" height="${RH-3}" fill="var(--accent)" fill-opacity="${va.has(k) ? 0.28 : 0.13}" ${k===poc?'stroke="var(--accent)" stroke-width="1.2"':""}/>`; });
+    const d0 = (VP.days||[])[0], d1 = (VP.days||[]).at(-1);
+    ov += `<text x="4" y="${TOP+11}" font-size="10" font-weight="600" fill="var(--accent)" stroke="var(--surface)" stroke-width="3" paint-order="stroke">5-day profile${d0 ? ` · ${String(d0).slice(5)} → ${String(d1).slice(5)}` : ""}</text>`;
+  }
+  return `<div style="position:relative"><div class="fx-scroll" data-w="${W}"><svg class="fx-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" text-rendering="geometricPrecision" style="display:block;max-width:none">${g}</svg></div>${ov ? `<svg width="180" height="${PH}" style="position:absolute;left:0;top:0;pointer-events:none" aria-hidden="true">${ov}</svg>` : ""}</div>`;
 }
 function fxOi(V){
   const ch = V.chain||[], o = V.oi||{};
@@ -1510,14 +1533,16 @@ async function fxLoad(desk){
   if (follow) FX.sel[desk] = state.market;   // market tab: the chart follows the market chosen at the top
   else if (!keys.includes(FX.sel[desk])) FX.sel[desk] = keys[0];
   const I = ins[FX.sel[desk]] || {};
-  if (FX.L.trades && FX.sel[desk]) { try { I.trades = await fxTrades(FX.sel[desk]); } catch(e){} }
+  if (FX.ts !== "none" && FX.sel[desk]) { try { const want = (FX_TS.find(x => x[0] === FX.ts) || [])[2];
+    I.trades = (await fxTrades(FX.sel[desk])).filter(t => !want || want.includes(t.rule)); } catch(e){} }
   // 2026-10-23: many instruments (Nifty desk now has 10 stocks) -> index buttons + a stock dropdown
   const IDX = desk==="crypto" ? ["BTC","ETH","SOL"] : ["NIFTY","BANKNIFTY"], btnKeys = keys.length > 4 ? keys.filter(k => IDX.includes(k)) : keys, ddKeys = keys.length > 4 ? keys.filter(k => !IDX.includes(k)) : [];
   const dd = ddKeys.length ? `<select class="fx-sel" onchange="${desk==="crypto"?`FX.pick['${desk}']=this.value||null;if(!this.value){FX.sel['${desk}']=null}`:""}if(this.value){FX.sel['${desk}']=this.value};ldLoad('${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:${ddKeys.includes(FX.sel[desk])?"var(--ink)":"var(--surface)"};color:${ddKeys.includes(FX.sel[desk])?"var(--surface)":"var(--ink)"}">
       <option value="">${desk==="crypto"?(FX.pick[desk]?"← back to "+esc(state.market||"BTC"):"More coins ▾"):desk==="nifty"?"Stocks ▾":"Markets ▾"}</option>${ddKeys.map(k=>`<option value="${esc(k)}" ${k===FX.sel[desk]?"selected":""}>${esc(k)} ${ldPx(ins[k].spot)}</option>`).join("")}</select>` : "";
   const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}')">${l}</button>`).join("")}</span>`;
-  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["trades","Trades"],["cvd","CVD"],["profile","Profile"],["vwap","VWAP"],["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
-  const head = `<div class="fx-head">${tfb}${lyr}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
+  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["cvd","CVD"],["profile","5-day profile"],["vwap","VWAP"],["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
+  const tsel = `<select class="fx-sel" title="paper trades drawn on the chart" onchange="fxTs(this.value,'${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)">${FX_TS.map(([k,l]) => `<option value="${k}" ${k===FX.ts?"selected":""}>Trades: ${l}</option>`).join("")}</select>`;
+  const head = `<div class="fx-head">${tfb}${lyr}${tsel}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
     ${I.last_session?`<span class="fx-chip" style="background:var(--wait-soft);color:var(--wait)">tracker off · last session ${esc(I.last_session)} (real order flow)</span>`:""}${I.regime?`<span class="fx-chip">${esc(I.regime)}${I.stance?" · "+esc(I.stance):""}</span>`:""}${I.day_type?`<span class="fx-chip">${esc(I.day_type)}</span>`:""}
     ${I.setup&&I.setup.state?`<span class="fx-chip">setup: ${esc(I.setup.state)} ${esc(I.setup.grade||"")} ${esc(I.setup.side||"")}</span>`:""}${I.depth&&!I.depth.stale&&I.depth.imb20_1m!=null?`<span class="fx-chip" title="20-level order book (futures): (bids - asks) / total, 1-min average. Biggest bid ${ldPx(I.depth.bid_wall_px)} x${I.depth.bid_wall_qty}, ask ${ldPx(I.depth.ask_wall_px)} x${I.depth.ask_wall_qty}. Context only.">book ${I.depth.imb20_1m>0?"+":""}${fmt(I.depth.imb20_1m,2)} ${I.depth.imb20_1m>=0.15?"bids heavy":I.depth.imb20_1m<=-0.15?"asks heavy":"balanced"}</span>`:""}<span class="small faint" style="margin-left:auto">updated ${esc((V.at||"").slice(11,19))}</span></div>`;
   const ofh = `<div class="spread" style="margin:0 0 8px"><h2>Order Flow <span class="small muted">${esc(SHORT[FX.sel[desk]]||FX.sel[desk]||"")}</span></h2></div>`;   // 2026-11-04 (Nikhil)
@@ -1559,7 +1584,7 @@ const SU_NAME = {NIFTY:"Nifty", BANKNIFTY:"Bank Nifty"};
 // each market tab shows its own markets. Paper only, never orders. Shadow trades are NOT shown here.
 // 2026-11-06 (Nikhil: "new section for strategies paper trade with charts"): one chart per paper trade (app/tradecharts.py) -
 // candles from 30 min before the entry to 30 min after the exit, entry / stop / target / exit drawn, plus why / right / wrong / improve.
-const TC = {f: "All", days: 1, d: null};
+const TC = {f: "DOM", days: 1, d: null};          // default filter: DOM Index (Nikhil, 6 Nov)
 function tcChart(t){
   const C = (t.chart||{}).candles || [], st = (t.chart||{}).step || 60;
   if (!C.length) return `<p class="small muted" style="margin:20px 0;text-align:center">No stored price path for this market / day${(t.chart||{}).err ? " (" + esc(t.chart.err) + ")" : ""}.</p>`;
@@ -1601,7 +1626,7 @@ async function tcLoad(){
 }
 function tcRender(){
   const el = $("#ptCharts"), D = TC.d; if (!el || !D) return;
-  const all = D.trades || [], tags = [...new Set(all.map(t => t.tag))], show = all.filter(t => TC.f === "All" || t.tag === TC.f);
+  const all = D.trades || [], tags = [...new Set(all.map(t => t.tag))], F = TC.f === "All" || tags.includes(TC.f) ? TC.f : "All", show = all.filter(t => F === "All" || t.tag === F);
   const money = (v, c) => v == null ? "–" : (v < 0 ? "−" : "+") + (c || "") + fmt(Math.abs(v), c === "₹" ? 0 : 2), sg = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
   const card = t => `<div class="tc-card"><div class="spread"><b>${esc(t.market)} <span class="${t.side === "long" ? "pos" : "neg"}">${t.side === "long" ? "▲ long" : "▼ short"}</span></b><span class="pill p-neutral" title="${esc(t.rule_label||"")}">${esc(t.tag)}</span></div>
       <div class="small muted">${esc(String(t.opened||"").slice(5,16))} → ${t.status === "open" ? "open" : esc(String(t.closed||"").slice(5,16))} · ${t.status === "open" ? (t.pnl_open != null ? `<b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b> open` : "open") : `<b class="${sg(t.pnl)}">${money(t.pnl, t.ccy)}</b>${t.r != null ? ` · ${t.r > 0 ? "+" : ""}${t.r}R` : ""} · ${esc(t.exit_reason||"")}`}</div>
@@ -1610,7 +1635,7 @@ function tcRender(){
       <div class="small"><b>Why:</b> ${esc(t.why||"–")}</div>
       ${t.review ? `<div class="small" style="margin-top:3px">${t.review.right ? `<span class="pos">✓ ${esc(t.review.right)}</span><br>` : ""}${t.review.wrong ? `<span class="neg">✗ ${esc(t.review.wrong)}</span><br>` : ""}<b>Improve:</b> ${esc(t.review.improve||"–")}</div>` : t.status === "open" ? `<div class="small faint">trade open</div>` : ""}</div>`;
   setKeep(el, `<div class="spread"><h2>Strategy Paper Trades · Charts <span class="small muted">paper only · never orders</span></h2><span class="small muted">updated ${esc(D.at||"")}</span></div>
-    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><div class="ld-btns" style="margin:0">${["All", ...tags].map(k => `<button class="${k === TC.f ? "on" : ""}" onclick="TC.f='${esc(k)}';tcRender()">${esc(k)}${k === "All" ? ` (${all.length})` : ` (${all.filter(t => t.tag === k).length})`}</button>`).join("")}</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><div class="ld-btns" style="margin:0">${["All", ...tags].map(k => `<button class="${k === F ? "on" : ""}" onclick="TC.f='${esc(k)}';tcRender()">${esc(k)}${k === "All" ? ` (${all.length})` : ` (${all.filter(t => t.tag === k).length})`}</button>`).join("")}</div>
       <div class="ld-btns" style="margin:0">${[[1,"Today"],[5,"Last 5 days"]].map(([n, l]) => `<button class="${n === TC.days ? "on" : ""}" onclick="TC.days=${n};tcLoad()">${l}</button>`).join("")}</div></div>
     ${show.length ? `<div class="tc-grid">${show.map(card).join("")}</div>` : `<p class="small muted" style="margin:8px 0 0">No paper trade ${TC.days === 1 ? "today" : "in these days"} yet.</p>`}`);
 }
