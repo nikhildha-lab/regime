@@ -478,6 +478,10 @@ def poll_once():
                     _hot("overnight").tick()
                 except Exception as e:
                     _STATE["overnight_error"] = str(e)[:160]
+                try:                               # 2026-11-06: Nifty day / night vol cycle paper rules (app/volcycle.py): day 10:30-15:25, night 15:25-next 09:45
+                    _hot("volcycle").tick()
+                except Exception as e:
+                    _STATE["volcycle_error"] = str(e)[:160]
                 try:                               # 2026-11-06 (Nikhil): one CSV of every paper trade, all rules / tabs, every 5 min (app/tradelog.py)
                     _hot("tradelog").tick(_hot, {})
                 except Exception as e:
