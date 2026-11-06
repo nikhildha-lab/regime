@@ -1199,6 +1199,9 @@ const utcToIst = t => { const m = /^(\d\d):(\d\d)/.exec(String(t||"")); if (!m) 
    2) An older session far from today's price (e.g. after missed days) stretched the price axis: on 15m / 30m, earlier-session
       bars are kept only when they are from the last 4 days and within 1.5% of today's open. */
 const FX_BARS = 12;
+// 2026-11-06: on the Nifty desk the chart is futures - show the futures price (latest engine trade) with spot small beside it
+function fxFutPx(desk, I){ I = I || {}; const fp = I.fp || [], f = desk === "nifty" && I.fp_src === "of1m" && fp.length ? +fp.at(-1).c : null;
+  return f ? ` fut ${ldPx(f)} <span style="font-weight:500;opacity:.7">· spot ${ldPx(I.spot)}</span>` : ` ${ldPx(I.spot)}`; }
 function fxNormalize(V){
   const fp = (V.fp||[]).filter(b => b && b.bins && b.bins.length); if (!fp.length) return V;
   let out = Object.assign({}, V);
@@ -1219,21 +1222,31 @@ function fxNormalize(V){
     // v3 (Nikhil: "PDH is still moving 24,600-24,603"): lock the basis for the session. Median of the last ~10 min (300 polls), whole points,
     // shown value changes only on a >= 5 pt move of that median; remembered per day in this browser so a refresh does not re-settle it.
     // v4: raw gap = the order-flow engine's latest futures trade (live every 2 s) - spot, not the tracker's futures quote (it lags / freezes)
-    FX.bs = FX.bs || {}; FX.bh = FX.bh || {}; { const raw = (V.fp_src === "of1m" ? lastC : fut) - spot, h = FX.bh[V.key] || (FX.bh[V.key] = []), day = new Date().toISOString().slice(0,10);
+    // v6: prefer the server's basis (median of futures 1-min close - option-chain spot at the same minute, last ~10 snapshots: livedesk.fut_levels)
+    const FL = V.fut_lv || {};
+    FX.bs = FX.bs || {}; FX.bh = FX.bh || {}; { const raw = isFinite(+FL.basis) && FL.basis !== null ? +FL.basis : (V.fp_src === "of1m" ? lastC : fut) - spot, h = FX.bh[V.key] || (FX.bh[V.key] = []), day = new Date().toISOString().slice(0,10);
       if (isFinite(raw)) { h.push(raw); if (h.length > 300) h.shift(); }
-      if (!FX.bs[V.key]) { try { const m = JSON.parse(localStorage.getItem("mp.basis2." + V.key) || "null"); if (m && m.d === day && isFinite(m.v)) FX.bs[V.key] = {v: m.v, t: Date.now(), final: true}; } catch(e){} }
+      if (!FX.bs[V.key]) { try { const m = JSON.parse(localStorage.getItem("mp.basis3." + V.key) || "null"); if (m && m.d === day && isFinite(m.v)) FX.bs[V.key] = {v: m.v, t: Date.now(), final: true}; } catch(e){} }
       const sr = h.slice().sort((a,b)=>a-b), med = sr.length ? sr[Math.floor(sr.length/2)] : raw, pv = FX.bs[V.key];
       const ready = h.length >= 30;                       // first value is provisional; replaced once by the 1-minute median
-      if (!pv || (ready && !pv.final) || (ready && Math.abs(med - pv.v) >= 5)) { FX.bs[V.key] = {v: Math.round(med), t: Date.now(), final: ready};
-        if (ready) try { localStorage.setItem("mp.basis2." + V.key, JSON.stringify({d: day, v: FX.bs[V.key].v})); } catch(e){} } }
-    // 2026-11-06 (Nikhil: "the price is representing spot and footprints are future" -> chose "Everything in spot"): the chart is drawn on the
-    // SPOT scale. Footprint candles / volume rows / POC / imbalance prices and the futures volume-profile levels (POC / VAH / VAL) move DOWN by the
-    // locked basis; spot levels (VWAP, IB, PDH / PDL, S / R, option walls, blocks) are drawn as they are. Who traded where is unchanged.
-    const bs = FX.bs[V.key].v, dn = v => v==null ? v : +v - bs, L = Object.assign({}, V.levels||{});
-    ["POC","VAH","VAL"].forEach(k => { if (L[k]!=null) L[k] = dn(L[k]); });
-    out.fp = (out.fp||fp).map(b => Object.assign({}, b, {o: dn(b.o), h: dn(b.h), l: dn(b.l), c: dn(b.c), poc: dn(b.poc),
-      bins: (b.bins||[]).map(x => Object.assign({}, x, {p: dn(x.p)})), buy_imb: (b.buy_imb||[]).map(dn), sell_imb: (b.sell_imb||[]).map(dn)}));
-    out = Object.assign(out, {spot: spot, spot_idx: spot, fut_last: lastC, basis: 0, basis_fut: bs, levels: L, scale: "spot"});
+      // v5: follows the real intraday drift (1 -> 35 pts on 6 Nov) in >= 3 pt steps
+      if (!pv || (ready && !pv.final) || (ready && Math.abs(med - pv.v) >= 3)) { FX.bs[V.key] = {v: Math.round(med), t: Date.now(), final: ready};
+        if (ready) try { localStorage.setItem("mp.basis3." + V.key, JSON.stringify({d: day, v: FX.bs[V.key].v})); } catch(e){} } }
+    // 2026-11-06 (Nikhil, after trying spot: "lets keep every thing future to align better"): FUTURES scale. Candles / volume rows are the real
+    // futures trades; the price line is the latest futures trade; spot levels (VWAP, IB, PDH / PDL / PWH / PWL, S / R, option walls, blocks)
+    // move UP by the basis (10-min median, >= 3 pt steps); volume-profile POC / VAH / VAL are already futures.
+    const bs = FX.bs[V.key].v, up = v => v==null ? v : +v + bs, L = Object.assign({}, V.levels||{}), SR = Object.assign({}, V.sr||{});
+    ["VWAP","IB high","IB low"].forEach(k => { if (L[k]!=null) L[k] = up(L[k]); });
+    SR.support = (SR.support||[]).map(up); SR.resistance = (SR.resistance||[]).map(up); ["PDH","PDL","PWH","PWL"].forEach(k => { if (SR[k]!=null) SR[k] = up(SR[k]); });
+    // v5 (6 Nov): the real basis drifts 1 -> 35 pts in a day, so PDH / PDL, IB and VWAP come from the FUTURES bars themselves (no basis at all):
+    // previous session high / low, today's 09:15-10:15 range, and VWAP from today's traded volume per price. Spot-only levels keep the basis.
+    if (V.fp_src === "of1m"){                                  // computed on the server from the FULL 1-min futures footprint (livedesk.fut_levels)
+      if (FL.pdh != null) SR.PDH = +FL.pdh; if (FL.pdl != null) SR.PDL = +FL.pdl;
+      if (FL.ibh != null) L["IB high"] = +FL.ibh; if (FL.ibl != null) L["IB low"] = +FL.ibl;
+      if (FL.vwap != null) L.VWAP = +FL.vwap;
+    }
+    out = Object.assign(out, {spot: V.fp_src === "of1m" ? lastC : fut, spot_idx: spot, fut_last: lastC, basis: bs, levels: L, sr: SR, scale: "futures",
+      walls: {call: up((V.walls||{}).call), put: up((V.walls||{}).put)}});
   }
   return out;
 }
@@ -1410,12 +1423,12 @@ async function fxLoad(desk){
   const dd = ddKeys.length ? `<select class="fx-sel" onchange="${desk==="crypto"?`FX.pick['${desk}']=this.value||null;if(!this.value){FX.sel['${desk}']=null}`:""}if(this.value){FX.sel['${desk}']=this.value};ldLoad('${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:${ddKeys.includes(FX.sel[desk])?"var(--ink)":"var(--surface)"};color:${ddKeys.includes(FX.sel[desk])?"var(--surface)":"var(--ink)"}">
       <option value="">${desk==="crypto"?(FX.pick[desk]?"← back to "+esc(state.market||"BTC"):"More coins ▾"):desk==="nifty"?"Stocks ▾":"Markets ▾"}</option>${ddKeys.map(k=>`<option value="${esc(k)}" ${k===FX.sel[desk]?"selected":""}>${esc(k)} ${ldPx(ins[k].spot)}</option>`).join("")}</select>` : "";
   const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}')">${l}</button>`).join("")}</span>`;
-  const head = `<div class="fx-head">${tfb}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])} ${ldPx((ins[FX.sel[desk]]||{}).spot)}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${ldPx(ins[k].spot)}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
+  const head = `<div class="fx-head">${tfb}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
     ${I.last_session?`<span class="fx-chip" style="background:var(--wait-soft);color:var(--wait)">tracker off · last session ${esc(I.last_session)} (real order flow)</span>`:""}${I.regime?`<span class="fx-chip">${esc(I.regime)}${I.stance?" · "+esc(I.stance):""}</span>`:""}${I.day_type?`<span class="fx-chip">${esc(I.day_type)}</span>`:""}
     ${I.setup&&I.setup.state?`<span class="fx-chip">setup: ${esc(I.setup.state)} ${esc(I.setup.grade||"")} ${esc(I.setup.side||"")}</span>`:""}${I.depth&&!I.depth.stale&&I.depth.imb20_1m!=null?`<span class="fx-chip" title="20-level order book (futures): (bids - asks) / total, 1-min average. Biggest bid ${ldPx(I.depth.bid_wall_px)} x${I.depth.bid_wall_qty}, ask ${ldPx(I.depth.ask_wall_px)} x${I.depth.ask_wall_qty}. Context only.">book ${I.depth.imb20_1m>0?"+":""}${fmt(I.depth.imb20_1m,2)} ${I.depth.imb20_1m>=0.15?"bids heavy":I.depth.imb20_1m<=-0.15?"asks heavy":"balanced"}</span>`:""}<span class="small faint" style="margin-left:auto">updated ${esc((V.at||"").slice(11,19))}</span></div>`;
   const ofh = `<div class="spread" style="margin:0 0 8px"><h2>Order Flow <span class="small muted">${esc(SHORT[FX.sel[desk]]||FX.sel[desk]||"")}</span></h2></div>`;   // 2026-11-04 (Nikhil)
   if (!(I.fp||[]).length) return `<section class="card" style="margin:0">${ofh}${head}<p class="small muted" style="margin:4px 0">No footprint bars yet - the chart appears once the live tracker is running and trades come in (${desk==="nifty"?"09:15–15:30 IST":"round the clock"}).</p></section>`;
-  return `<section class="card" style="margin:0">${ofh}${head}<div class="small muted" style="margin-bottom:4px">Footprint ${FXTF.find(x=>x[0]===tf)[1]} · ${desk==="nifty" && I.fp_src==="of1m" && FX.bs && FX.bs[FX.sel[desk]] ? `<b>spot scale</b> (futures traded ${FX.bs[FX.sel[desk]].v} pts higher) · ` : ""}sell × buy per price · last ${Math.min(FX_BARS, (I.fp||[]).length)} bars${tf>15?" (merged from 15-min bars)":""} · shaded bands = blocks · text under each bar = who drove it (from OI). Descriptive, not tested signals.
+  return `<section class="card" style="margin:0">${ofh}${head}<div class="small muted" style="margin-bottom:4px">Footprint ${FXTF.find(x=>x[0]===tf)[1]} · ${desk==="nifty" && I.fp_src==="of1m" && FX.bs && FX.bs[FX.sel[desk]] ? `<b>futures scale</b> (PDH / PDL, IB, VWAP from futures; blocks, walls, S/R moved up ${FX.bs[FX.sel[desk]].v} pts) · ` : ""}sell × buy per price · last ${Math.min(FX_BARS, (I.fp||[]).length)} bars${tf>15?" (merged from 15-min bars)":""} · shaded bands = blocks · text under each bar = who drove it (from OI). Descriptive, not tested signals.
       <details style="display:inline"><summary style="cursor:pointer;display:inline">Legend</summary><div style="margin-top:4px"><i>est.</i> = bar rebuilt from candles at tracker start (not real trades) · bold = imbalance · outlined = bar POC · lines = value area, VWAP, IB and OI walls · green / red bands = support / resistance (swings, previous day & week) · amber band = price inside a block · <span class="pos">new longs</span> (price up, OI up), <span style="color:var(--wait)">short cover</span> (price up, OI down), <span class="neg">new shorts</span> (price down, OI up), longs exit (price down, OI down) · ⚡ = buy/sell burst (3x a normal bar) · ▲/▼ = buyers / sellers absorbing at a level (solid ● = heavy volume) · ⇅ = exhaustion (new price extreme, delta does not confirm) · dashed line in the lower panel = OI.</div></details></div>${fxChart(I)}<p class="small faint" style="margin:6px 0 0"><b>CVD</b> = running total of the Δ (buy − sell) under each bar, real trades only, reset at the session start (${desk==="nifty"?"09:15 IST":"05:30 IST = 00:00 UTC"}); bar times in IST; <i>est.</i> bars add nothing. Source: ${I.fp_src==="of1m"?"Dhan order-flow engine - every trade checked against the 20-level book (at/above ask = buy, at/below bid = sell)":desk==="nifty"?"Nifty tracker ticks (bid/ask at each tick)":"Hyperliquid trades (the exchange marks the aggressor side)"}.</p>${fxOi(I)}</section>`;
 }
 async function ldLoad(desk){

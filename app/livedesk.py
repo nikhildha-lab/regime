@@ -216,6 +216,51 @@ def of_min_bars(sym: str, days: int = 20) -> list:
     return out
 
 
+_FLV: dict = {}
+
+
+def fut_levels(key: str) -> dict:
+    """2026-11-06 (Nikhil: "lets keep every thing future"): futures-native levels for the Nifty desk chart, from the order-flow engine's full
+    1-min footprint (no spot -> futures guessing): previous session high / low, today's IB (09:15-10:15, once 10:15 has passed), VWAP from
+    every traded lot today, and the live basis = median over the last ~10 option-chain snapshots of (futures 1-min close - chain spot) at the
+    same minute (the tracker's own spot / futures quotes lag each other by up to ~20 pts). Cached 30 s."""
+    c = _FLV.get(key)
+    if c and time.time() - c[0] < 30:
+        return c[1]
+    out = {}
+    try:
+        B = of_min_bars(key, days=6)
+        days = sorted({b["d"] for b in B})
+        if days:
+            T = [b for b in B if b["d"] == days[-1]]
+            if len(days) > 1:
+                P = [b for b in B if b["d"] == days[-2]]
+                out.update(pdh=max(b["h"] for b in P), pdl=min(b["l"] for b in P), prev_day=days[-2])
+            ib = [b for b in T if str(b["t"]) < "10:15"]
+            if ib and any(str(b["t"]) >= "10:15" for b in T):
+                out.update(ibh=max(b["h"] for b in ib), ibl=min(b["l"] for b in ib))
+            pv = vv = 0.0
+            for b in T:
+                for x in b.get("bins") or []:
+                    q = (x.get("b") or 0) + (x.get("s") or 0); pv += q * x["p"]; vv += q
+            if vv > 0:
+                out["vwap"] = round(pv / vv, 2)
+            try:
+                import pandas as pd
+                o = pd.read_csv(os.path.join(ROOT, "data_store", "flow", "option_chain", f"{days[-1]}.csv.gz"), usecols=["ts", "symbol", "underlying"])
+                o = o[o.symbol == key].groupby("ts").underlying.first()
+                cl = {str(b["t"])[:5]: b["c"] for b in T}
+                pairs = [(cl[t[11:16]] - u) for t, u in o.items() if t[11:16] in cl][-10:]
+                if len(pairs) >= 3:
+                    pairs.sort(); out["basis"] = round(pairs[len(pairs) // 2], 1); out["basis_n"] = len(pairs)
+            except Exception:
+                pass
+    except Exception as e:
+        out["err"] = str(e)[:120]
+    _FLV[key] = (time.time(), out)
+    return out
+
+
 def _fp_source(desk: str, key: str, bars: list):
     """(bars, source) for the footprint chart: Dhan order-flow engine 1-min bars for NIFTY / BANKNIFTY when today has data,
     else the tracker's 15-min bars (+ stored real history)."""
@@ -327,7 +372,8 @@ def view_of(desk: str, key: str, inst: dict) -> dict:
         chain.sort(key=lambda r: float(r["strike"]))
     s = inst.get("setup") or {}
     return {"desk": desk, "key": key, "spot": spot, "fut": inst.get("fut"),
-            **dict(zip(("fp", "fp_src"), _fp_source(desk, key, bars))),   # 2026-11-03 audit: unused "cvd" series (it held per-bar delta, not CVD) dropped
+            **dict(zip(("fp", "fp_src"), _fp_source(desk, key, bars))),
+            "fut_lv": fut_levels(key) if desk == "nifty" and key in ("NIFTY", "BANKNIFTY") else None,   # 2026-11-06: futures-native levels + basis   # 2026-11-03 audit: unused "cvd" series (it held per-bar delta, not CVD) dropped
             # support / resistance (2026-10-23): the tracker's swing levels + previous day / week high-low
             "sr": {"support": [x for x in (pa.get("support") or []) if x is not None][:4],
                    "resistance": [x for x in (pa.get("resistance") or []) if x is not None][:4],
