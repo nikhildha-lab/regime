@@ -1434,7 +1434,7 @@ const SU_NAME = {NIFTY:"Nifty", BANKNIFTY:"Bank Nifty"};
 // 2026-10-30 (Nikhil): ALL PAPER TRADES in one list (4H break, Touch-minute option, DOM hold / break) - full list in the Log book,
 // each market tab shows its own markets. Paper only, never orders. Shadow trades are NOT shown here.
 function ptStart(v){ clearInterval(ptStart.t); if (v!=="metals" && document.body.dataset.tab!=="intraday") return;   /* 2026-10-31: crypto / India cards are hidden there */
-  ptLoad(); ptStart.t = setInterval(() => { if (!document.hidden) ptLoad(); }, 30000); }
+  ptLoad(); ptStart.t = setInterval(() => { if (!document.hidden) ptLoad(); }, 5000); }   // 2026-11-06: 30 s -> 5 s
 async function ptLoad(){
   for (const el of document.querySelectorAll(".ptCard")){ if (el.offsetParent===null) continue;   // skip hidden cards
     if (el.offsetParent === null && !el.closest(".view:not([hidden])")) continue;
@@ -1543,7 +1543,7 @@ function b4Render(){
 function b4Start(v){ clearInterval(b4Start.t); if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
 function suStart(v){
   clearInterval(suStart.t); if (!["india","desk"].includes(v)) return;
-  suLoad(); suStart.t = setInterval(() => { if (!document.hidden) suLoad(); }, 30000);
+  suLoad(); suStart.t = setInterval(() => { if (!document.hidden) suLoad(); }, 10000);   // 2026-11-06: 30 s -> 10 s
 }
 function showLive(v){
   v = LIVETAB[v] || v;      // live trackers live inside the India / Crypto / Metals tabs
@@ -1580,7 +1580,7 @@ async function lvlLoad(){
     <p class="small" style="margin:6px 0 0">${live}</p>
     <p class="small faint" style="margin:4px 0 0">Strong blocks held 77-80% in 2024-26 - use them for stops / targets, not as entries. ★ = week / month high-low. The detail cards are inside 'Details'.</p>`;
 }
-setInterval(() => { if (!document.hidden && VIEW === "india") lvlLoad(); }, 60000);
+setInterval(() => { if (!document.hidden && VIEW === "india") lvlLoad(); }, 10000);   // 2026-11-06: 60 s -> 10 s
 function showView(v){
   v = ({setups:"desk", stocks:"india", bt:"desk", fx:"desk", logbook:"intraday"})[v] || v;   // removed tabs (a view saved in the browser before 1 Nov 2026)
   // 2026-10-31 (Nikhil): "Intraday desk" = the Indian market engine showing only the intraday sections
@@ -1802,7 +1802,7 @@ async function domLoad(){
     <p class="small faint" style="margin:6px 0 0">Dhan 20-level book, refreshed every 2 s (Dhan sends snapshots, not every order). Outlined = wall (≥3× the median level; walls often get pulled). "10 s" = change in waiting quantity: rising qty at a level price is trading into = refilling (possible iceberg). Context for timing only - untested as a signal.</p>`;
 }
 function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.body.dataset.tab === "intraday" && document.body.dataset.sub === "india"){ domLoad(); DOM.t = setInterval(() => { if (!document.hidden) domLoad(); }, 2000);
-  dsLoad(); DOM.s = setInterval(() => { if (!document.hidden) dsLoad(); }, 10000); } }
+  dsLoad(); DOM.s = setInterval(() => { if (!document.hidden) dsLoad(); }, 2000); } }   // 2026-11-06 (Nikhil: speed up cheap ones): 10 s -> 2 s
 /* 2026-11-03 (Nikhil: Live trackers v2 -> new cards on the DOM setups): hold / break at a level, paper only (app/domcards.py) */
 async function dsLoad(){
   const c = $("#domSetups"); if (!c) return;
