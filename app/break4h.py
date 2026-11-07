@@ -30,6 +30,9 @@ MKTS = {"ETH": "ETHUSDT", "BTC": "BTCUSDT", "GOLD": None}      # SOL removed 202
 # 2026-11-04 (Nikhil: "add for other coins and keep recording"): the same v3 rule as a FORWARD PAPER TEST on the other coins.
 # NOT backtested on these coins -> proven False, shown "unproven"; uses ETH's exit (block stop, trail 1.5 ATR after +1R).
 ALTS = {"ZEC": "ZECUSDT", "DASH": "DASHUSDT"}      # 2026-11-06 (Nikhil: "retire and fully remove"): XRP, BNB, LINK, UNI retired (negative 90-day check)
+# 2026-11-08 (Nikhil: "remove wild ATR"): the wild-ATR skip is off - crypto v3 now trades in any ATR mood; it still needs BTC's 24 h
+# trend. Set True to bring the skip back. Signals skipped before 8 Nov stay recorded as 'skip'.
+WILD_SKIP = False
 MKTS.update(ALTS)
 ROUND = {"BTC": 1000, "ETH": 50, "SOL": 5, "GOLD": 50}
 
@@ -455,7 +458,7 @@ def tick(force=False) -> dict:
             why = []
             if tr is None or tr * ts <= 0: why.append(f"against BTC 24h trend ({'n/a' if tr is None else f'{tr*100:+.2f}%'})")
             if md is None: why.append("ATR history n/a")
-            elif md == "wild": why.append(f"wild ATR (rank {rk*100:.0f}%)")
+            elif md == "wild" and WILD_SKIP: why.append(f"wild ATR (rank {rk*100:.0f}%)")
             stop = sig["stop"] - ts * cfg["room"] * a; R = abs(e - stop)
             v3 = {**sig, "sig": key + ("|skip" if why else "|v3"), "rule": "skip" if why else "v3", "stop": round(stop, 2), "risk": round(R, 2),
                   "risk_bps": round(R / e * 1e4, 1), "atr": round(a, 4), "atr_rank": None if rk is None else round(rk, 2), "mood": md,
@@ -544,7 +547,7 @@ def api() -> dict:
                        "avg_R_net": round(sum(r["R_net"] for r in z) / len(z), 2), "verdict": "too early" if len(z) < 30 else "holding" if sum(r["bps_net"] for r in z) > 0 else "not holding"}
 
     return {"markets": out, "status": _C.get("status", {}), "recent": rows[-20:][::-1], "scorecard": sc, "variants": vsc, "variant_names": list(VARIANTS),
-            "rule": "4H bar enters a block and breaks its far edge (crypto: taker volume with the break) -> follow at the close. Crypto (v3, from 29 Oct): only with BTC's 24 h trend and when ATR is calm or normal vs the last 180 days (wild skipped); ETH: stop back past the block, trail 1.5 ATR once +1R; BTC: stop +0.5 ATR room, 3 targets 1/2/3R; out after 2 days. Gold (v1): stop back past the block, exit after 2 days. Paper only.",
+            "rule": "4H bar enters a block and breaks its far edge (crypto: taker volume with the break) -> follow at the close. Crypto (v3, from 29 Oct): only with BTC's 24 h trend (the wild-ATR skip was removed on 8 Nov); ETH: stop back past the block, trail 1.5 ATR once +1R; BTC: stop +0.5 ATR room, 3 targets 1/2/3R; out after 2 days. Gold (v1): stop back past the block, exit after 2 days. Paper only.",
             "tested": {"ETH": "v3 conditions 2023-24 / 2025-26: calm +125 / +184, normal +95 / +62 bps gross", "BTC": "v3 conditions: calm +58 / +57, normal 0 / +69 bps gross",
                        "SOL": "UNPROVEN - failed the 4H test overall (+31 / -2 bps gross); paper test only",
                        **{k: "UNPROVEN - not backtested on this coin; forward paper test from 4 Nov 2026 (same v3 rule, ETH exit)" for k in ALTS}, "GOLD": "+21 / +10 bps net (no taker data)"}}
