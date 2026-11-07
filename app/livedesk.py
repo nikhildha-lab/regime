@@ -490,6 +490,10 @@ def poll_once():
                 _hot("tradelog").tick(_hot, {})    # 2026-11-08: runs for every desk now (throttled to 5 min inside), so weekends / evenings update too
             except Exception as e:
                 _STATE["tradelog_error"] = str(e)[:160]
+            try:                                   # 2026-11-08 (Nikhil): Stock Volume Break v1 paper rule (app/stockvb.py) - own hours / weekday check inside
+                _hot("stockvb").tick()
+            except Exception as e:
+                _STATE["stockvb_error"] = str(e)[:160]
             try:                                   # 2026-11-07 (Nikhil): crypto rise / fall score every 5 min (fetch + score + log + check)
                 _hot("cryptoscore").tick()
             except Exception as e:

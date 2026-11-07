@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 NAME = {"BTC": "BTC", "ETH": "ETH", "GOLD": "Gold", "NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty",
-        "SOL": "SOL", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}   # 2026-11-04: 4H break forward test on more coins
+        "SOL": "SOL", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH", "ES": "S&P 500 (ES)", "NQ": "Nasdaq 100 (NQ)", "SPY": "SPY"}   # 2026-11-04: 4H break forward test on more coins
 # 2026-11-06 (Nikhil: "retire and fully remove"): retired + removed - touch (option buying), touchdom, sbt, dom (mixed plan account), ovn plain + h20,
 # vcy_day_w, vcy_night_ts, vcy_night_tx. Their past trades: _archive/2026-11-03/backups/2026-11-06_retire/retired_trades.csv
 RULES = {
@@ -33,6 +33,10 @@ RULES = {
     "vcy_day_sk": {"label": "Vol cycle · day skew: credit spread on the side away from the 09:15-10:30 trend (0.3 %)", "edge": "record only 6 Nov - replay 14 days +25.0 pts vs +10.3 straddle, but from 3 down-trend days; fades at 0.4-0.5 %"},
     "vcy_day_bw": {"label": "Vol cycle · day broken-wing fly (1 % trend side / 3 % other)", "edge": "record only 6 Nov - replay 14 days +19.2 pts, net +Rs 736/lot; fades at 0.5 %"},
     "vcy_day_dh": {"label": "Vol cycle · day straddle, delta-hedged (synthetic, band ±1 lot on a 4-lot book)", "edge": "record only 6 Nov - replay 14 days +12.5 pts vs +10.3 plain, worst day -33.7 vs -52.4, net +Rs 493/lot, 1.4 hedges/day; band picked from 4 tried"},
+    "us_desk": {"label": "US desk card (ES / NQ)", "edge": "new 7 Nov - the US desk agent's registered directional calls played on 5-min futures bars; record only, judge after 30+"},
+    "us_manual": {"label": "US paper trade (your form)", "edge": "your own US paper trade from the dashboard form - record only"},
+    "svb": {"label": "Stock Volume Break v1 · target 2R (MIS 5x)", "edge": "new 9 Nov - backtest 81 days: 149 trades, +0.23 % a trade after costs, halves +0.21 / +0.25; picked from a grid - judge after 30-40"},
+    "svb_tr": {"label": "Stock Volume Break v1 · 2-ATR trail (MIS 5x)", "edge": "new 9 Nov - same entries, trail 2 ATR after +1R, target 3R: backtest +0.19 % a trade, win 53 %"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -254,6 +258,23 @@ def _sorb(hot):
     return out
 
 
+def _svb(hot):
+    """2026-11-08: Stock Volume Break v1 (app/stockvb.py) - two exit versions of each signal, MIS 5x paper, Rs 1 lakh position, after 0.12 %."""
+    SV = hot("stockvb"); out = []
+    for x in SV.trades():
+        ver = x.get("ver", "svb")
+        how = ("stop 2 ATR(5m) · target 2R · flat 15:15" if ver == "svb" else "stop 2 ATR(5m) · trail 2 ATR once +1R · target 3R · flat 15:15")
+        t = {"rule": ver, "key": x["sym"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x.get("stop"), "target": x.get("target"),
+             "how": how, "instrument": f"{x['sym']} (NSE stock, MIS 5x: Rs {x.get('margin', 20000):,} margin, qty {x.get('qty')})", "size": x.get("qty"), "ccy": "₹",
+             "status": x["status"], "why": x.get("why", "")}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), pct_margin=x.get("pnl_margin_pct"), r=x.get("r"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
 def _ovn(hot):
     """2026-11-06: Overnight hold (app/overnight.py) - three versions of the same signal, each its own row, rupees per 1 lot after costs."""
     O = hot("overnight"); out = []
@@ -317,6 +338,12 @@ def _vcy(hot):
                 t.update(exit=r.get("exit_spot"), exit_reason="time exit", closed=r.get("closed"), pnl=X.get("pnl"))
             out.append(t)
     return out
+
+
+def _us(hot):
+    """2026-11-07 (Nikhil: "We haven't done for US market for paper trade"): US desk cards + the US paper-trade form (app/uspaper.py).
+    Only filled trades (open / closed) are listed here; waiting / not filled / cancelled show on the US paper trades card."""
+    return [t for t in hot("uspaper").rows() if t["status"] in ("open", "closed")]
 
 
 def _dom_ix(hot):
@@ -422,7 +449,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -449,7 +476,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -477,4 +504,5 @@ def api(hot, px, keys=None, group=None) -> dict:
             "note": "Paper trades only (never orders). 4H break crypto = 100 USDT margin x 5 leverage = 500 USDT a trade, P&L after 0.14 % costs; Gold / metals / commodities $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
                     "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs. "
                     "Touch + DOM v1 = touch-minute signal with the DOM book agreeing, synthetic future, 1 lot, rupees after costs. "
+                    "US desk / US form = $10,000 account risking 1% ($100) a trade on ES / NQ / SPY 5-min bars, after ES 0.5 pt / NQ 2 pt / SPY $0.04 costs. "
                     "Strong Block Touch v2 = strong block (evening-before map) + touch-minute confirm, synthetic future, 1 lot, rupees after costs."}
