@@ -32,7 +32,7 @@ from of_calc import Instrument
 
 STOP_AT, START_AT = "15:31", "09:07"
 BUCKET = {"NIFTY": 2.0, "BANKNIFTY": 5.0}
-DEEP_200 = ["NIFTY"]
+DEEP_200 = ["NIFTY", "BANKNIFTY"]      # 2026-11-07: Bank Nifty 200-level too (5th Dhan connection; MCX is evening-only now)
 OUT_ROOT = HERE / "data" / "of"
 LIVE = OUT_ROOT / "live.json"
 _LADDER_HIST = {}     # 2026-11-03: DOM ladder for Market Pulse - per instrument, recent books to show the 10-second change per price
