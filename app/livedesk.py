@@ -795,6 +795,11 @@ def view(desk: str, tf: int = 15, want=None) -> dict:
                 v["vp5"] = vp5(desk, k, ((_STATE.get("views") or {}).get(desk) or {}).get(k) or {})
             except Exception as e:
                 _STATE["vp5_error"] = str(e)[:120]
+            if desk == "nifty" and k in ("NIFTY", "BANKNIFTY"):      # 2026-11-07 (Nikhil): big walls on the order-flow chart
+                try:
+                    v["bigwalls"] = _hot("bigwalls").api(k)
+                except Exception as e:
+                    _STATE["bigwalls_error"] = str(e)[:120]
     try:                               # 2026-10-25: OI tag / burst per bar, OI line, logged setup events (chartmarks)
         CM = _hot("chartmarks")
         for k, v in ins.items():
@@ -832,7 +837,7 @@ def start_tracker(desk: str, restart: bool = False) -> dict:
         return CL.restart() if restart else (CL.start() if not CL._E["running"] else {"ok": True, "detail": "already running"})
     if not name:
         return {"ok": False, "detail": "unknown tracker"}
-    d = os.environ.get("MP_METALS_DIR") if name == "metals-tracker" and os.environ.get("MP_METALS_DIR") else os.path.abspath(os.path.join(ROOT, "..", "..", name))
+    d = os.path.abspath(os.path.join(ROOT, "..", "..", name))
     if not os.path.exists(os.path.join(d, "run_forever.sh")):
         return {"ok": False, "detail": f"{name} not found"}
     if restart:
@@ -880,11 +885,11 @@ def handle_get(path: str, q: dict):
                 "error": None if I.get("ladder") else "no order book yet (market opens 09:15; the engine needs a minute to connect)"}
     if path == "/api/livedesk/run_tool" and q.get("name") == "restart_of_engine":  # 2026-11-03: restart the Dhan order-flow engine (loads code changes)
         import subprocess
-        d = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "orderflow")
+        d = os.path.join(HOME, "Documents", "dhan", "orderflow")
         subprocess.run(["pkill", "-f", "of_engine.py"])
         time.sleep(2)
         log = open(os.path.join(d, "of_engine.log"), "a")
-        p = subprocess.Popen((["caffeinate", "-i"] if __import__("shutil").which("caffeinate") else []) + [os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "venv", "bin", "python"), "-u", "of_engine.py"],
+        p = subprocess.Popen(["caffeinate", "-i", os.path.join(HOME, "Documents", "dhan", "venv", "bin", "python"), "-u", "of_engine.py"],
                              cwd=d, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
         return {"ok": True, "pid": p.pid, "detail": "order-flow engine restarting - book back in about a minute"}
     if path == "/api/livedesk/run_tool" and q.get("name") == "tabnews_now":
@@ -894,6 +899,8 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/bigwalls":               # 2026-11-07 (Nikhil): big resting orders in the Nifty / Bank Nifty book (app/bigwalls.py)
+        return _hot("bigwalls").api(q.get("sym") or "NIFTY")
     if path == "/api/livedesk/marketscore":            # 2026-11-07 (Nikhil): same score for Indian futures, metals, commodities (app/marketscore.py)
         return _hot("marketscore").api(q.get("view") or "india")
     if path == "/api/livedesk/cryptoscore":            # 2026-11-07 (Nikhil): SOL / BTC / ETH rise-fall score, 15m / 1h / 4h (app/cryptoscore.py)
@@ -998,6 +1005,11 @@ def handle_get(path: str, q: dict):
             return out
         except Exception as e:
             return {"error": str(e)[:160], "rows": []}
+    if path == "/api/livedesk/uspaper":       # 2026-11-07 (Nikhil): US paper trades - desk cards + dashboard form (app/uspaper.py)
+        try:
+            return _hot("uspaper").api(q)
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:160], "rows": []}
     if path == "/api/livedesk/papertrades":   # 2026-10-30: paper trades, all rules in one list (Nikhil); Block story dropped 2026-11-03
         px = {}
         for desk in ("crypto", "nifty", "metals"):

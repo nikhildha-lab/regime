@@ -356,7 +356,7 @@ body[data-tab="intraday"] #idBar, body[data-tab="intraday"] #idTop{display:block
 body[data-tab="intraday"] #decision, body[data-tab="intraday"] #tfCard, body[data-tab="intraday"] #mktDeskCard, body[data-tab="intraday"] #rail,
 body[data-tab="intraday"] #viewMarkets, body[data-tab="intraday"] #lvlMore > summary, body[data-tab="intraday"] .ptCard:not(#ptAll),
 body[data-tab="intraday"]:not([data-sub="crypto"]) #b4Crypto, body:not([data-tab="intraday"]) #csCard, body[data-tab="intraday"][data-sub="us"] #csCard, body[data-tab="intraday"] #viewCLive > section:first-child,
-body[data-tab="intraday"]:not([data-sub="metals"]) #b4Metals, body[data-tab="intraday"] #viewMLive > section:first-child{display:none!important}
+body[data-tab="intraday"]:not([data-sub="metals"]) #b4Metals, body:not([data-tab="intraday"]) #bwCard, body[data-tab="intraday"]:not([data-sub="india"]) #bwCard, body[data-tab="intraday"] #viewMLive > section:first-child{display:none!important}
 body[data-tab="intraday"]:not(.ind-stock) #stkCard, body[data-tab="intraday"][data-sub="crypto"] #stkCard, body[data-tab="intraday"][data-sub="us"] #stkCard,
 body[data-tab="intraday"][data-sub="metals"] #stkCard, body[data-tab="intraday"][data-sub="global"] #stkCard{display:none!important}
 @media (max-width:1100px){ .deskcols{grid-template-columns:1fr} }
@@ -551,6 +551,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <section class="card" hidden data-anchor="1"></section>   <!-- 2026-11-03 audit: placement anchor (old tracker status header removed) -->
   <section class="card" id="b4Crypto"></section>
   <section class="card" id="csCard"></section>
+  <section class="card" id="bwCard"></section>
   <section class="card ptCard" data-keys="BTC,ETH" data-title="Crypto paper trades · BTC / ETH"></section>
   <div id="cliveDesk"></div>
 </div>
@@ -1194,7 +1195,7 @@ const ldPx = (v,d) => v==null ? "–" : Number(v).toLocaleString("en-IN",{maximu
 const FX = {sel:{nifty:"NIFTY", crypto:"BTC", metals:"GOLD"}, tf:{}, data:{}};
 // 2026-11-06 (Nikhil: "yes for all"): chart layers you can switch on / off (kept in this browser), paper trades drawn on the chart,
 // day volume profile, moving VWAP, stacked imbalances, hover detail per cell, and a "Fit day" view that squeezes the day onto one screen.
-FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, fit:0};
+FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, walls:1, fit:0};
   try { return Object.assign(d, JSON.parse(localStorage.getItem("mp.fxlayers") || "{}")); } catch(e){ return d; } })();
 function fxLayer(k, desk){ FX.L[k] = FX.L[k] ? 0 : 1; try { localStorage.setItem("mp.fxlayers", JSON.stringify(FX.L)); } catch(e){} ldLoad(desk); }
 FX.trd = {};
@@ -1313,12 +1314,14 @@ function fxChart(V){
   // 2026-11-06 (Nikhil: "text overlapping on top of the order-flow chart ... all elements and text should be clear"): marks get their
   // own strips ABOVE the price area - tracker flips (up to 3 a bar + "more"), then absorption / big-print / exhaustion tags - so nothing is
   // drawn over the footprint cells any more. Labels are cut to the column width; the full text is in the hover tooltip.
-  const EVH = FX.L.signals && (V.events||[]).length ? 3*13 + 12 : 0, MKH = FX.L.signals && ((V.rev||[]).length || bars.some(b => b.burst) || (V.div && V.div.pivot_t)) ? 41 : 0, TOP = 4 + EVH + MKH;
+  const BWD = FX.L.walls && V.bigwalls && !V.bigwalls.err ? V.bigwalls : null, BWL = BWD ? [...(BWD.above||[]), ...(BWD.below||[])] : [];
+  const BWUP = Math.min(3, BWL.filter(w => w.price > hi).length);   // 2026-11-07: walls above the chart's range get labels in the strip above it
+  const EVH = FX.L.signals && (V.events||[]).length ? 3*13 + 12 : 0, MKH = FX.L.signals && ((V.rev||[]).length || bars.some(b => b.burst) || (V.div && V.div.pivot_t)) ? 41 : 0, TOP = Math.max(4 + EVH + MKH, BWUP ? 18 + 13*BWUP : 0);
   const X0 = 8, LW = 160, AW = 62, avail = Math.max(640, (FX.availW || 1100) - 4);   // AW = price axis (y axis) column, 2026-11-04 (Nikhil)
-  const PW = 0, FIT = !!FX.L.fit;          // 2026-11-06: the day profile column moved to a 5-day overlay on the left (see the return)
-  const need = Math.ceil(maxLen*6.7) + 34, fill = Math.floor((avail - X0 - LW - AW - PW)/bars.length);
+  const PW = 0, WW = BWL.length ? 118 : 0, FIT = !!FX.L.fit;     // 2026-11-07 (Nikhil): WW = big-walls column between the bars and the price axis          // 2026-11-06: the day profile column moved to a 5-day overlay on the left (see the return)
+  const need = Math.ceil(maxLen*6.7) + 34, fill = Math.floor((avail - X0 - LW - AW - PW - WW)/bars.length);
   const CW = FIT ? Math.max(10, Math.min(fill, 150)) : Math.max(need, 86, Math.min(fill, 150)), TXT = CW >= 60, CL = TXT ? 18 : Math.max(4, Math.round(CW*0.35));
-  const W = X0 + bars.length*CW + PW + AW + LW, PH = TOP + nR*RH + 6, CP = FX.L.cvd ? 58 : 0, H = PH + 58 + CP;   // CL = candle lane, PW = day-profile column
+  const W = X0 + bars.length*CW + PW + WW + AW + LW, PH = TOP + nR*RH + 6, CP = FX.L.cvd ? 58 : 0, H = PH + 58 + CP;   // CL = candle lane, PW = day-profile column
   const y = p => TOP + (hi - p)/RS*RH;
   const fit = (t, w, px = 5.9) => { if (w < 24) return ""; t = String(t); const n = Math.max(3, Math.floor(w / px)); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
   const mx = Math.max(...bars.flatMap(b => b.bins.map(x => (+x.b)+(+x.s))), 1);
@@ -1354,7 +1357,7 @@ function fxChart(V){
     if (TXT) g += `<text x="${x+CW/2+4}" y="${PH+26}" text-anchor="middle" font-size="11" font-weight="600" fill="${b.delta>=0?"var(--bull)":"var(--bear)"}">Δ ${b.delta>=0?"+":"-"}${fxK(b.delta||0)}</text>`
        + (cv==null ? "" : est ? `<text x="${x+CW/2+4}" y="${PH+40}" text-anchor="middle" font-size="11" fill="var(--muted)">CVD –</text>` : `<text x="${x+CW/2+4}" y="${PH+40}" text-anchor="middle" font-size="11" fill="${cv>=0?"var(--bull)":"var(--bear)"}">CVD ${cv>=0?"+":"-"}${fxK(cv)}</text>`);
   });
-  const bx = X0 + bars.length*CW, lx = bx + PW;
+  const bx = X0 + bars.length*CW, lx = bx + PW + WW;
   if (PW){ // day volume profile: volume per price row over the bars shown; darker = value area (70 % of volume), outlined = POC
     const vol = {}; bars.forEach(b => b.bins.forEach(c => { const k = Math.floor((hi - c.p)/RS); vol[k] = (vol[k]||0) + (+c.b) + (+c.s); }));
     const ks = Object.keys(vol).map(Number), vals = Object.values(vol), vmx = Math.max(...vals, 1), tot = vals.reduce((a, v) => a + v, 0) || 1;
@@ -1470,6 +1473,22 @@ function fxChart(V){
   // support (green) / resistance (red) zones: thick translucent bands under the other lines
   SRL.filter(([k,v]) => v>=lo-RS && v<=hi+RS).forEach(([k,v]) => { const sup = k==="S" || k==="PDL" || k==="PWL" || (k!=="R" && k!=="PDH" && k!=="PWH" && V.spot!=null && v < V.spot);
     const yy = y(v)+RH/2; g = `<rect x="${X0}" y="${yy-3}" width="${lx-X0}" height="6" fill="${sup?"var(--bull)":"var(--bear)"}" fill-opacity="0.13"/><line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="${sup?"var(--bull)":"var(--bear)"}" stroke-width="1.3" stroke-dasharray="2 3" opacity="0.85"/>` + g; });
+  if (WW){ // 2026-11-07 (Nikhil: "can we see this info on the dashboard"): big resting orders in the book, in their own column (never over the cells)
+    const up0 = Math.min(3, BWL.filter(w => w.price > hi).length), wx = bx + PW + 4, mxX = Math.max(...BWL.map(w => +w.x), 4), sz = w => Math.max(16, Math.min(1, w.x/mxX)*(WW - 12));
+    g += `<text x="${wx}" y="${Math.max(10, TOP-3-13*up0)}" font-size="9.5" fill="var(--muted)"><title>${esc(BWD.rule||"")} · ${esc(BWD.source||"")} ${esc(BWD.as_of||"")}</title>Big walls${BWD.source==="live"?"":" · close"}</text>`;
+    const rowsUsed = new Set(), ins = BWL.filter(w => w.price >= lo && w.price <= hi), outs = BWL.filter(w => !(w.price >= lo && w.price <= hi));
+    const tipOf = w => `${w.side==="sell"?"Sell":"Buy"} wall ${ldPx(w.price)} · ${fxK(w.qty_now)} now (${w.x}× normal) · ${w.dist>0?"+":""}${fmt(w.dist,1)} pts · ${w.age_min} min · ${w.trend}`;
+    ins.slice().sort((a, b) => b.x - a.x).forEach(w => {        // walls inside the chart: a bar in their own price row
+      const r = Math.floor((hi - w.price)/RS + 1e-9); if (rowsUsed.has(r)) return; rowsUsed.add(r);
+      const col = w.side === "sell" ? "var(--bear)" : "var(--bull)", yy = TOP + r*RH;
+      g += `<g><title>${esc(tipOf(w))}</title><rect x="${wx}" y="${yy+1}" width="${sz(w).toFixed(1)}" height="${RH-3}" rx="2" fill="${col}" fill-opacity="0.22" stroke="${col}" stroke-opacity="0.7"/>`
+        + `<text x="${wx+4}" y="${Math.round(yy+(RH-2)/2+4)}" font-size="11" font-weight="700" fill="${col}">${esc(fit(`${w.x}× ${fxK(w.qty_now)}`, WW-12))}</text></g>`; });
+    // walls beyond the chart's price range: arrow labels ABOVE the price area (sell side, highest at the top) and BELOW it (under the axis rows)
+    const up = outs.filter(w => w.price > hi).sort((a, b) => a.price - b.price).slice(0, 3), dn = outs.filter(w => w.price < lo).sort((a, b) => b.price - a.price).slice(0, 3);
+    const lab = (w, yy, ar) => { const col = w.side === "sell" ? "var(--bear)" : "var(--bull)";
+      g += `<text x="${wx}" y="${yy}" font-size="10.5" font-weight="600" fill="${col}"><title>${esc(tipOf(w))}</title>${ar} ${esc(fit(`${ldPx(w.price)} ${w.x}×`, WW-12))}</text>`; };
+    up.forEach((w, i) => lab(w, TOP - 3 - 13*i, "↑"));
+    dn.forEach((w, i) => lab(w, PH + 12 + 13*i, "↓")); }
   const lcol2 = k => k==="S"||k==="PDL"||k==="PWL" ? "var(--bull)" : k==="R"||k==="PDH"||k==="PWH" ? "var(--bear)" : lcol(k);
   const nm = k => ({"VWAP·":"VWAP", S:"Support", R:"Resistance", PDH:"Prev day high", PDL:"Prev day low", PWH:"Prev week high", PWL:"Prev week low"})[k] || k;
   { // 2026-11-06: right-hand labels laid out so they never overlap: levels in the same row are merged into one line, lines keep 15 px
@@ -1559,7 +1578,7 @@ async function fxLoad(desk){
   const dd = ddKeys.length ? `<select class="fx-sel" onchange="${desk==="crypto"?`FX.pick['${desk}']=this.value||null;if(!this.value){FX.sel['${desk}']=null}`:""}if(this.value){FX.sel['${desk}']=this.value};ldLoad('${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:${ddKeys.includes(FX.sel[desk])?"var(--ink)":"var(--surface)"};color:${ddKeys.includes(FX.sel[desk])?"var(--surface)":"var(--ink)"}">
       <option value="">${desk==="crypto"?(FX.pick[desk]?"← back to "+esc(state.market||"BTC"):"More coins ▾"):desk==="nifty"?"Stocks ▾":"Markets ▾"}</option>${ddKeys.map(k=>`<option value="${esc(k)}" ${k===FX.sel[desk]?"selected":""}>${esc(k)} ${ldPx(ins[k].spot)}</option>`).join("")}</select>` : "";
   const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}')">${l}</button>`).join("")}</span>`;
-  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["cvd","CVD"],["profile","5-day profile"],["vwap","VWAP"],["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
+  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["cvd","CVD"],["profile","5-day profile"],["vwap","VWAP"],["walls","Big walls"],["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
   const tsel = `<select class="fx-sel" title="paper trades drawn on the chart" onchange="fxTs(this.value,'${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)">${FX_TS.map(([k,l]) => `<option value="${k}" ${k===FX.ts?"selected":""}>Trades: ${l}</option>`).join("")}</select>`;
   const head = `<div class="fx-head">${tfb}${lyr}${tsel}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
     ${I.last_session?`<span class="fx-chip" style="background:var(--wait-soft);color:var(--wait)">tracker off · last session ${esc(I.last_session)} (real order flow)</span>`:""}${I.regime?`<span class="fx-chip">${esc(I.regime)}${I.stance?" · "+esc(I.stance):""}</span>`:""}${I.day_type?`<span class="fx-chip">${esc(I.day_type)}</span>`:""}
@@ -1657,6 +1676,82 @@ function tcRender(){
     <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><div class="ld-btns" style="margin:0">${["All", ...tags].map(k => `<button class="${k === F ? "on" : ""}" onclick="TC.f='${esc(k)}';tcRender()">${esc(k)}${k === "All" ? ` (${all.length})` : ` (${all.filter(t => t.tag === k).length})`}</button>`).join("")}</div>
       <div class="ld-btns" style="margin:0">${[[1,"Today"],[5,"Last 5 days"]].map(([n, l]) => `<button class="${n === TC.days ? "on" : ""}" onclick="TC.days=${n};tcLoad()">${l}</button>`).join("")}</div></div>
     ${show.length ? `<div class="tc-grid">${show.map(card).join("")}</div>` : `<p class="small muted" style="margin:8px 0 0">No paper trade ${TC.days === 1 ? "today" : "in these days"} yet.</p>`}`);
+}
+// 2026-11-07 (Nikhil: "We haven't done for US market for paper trade" + "Form on the dashboard"): US paper trades card on the US tabs.
+// Desk cards = the US desk agent's registered directional calls; the form records your own. Results from 5-min bars (app/uspaper.py).
+const USP = {};
+function usPaperStart(v, tab){
+  clearInterval(usPaperStart.t);
+  let c = $("#usPaperCard");
+  if (v !== "us"){ if (c) c.hidden = true; return; }
+  if (!c){ c = document.createElement("section"); c.id = "usPaperCard"; c.className = "card"; c.style.marginTop = "12px"; }
+  const top = $("#idTop"), md = $("#mktDeskCard");
+  if (tab === "intraday" && top) top.append(c); else if (md && md.parentElement) md.after(c); else document.body.append(c);
+  c.hidden = false;
+  if (!c.dataset.built) usPaperForm(c);
+  usPaperLoad(); usPaperStart.t = setInterval(() => { if (!document.hidden && !c.hidden) usPaperLoad(); }, 30000);
+}
+function usPaperForm(c){
+  c.dataset.built = "1";
+  const inp = (id, ph, w) => `<input id="${id}" placeholder="${ph}" inputmode="decimal" style="font:inherit;width:${w||96}px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--surface);color:var(--ink)">`;
+  const sel = (id, opts) => `<select id="${id}" style="font:inherit;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--surface);color:var(--ink)">${opts.map(([v,l]) => `<option value="${v}">${l}</option>`).join("")}</select>`;
+  c.innerHTML = `<div class="spread"><h2>US paper trades <span class="small muted">desk cards + your form · paper only · never orders</span></h2><span class="small muted" id="uspPx"></span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px">
+      ${sel("uspMkt", [["ES","S&P 500 futures (ES)"],["NQ","Nasdaq 100 futures (NQ)"],["SPY","SPY"]])}
+      ${sel("uspSide", [["long","Long"],["short","Short"]])}
+      ${inp("uspLo","Entry (blank = market)",150)} ${inp("uspHi","Entry to (optional)",130)}
+      ${inp("uspStop","Stop")} ${inp("uspTgt","Target (optional)",120)}
+      ${sel("uspDays", [1,2,3,5,10].map(n => [n, n + (n>1?" sessions":" session")]))}
+      <input id="uspNote" placeholder="Why (one line)" maxlength="300" style="font:inherit;flex:1;min-width:180px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--surface);color:var(--ink)">
+      <button class="btn" id="uspAdd" style="font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--line);cursor:pointer">Record paper trade</button></div>
+    <div class="small" id="uspMsg" style="min-height:18px"></div>
+    <div class="small faint" style="margin-bottom:6px">Entry = a price or a zone (fills when a 5-min bar trades there, within the sessions chosen); blank = next bar's open. Stop required. Sessions = fill window and time stop. $ = a $10,000 account risking 1% ($100) a trade, after costs. Prices are Yahoo 5-min bars and can lag 15-30 min.</div>
+    <div id="uspBody"></div>`;
+  $("#uspAdd").onclick = usPaperAdd;
+}
+async function usPaperAct(qs){
+  try { return await fetch("/api/livedesk/uspaper?" + qs).then(r => r.json()); } catch(e){ return {ok:false, error:"server not reachable"}; }
+}
+async function usPaperAdd(){
+  const g = id => ($("#" + id).value || "").trim(), msg = $("#uspMsg");
+  if (!g("uspStop")){ msg.innerHTML = `<span class="neg">Enter a stop.</span>`; return; }
+  const qs = new URLSearchParams({act:"add", mkt:g("uspMkt"), side:g("uspSide"), lo:g("uspLo"), hi:g("uspHi"), stop:g("uspStop"), target:g("uspTgt"), days:g("uspDays"), note:g("uspNote")});
+  $("#uspAdd").disabled = true; const r = await usPaperAct(qs.toString()); $("#uspAdd").disabled = false;
+  if (r.ok){ msg.innerHTML = `<span class="pos">Recorded ${esc(r.id)}</span>${r.last_px?` <span class="faint">(last ${esc(g("uspMkt"))} ${fmt(r.last_px,2)} at ${esc(String(r.last_px_at||"").slice(5))} IST)</span>`:""}`;
+    ["uspLo","uspHi","uspStop","uspTgt","uspNote"].forEach(id => $("#" + id).value = ""); usPaperLoad(); }
+  else msg.innerHTML = `<span class="neg">Not recorded: ${esc(r.error||"error")}</span>`;
+}
+async function usPaperRow(act, id){
+  if (act === "void" && !confirm(`Mark ${id} as a typing mistake? It stays in the file but is never counted.`)) return;
+  const r = await usPaperAct(new URLSearchParams({act, id}).toString());
+  $("#uspMsg").innerHTML = r.ok ? `<span class="pos">${act === "close" ? "Closed" : "Marked as mistake"}: ${esc(id)}</span>` : `<span class="neg">${esc(r.error||"error")}</span>`;
+  usPaperLoad();
+}
+async function usPaperLoad(){
+  const b = $("#uspBody"); if (!b) return;
+  const D = await usPaperAct("act=list"); USP.d = D;
+  if (!D || D.ok === false){ b.innerHTML = `<p class="small neg">US paper trades not loaded: ${esc((D||{}).error||"")}</p>`; return; }
+  const px = D.px || {};
+  $("#uspPx").textContent = Object.entries(px).filter(([k,v]) => v && v.px).map(([k,v]) => `${k} ${fmt(v.px, 2)} (${String(v.at||"").slice(5)} IST)`).join(" · ");
+  const f = v => v==null ? "–" : fmt(v, 2), sg = v => v>0?"pos":v<0?"neg":"", d = s => String(s||"").slice(5,16);
+  const money = v => v==null ? "–" : (v<0?"−$":"+$") + fmt(Math.abs(v), 2);
+  const ST = {open:["open","accent"], closed:["closed","neutral"], waiting:["waiting for entry","wait"], not_filled:["not filled","neutral"], cancelled:["cancelled","neutral"], void:["void","neutral"]};
+  const LBL = {us_desk:"US desk card", us_manual:"Your form"};
+  const rows = (D.rows||[]).slice().sort((a,b) => String(b.registered).localeCompare(String(a.registered)));
+  const tr = t => { const s = ST[t.status] || [t.status, "neutral"], man = t.rule === "us_manual";
+    const btn = man && (t.status === "open" || t.status === "waiting") ? `<button class="small" onclick="usPaperRow('close','${esc(t.id)}')">${t.status==="open"?"Close now":"Cancel"}</button> ` : "";
+    const vb = man && t.status !== "void" ? `<button class="small" onclick="usPaperRow('void','${esc(t.id)}')">Mistake</button>` : "";
+    return `<tr><td>${esc(d(t.registered))}</td><td>${esc(LBL[t.rule]||t.rule)}<br><span class="faint">${esc(t.id)}</span></td><td>${esc(t.key)}</td>
+      <td class="${t.side==="long"?"pos":"neg"}">${esc(t.side)}</td><td>${t.entry!=null?`${f(t.entry)} <span class="faint">${esc(d(t.opened))}</span>`:"–"}</td><td>${f(t.stop)}</td><td>${f(t.target)}</td>
+      <td><span class="pill p-${s[1]}">${esc(s[0])}</span>${t.exit_reason&&t.status!=="open"?` <span class="faint">${esc(t.exit_reason)}</span>`:""}</td>
+      <td>${t.status==="open"?`now ${f(t.now)} · <b class="${sg(t.pnl_open)}">${money(t.pnl_open)}</b>`:t.status==="closed"?`${f(t.exit)} <span class="faint">${esc(d(t.closed))}</span>`:"–"}</td>
+      <td>${t.status==="closed"?`<b class="${sg(t.pnl)}">${money(t.pnl)}</b> <span class="faint">${t.r>0?"+":""}${t.r}R</span>`:"–"}</td>
+      <td style="min-width:220px;max-width:380px">${esc(t.instrument||"")}<br><span class="faint">${esc(t.why||"")}</span><br><span class="faint">${esc(t.how||"")}</span></td><td>${btn}${vb}</td></tr>`; };
+  const tot = Object.entries(D.totals||{}).map(([k,z]) => `<span style="margin-right:14px"><b>${esc(LBL[k]||k)}</b> ${z.n} closed · won ${z.wins} · <b class="${sg(z.pnl)}">${money(z.pnl)}</b> <span class="faint">(${z.r>0?"+":""}${z.r}R)</span></span>`).join("");
+  const c = D.counts || {};
+  b.innerHTML = `<div class="small" style="margin:2px 0 6px">${tot || '<span class="faint">No US paper trade closed yet.</span>'} <span class="faint">· ${c.open||0} open · ${c.waiting||0} waiting · ${c.not_filled||0} not filled</span></div>
+    ${rows.length ? `<div class="tscroll"><table class="small" style="width:100%"><tr class="muted"><td>Registered (IST)</td><td>Source</td><td>Market</td><td>Side</td><td>Filled</td><td>Stop</td><td>Target</td><td>Status</td><td>Now / exit</td><td>Result</td><td>Instrument · why · rule</td><td></td></tr>${rows.map(tr).join("")}</table></div>`
+      : `<p class="small muted">No US paper trade yet.</p>`}`;
 }
 function ptStart(v){ clearInterval(ptStart.t); clearInterval(ptStart.t2); if (v!=="metals" && document.body.dataset.tab!=="intraday") return;   /* 2026-10-31: crypto / India cards are hidden there */
   ptLoad(); ptStart.t = setInterval(() => { if (!document.hidden) ptLoad(); }, 5000);
@@ -1794,12 +1889,37 @@ function b4Render(){
       : `<p class="small muted" style="margin:6px 0">The 4H break rule does not run on ${esc(sel||"this coin")}${sel==="SOL"?" (stopped on 30 Oct)":""}. It runs on ${Object.keys(D.markets||{}).filter(k=>k!=="GOLD").join(", ")}.</p>`) + foot;
   const m = $("#b4Metals"); if (m) m.innerHTML = head("4H block-break trade · Gold") + `<div style="margin-top:6px">${card("GOLD")}</div>` + foot.replace("(crypto: taker volume with the break) ", "");
 }
-function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c);
+function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearInterval(b4Start.w);
+  if (document.body.dataset.tab === "intraday" && v === "india"){ bigwLoad(); b4Start.w = setInterval(() => { if (!document.hidden) bigwLoad(); }, 60000); }
   if (document.body.dataset.tab === "intraday" && ["crypto","india","metals","global"].includes(v)){ csLoad(); b4Start.c = setInterval(() => { if (!document.hidden) csLoad(); }, 60000); }
   if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
 // 2026-11-07 (Nikhil: "for SOL, BTC, ETH ... 15 min, 1 hour, 4 hour ... keep a prediction score increasing or decreasing even though we are
 // never sure"): app/cryptoscore.py. The model's chance that price is LOWER at the end of the horizon, its last few readings, what drives
 // it, and - beside every timeframe - how it did on data it never saw and how it is doing live. An indication, never advice.
+// 2026-11-07 (Nikhil: "can we see this info [big walls] on the dashboard .. how frequently we should observe"): Nifty / Bank Nifty
+// big resting orders from the 200-level book (app/bigwalls.py), refreshed every minute.
+async function bigwLoad(){
+  const el = $("#bwCard"); if (!el) return;
+  let R; try { R = await Promise.all(["NIFTY","BANKNIFTY"].map(s => fetch(`/api/livedesk/bigwalls?sym=${s}`).then(r => r.json()))); } catch(e){ return; }
+  const TR = {growing:"↑ growing", shrinking:"↓ shrinking", steady:"steady"};
+  const row = w => `<tr><td class="num"><b style="color:${w.side==="sell"?"var(--bear)":"var(--bull)"}">${ldPx(w.price)}</b></td><td class="num">${w.dist>0?"+":""}${fmt(w.dist,0)}</td>`
+    + `<td class="num"><b>${fmt(w.x,1)}×</b></td><td class="num">${fxK(w.qty_now)}</td><td class="num">${w.age_min >= 60 ? "60+" : w.age_min} min</td><td>${TR[w.trend]||""}</td></tr>`;
+  const one = D => { const nm = D.sym === "NIFTY" ? "Nifty" : "Bank Nifty";
+    if (D.err || D.price == null) return `<div><h4 style="margin:6px 0">${nm} Futures</h4><p class="small muted">${esc(D.err || "no data")}${D.sym==="BANKNIFTY" ? " - Bank Nifty gets the 200-level book from Monday 9 Nov." : ""}</p></div>`;
+    const ab = (D.above||[]).slice().reverse(), be = D.below||[];
+    return `<div><h4 style="margin:6px 0">${nm} Futures <span class="small muted">· ${ldPx(D.price)} · ${D.source === "live" ? "live" : "last session close"} ${esc(D.as_of||"")}${D.source==="live"?"":" (" + esc(D.day||"") + ")"}</span></h4>`
+      + `<table class="ld-tbl small"><thead><tr><th>Price</th><th>Pts Away</th><th>Size vs Normal</th><th>Qty Now</th><th>Standing</th><th>Trend</th></tr></thead><tbody>`
+      + (ab.length ? `<tr><td colspan="6" class="faint">Sell walls above</td></tr>` + ab.map(row).join("") : `<tr><td colspan="6" class="faint">No big sell wall above</td></tr>`)
+      + `<tr><td colspan="6" style="border-top:2px solid var(--ink)"><b>Price ${ldPx(D.price)}</b></td></tr>`
+      + (be.length ? `<tr><td colspan="6" class="faint">Buy walls below</td></tr>` + be.map(row).join("") : `<tr><td colspan="6" class="faint">No big buy wall below</td></tr>`)
+      + `</tbody></table>`
+      + (D.sym === "BANKNIFTY" && D.day < "2026-11-09" ? `<p class="small faint" style="margin:4px 0">Bank Nifty had only the 20-level book until now; the 200-level book starts Monday 9 Nov.</p>` : "")
+      + ((D.pulled||[]).length ? `<p class="small muted" style="margin:4px 0">Pulled in the last 30 min: ${D.pulled.map(p => `${p.side} ${ldPx(p.price)} at ${esc(p.at)} (stood ${p.stood_min} min)`).join(" · ")}</p>` : "") + `</div>`; };
+  el.innerHTML = `<div class="spread"><h3 style="margin:0">Big Walls · Order Book</h3><span class="small faint">refreshes every minute</span></div>`
+    + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">${R.map(one).join("")}</div>`
+    + `<p class="small faint" style="margin:6px 0 0">${esc((R[0]||{}).rule||"")}. Futures prices. Context only, not a signal: on 9 days of Nifty data walls held 47% of the time vs 52% for ordinary levels, and the biggest usually broke. `
+    + `Best read at about 09:30 (after the opening book settles), then every 15–30 min and just before any entry; a wall that keeps shrinking or gets pulled is weaker than one that is growing. Paper only, never orders.</p>`;
+}
 async function csLoad(){
   const el = $("#csCard"); if (!el) return;
   const isC = VIEW === "crypto";
@@ -1876,7 +1996,8 @@ function showView(v){
   VIEW = v; if (v === "india") setTimeout(() => { try { lvlLoad(); } catch(e){} }, 1500); try{localStorage.setItem("mp.view", TAB)}catch(e){}
   setTimeout(() => { try { sysBanner(); } catch(e){} }, 0);
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v===TAB));
-  ptStart(v); domStart(); if (v==="desk") setTimeout(() => { try { pairAlign(); } catch(e){} }, 60);
+  ptStart(v); domStart(); setTimeout(() => { try { usPaperStart(v, TAB); } catch(e){} }, 0);   // 2026-11-07: US paper trades card
+  if (v==="desk") setTimeout(() => { try { pairAlign(); } catch(e){} }, 60);
   $("#viewDesk").hidden = v!=="desk"; showLive(v); suStart(v); b4Start(v);
   // 2026-10-24: every market tab = [tracker status] -> market chips + decision -> live cards / chart / today -> trade plan
   //             -> timeframes -> strategy recommendations (this tab's markets) -> regime history
@@ -1890,7 +2011,8 @@ function showView(v){
       { const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }   // 2026-11-03 (Nikhil): picker top-left inside Timeframe at Glance
       const b4 = v==="crypto" ? $("#b4Crypto") : v==="metals" ? $("#b4Metals") : null;      // 2026-10-30 audit: the passed edge first
       if (b4) at.after(b4);
-      { const cs = $("#csCard"); if (cs && ["crypto","india","metals","global"].includes(v)) (b4 || at).after(cs); }      // 2026-11-07: rise / fall score near the top
+      { const cs = $("#csCard"); if (cs && ["crypto","india","metals","global"].includes(v)) (b4 || at).after(cs); }
+      { const bw = $("#bwCard"); if (bw && v === "india") ($("#csCard") || at).after(bw); }      // 2026-11-07: big walls under the score      // 2026-11-07: rise / fall score near the top
       const pt = lv.querySelector(".ptCard"); if (pt) (b4 || at).after(pt); }       // 2026-10-30: paper trades high on the tab
     else { const mv = $("#viewMarkets"), pl = $("#planCard"); if (pl && pl.parentElement === mv){ pl.before(dec); pl.before(tf); pl.before($("#hvCard")); pl.before(md); }
       const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }

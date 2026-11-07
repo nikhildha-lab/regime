@@ -190,6 +190,7 @@ def main():
     ev_f = open(out / "events.jsonl", "a")
     fp_f = {n: open(out / f"footprint_{n}.jsonl", "a") for n in inst}
     heat_f = {n: gzip.open(out / f"heatmap_{n}.csv.gz", "at", newline="") for n in inst}
+    heat_live = {n: deque(maxlen=60) for n in inst}     # 2026-11-07 (Nikhil): last 60 heatmap minutes as plain JSON for the Big Walls card (the .gz is only complete after the close)
     trade_f = {n: gzip.open(out / f"trades_{n}.csv.gz", "at", newline="") for n in inst}
     depth_dir = HERE / "data" / "depth"
     depth_dir.mkdir(parents=True, exist_ok=True)
@@ -249,6 +250,12 @@ def main():
                         fp_f[n].write(json.dumps(candle) + "\n")
                         recent_fp[n].append(candle)
                         csv.writer(heat_f[n]).writerows(heat)
+                        try:
+                            heat_live[n].append(heat)
+                            tmp = out / f"heat_live_{n}.json.tmp"
+                            tmp.write_text(json.dumps([r for m in heat_live[n] for r in m])); os.replace(tmp, out / f"heat_live_{n}.json")
+                        except Exception:
+                            pass
                 if now // 60 != last_min:
                     last_min = now // 60
                     for f in list(sec_files.values()) + [ev_f, comp_f] + list(fp_f.values()):
