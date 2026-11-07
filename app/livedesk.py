@@ -486,6 +486,10 @@ def poll_once():
                 B4.tick()
             except Exception as e:
                 _STATE["break4h_error"] = str(e)[:160]
+            try:                                   # 2026-11-06 (Nikhil): one CSV of every paper trade, all rules / tabs, every 5 min (app/tradelog.py);
+                _hot("tradelog").tick(_hot, {})    # 2026-11-08: runs for every desk now (throttled to 5 min inside), so weekends / evenings update too
+            except Exception as e:
+                _STATE["tradelog_error"] = str(e)[:160]
             try:                                   # 2026-11-07 (Nikhil): crypto rise / fall score every 5 min (fetch + score + log + check)
                 _hot("cryptoscore").tick()
             except Exception as e:
@@ -520,10 +524,7 @@ def poll_once():
                     _hot("volcycle").tick()
                 except Exception as e:
                     _STATE["volcycle_error"] = str(e)[:160]
-                try:                               # 2026-11-06 (Nikhil): one CSV of every paper trade, all rules / tabs, every 5 min (app/tradelog.py)
-                    _hot("tradelog").tick(_hot, {})
-                except Exception as e:
-                    _STATE["tradelog_error"] = str(e)[:160]
+                # 2026-11-08: the trade-log CSV tick moved below (it ran only while the Nifty tracker was up, so it froze after hours / weekends)
                 try:                               # 2026-11-05: Stocks in Play ORB paper rule (app/stockorb.py), MIS 5x, new - nothing else changed
                     _hot("stockorb").tick()
                 except Exception as e:
