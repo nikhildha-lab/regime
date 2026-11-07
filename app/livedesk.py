@@ -894,6 +894,8 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/marketscore":            # 2026-11-07 (Nikhil): same score for Indian futures, metals, commodities (app/marketscore.py)
+        return _hot("marketscore").api(q.get("view") or "india")
     if path == "/api/livedesk/cryptoscore":            # 2026-11-07 (Nikhil): SOL / BTC / ETH rise-fall score, 15m / 1h / 4h (app/cryptoscore.py)
         return _hot("cryptoscore").api()
     if path == "/api/livedesk/run_tool" and q.get("name") == "fetch_deriv":         # 2026-11-07: Binance OI / long-short / funding / CVD history (research)

@@ -314,7 +314,7 @@ body[data-tab="intraday"] #prepMini{display:none!important}   /* 2026-11-04: blo
 /* 2026-10-31 (Nikhil): US and Crypto tabs follow the Indian tab: regime box, timeframes, strategy x regime matrix, today's plan,
    regime history. Desk analyst, verdict, live cards, order flow and paper trades live on the Intraday desk / trading platform. */
 body[data-tab="us"] #hvCard, body[data-tab="us"] #mktDeskCard,
-body[data-tab="crypto"] #hvCard, body[data-tab="crypto"] #mktDeskCard, body[data-tab="crypto"] #b4Crypto, body[data-tab="crypto"] #csCard, body[data-tab="crypto"] .ptCard,
+body[data-tab="crypto"] #hvCard, body[data-tab="crypto"] #mktDeskCard, body[data-tab="crypto"] #b4Crypto, body[data-tab="crypto"] .ptCard,
 body[data-tab="crypto"] #cliveDesk, body[data-tab="crypto"] #viewCLive > section:first-child,
 body[data-tab="metals"] #hvCard, body[data-tab="metals"] #mktDeskCard, body[data-tab="metals"] #b4Metals, body[data-tab="metals"] .ptCard,
 body[data-tab="metals"] #mliveDesk, body[data-tab="metals"] #viewMLive > section:first-child,
@@ -355,7 +355,7 @@ body[data-tab="intraday"] #smxCard, body[data-tab="intraday"] #desk{display:none
 body[data-tab="intraday"] #idBar, body[data-tab="intraday"] #idTop{display:block}
 body[data-tab="intraday"] #decision, body[data-tab="intraday"] #tfCard, body[data-tab="intraday"] #mktDeskCard, body[data-tab="intraday"] #rail,
 body[data-tab="intraday"] #viewMarkets, body[data-tab="intraday"] #lvlMore > summary, body[data-tab="intraday"] .ptCard:not(#ptAll),
-body[data-tab="intraday"]:not([data-sub="crypto"]) #b4Crypto, body[data-tab="intraday"]:not([data-sub="crypto"]) #csCard, body[data-tab="intraday"] #viewCLive > section:first-child,
+body[data-tab="intraday"]:not([data-sub="crypto"]) #b4Crypto, body:not([data-tab="intraday"]) #csCard, body[data-tab="intraday"][data-sub="us"] #csCard, body[data-tab="intraday"] #viewCLive > section:first-child,
 body[data-tab="intraday"]:not([data-sub="metals"]) #b4Metals, body[data-tab="intraday"] #viewMLive > section:first-child{display:none!important}
 body[data-tab="intraday"]:not(.ind-stock) #stkCard, body[data-tab="intraday"][data-sub="crypto"] #stkCard, body[data-tab="intraday"][data-sub="us"] #stkCard,
 body[data-tab="intraday"][data-sub="metals"] #stkCard, body[data-tab="intraday"][data-sub="global"] #stkCard{display:none!important}
@@ -1794,15 +1794,17 @@ function b4Render(){
       : `<p class="small muted" style="margin:6px 0">The 4H break rule does not run on ${esc(sel||"this coin")}${sel==="SOL"?" (stopped on 30 Oct)":""}. It runs on ${Object.keys(D.markets||{}).filter(k=>k!=="GOLD").join(", ")}.</p>`) + foot;
   const m = $("#b4Metals"); if (m) m.innerHTML = head("4H block-break trade · Gold") + `<div style="margin-top:6px">${card("GOLD")}</div>` + foot.replace("(crypto: taker volume with the break) ", "");
 }
-function b4Start(v){ clearInterval(b4Start.t); if (!["crypto","metals"].includes(v)) return; b4Load(); if (v === "crypto") csLoad();
-  b4Start.t = setInterval(() => { if (!document.hidden){ b4Load(); if (VIEW === "crypto") csLoad(); } }, 60000); }
+function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c);
+  if (document.body.dataset.tab === "intraday" && ["crypto","india","metals","global"].includes(v)){ csLoad(); b4Start.c = setInterval(() => { if (!document.hidden) csLoad(); }, 60000); }
+  if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
 // 2026-11-07 (Nikhil: "for SOL, BTC, ETH ... 15 min, 1 hour, 4 hour ... keep a prediction score increasing or decreasing even though we are
 // never sure"): app/cryptoscore.py. The model's chance that price is LOWER at the end of the horizon, its last few readings, what drives
 // it, and - beside every timeframe - how it did on data it never saw and how it is doing live. An indication, never advice.
 async function csLoad(){
   const el = $("#csCard"); if (!el) return;
-  let D; try { D = await fetch("/api/livedesk/cryptoscore").then(r => r.json()); } catch(e){ return; }
-  const TFL = {"15m":"next 1 h", "1h":"next 6 h", "4h":"next 24 h"}, T = D.tested || {}, LV = D.live || {};
+  const isC = VIEW === "crypto";
+  let D; try { D = await fetch(isC ? "/api/livedesk/cryptoscore" : `/api/livedesk/marketscore?view=${VIEW}`).then(r => r.json()); } catch(e){ return; }
+  const T = D.tested || {}, LV = D.live || {}, TFL = Object.fromEntries(Object.entries(T).map(([k, v]) => [k, v.label || ({"15m":"next 1 h","1h":"next 6 h","4h":"next 24 h"})[k] || ""]));
   const verdict = tf => { const a = (T[tf]||{}).auc; return a == null ? "untested" : a < 0.53 ? "coin flip in test" : a < 0.58 ? "weak in test" : "promising in test (small sample)"; };
   const cell = (v, tf) => { if (!v || v.p_fall == null) return `<td class="faint">–</td>`;
     const p = v.p_fall, fall = p >= 0.5, pct = Math.round(100 * (fall ? p : 1 - p)), weak = Math.abs(p - 0.5) < 0.05, ch = v.change;
@@ -1812,14 +1814,16 @@ async function csLoad(){
     const why = (v.drivers||[]).map(d => `${d.name} → ${d.push}`).join(" · ");
     return `<td title="fall-chance history (last bars): ${esc(hist)}%&#10;biggest pushes: ${esc(why)}"><b style="color:${col}">${weak ? "No view" : (fall ? "Fall " : "Rise ") + pct + "%"}</b><br><span class="small faint">${esc(trend)} · ${esc(hist)}%</span><br><span class="small faint">${esc(why)}</span></td>`; };
   const coins = Object.keys(D.scores || {});
-  const tfs = ["15m","1h","4h"];
-  el.innerHTML = `<div class="spread"><h2>Rise / Fall Score <span class="small muted">SOL · BTC · ETH · order flow + positioning</span></h2><span class="small muted">${D.at ? "updated " + esc(String(D.at).slice(11,16)) : ""}</span></div>
-    <p class="small" style="margin:4px 0">The model's chance that price is <b>lower</b> at the end of each window, from CVD, open interest, long / short ratios, taker flow, funding and range (Binance). Re-scored every 15-min bar; hover a cell for its history and the biggest pushes. <b>Never a certainty</b> - check the test line under each timeframe.</p>
+  const tfs = D.tfs || ["15m","1h","4h"];
+  const NM = {NIFTY:"Nifty fut", BANKNIFTY:"Bank Nifty fut", GOLD:"Gold", SILVER:"Silver", COPPER:"Copper", ALUMINIUM:"Aluminium", CRUDE:"WTI crude", NATGAS:"Natural gas"};
+  const sub = isC ? "SOL · BTC · ETH · order flow + positioning" : ({india:"Nifty · Bank Nifty futures · price, volume, OI", metals:"Gold · Silver · Copper · Aluminium · price and volume", global:"WTI crude · Natural gas · price and volume"})[VIEW] || "";
+  el.innerHTML = `<div class="spread"><h2>Rise / Fall Score <span class="small muted">${esc(sub)}</span></h2><span class="small muted">${D.at ? "updated " + esc(String(D.at).slice(11,16)) : ""}</span></div>
+    <p class="small" style="margin:4px 0">The model's chance that price is <b>lower</b> at the end of each window, from ${isC ? "CVD, open interest, long / short ratios, taker flow, funding and range (Binance)" : "recent moves, volume vs normal, " + (VIEW === "india" ? "open-interest change, " : "") + "range and where price sits in today's range (no order-book history exists for these markets)"}. Re-scored every bar; hover a cell for its history and the biggest pushes. <b>Never a certainty</b> - check the test line under each timeframe.</p>
     <div class="tscroll"><table class="ld-tbl" style="margin-top:6px"><tr><th>Coin</th>${tfs.map(tf => `<th>${tf} bars · ${TFL[tf]}</th>`).join("")}</tr>
-      ${coins.map(c => `<tr><td><b>${esc(c)}</b><br><span class="small faint">${ldPx(((D.scores[c]||{})["15m"]||{}).price)}</span></td>${tfs.map(tf => cell((D.scores[c]||{})[tf], tf)).join("")}</tr>`).join("")}
+      ${coins.map(c => `<tr><td><b>${esc(NM[c] || c)}</b><br><span class="small faint">${ldPx(((D.scores[c]||{})["15m"]||{}).price)}</span></td>${tfs.map(tf => cell((D.scores[c]||{})[tf], tf)).join("")}</tr>`).join("")}
       <tr><td class="small faint">How reliable</td>${tfs.map(tf => { const t = T[tf]||{}, l = LV[tf]||{};
         return `<td class="small"><b>${esc(verdict(tf))}</b><br><span class="faint">unseen test: AUC ${t.auc ?? "–"} (0.5 = coin flip), right ${t["hit_leaning_%"] ?? "–"}% when it leans, ${t.test_bars ?? 0} bars from ${t.train_days ?? "–"} days</span><br><span class="faint">live since 7 Nov: ${l.checked ? `${l["hit_%"]}% right on ${l.checked} checked${l.leaning ? `, ${l["hit_leaning_%"]}% when leaning (${l.leaning})` : ""}` : "nothing checked yet"}</span></td>`; }).join("")}</tr></table></div>
-    <p class="small faint" style="margin:6px 0 0">2-year check of the CVD-only part (1-hour): AUC ${esc(String((D.long_check||{}).auc ?? "–"))} - CVD on its own did not predict. Model re-fitted as more data is recorded. ${esc(D.err ? "Last error: " + D.err : "")}</p>`;
+    <p class="small faint" style="margin:6px 0 0">${isC ? `2-year check of the CVD-only part (1-hour): AUC ${esc(String((D.long_check||{}).auc ?? "–"))} - CVD on its own did not predict. ` : ""}Model re-fitted as more data is recorded. ${esc(D.err ? "Last error: " + D.err : "")}</p>`;
 }
 function suStart(v){
   clearInterval(suStart.t); if (!["india","desk"].includes(v)) return;
@@ -1886,7 +1890,7 @@ function showView(v){
       { const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }   // 2026-11-03 (Nikhil): picker top-left inside Timeframe at Glance
       const b4 = v==="crypto" ? $("#b4Crypto") : v==="metals" ? $("#b4Metals") : null;      // 2026-10-30 audit: the passed edge first
       if (b4) at.after(b4);
-      { const cs = $("#csCard"); if (cs && v === "crypto" && b4) b4.after(cs); }      // 2026-11-07: rise / fall score under the 4H break card
+      { const cs = $("#csCard"); if (cs && ["crypto","india","metals","global"].includes(v)) (b4 || at).after(cs); }      // 2026-11-07: rise / fall score near the top
       const pt = lv.querySelector(".ptCard"); if (pt) (b4 || at).after(pt); }       // 2026-10-30: paper trades high on the tab
     else { const mv = $("#viewMarkets"), pl = $("#planCard"); if (pl && pl.parentElement === mv){ pl.before(dec); pl.before(tf); pl.before($("#hvCard")); pl.before(md); }
       const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }
