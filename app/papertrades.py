@@ -27,6 +27,7 @@ RULES = {
     "dom_stocks": {"label": "DOM Stocks (record only)", "edge": "loss-making (-0.18R a trade, 312 trades) - needs new logic, not traded"},
     "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic, Nifty only from 6 Nov)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
     "ovn_h30": {"label": "Overnight hold · synthetic + 0.3-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 40,010"},
+    "ovn_h30f": {"label": "Overnight hold · h30 + order-flow filter (last-hour CVD agrees)", "edge": "new 7 Nov - same trade as h30, taken only when the last hour's futures CVD points the same way; forward test only (no CVD history to backtest)"},
     "vcy_night": {"label": "Vol cycle · night: buy ATM straddle (15:25 -> next 09:45)", "edge": "new 6 Nov - recorded chain 5 Oct-5 Nov: 13 nights +26.7 pts/unit gross, net +Rs 1,458/lot, halves +14 / +37 (one trending month) - paper test"},
     "vcy_day": {"label": "Vol cycle · day: sell ATM straddle (10:30 -> 15:25)", "edge": "new 6 Nov - recorded chain: 14 days +10.3 pts/unit gross, net +Rs 399/lot, halves +8 / +13 - paper test"},
     "vcy_day_sk": {"label": "Vol cycle · day skew: credit spread on the side away from the 09:15-10:30 trend (0.3 %)", "edge": "record only 6 Nov - replay 14 days +25.0 pts vs +10.3 straddle, but from 3 down-trend days; fades at 0.4-0.5 %"},
@@ -259,13 +260,14 @@ def _ovn(hot):
     for r in O.trades():
         if r.get("status") not in ("open", "closed"):
             continue
-        for v, rule in (("h30", "ovn_h30"),):                 # plain + h20 retired 6 Nov
+        for v, rule in (("h30", "ovn_h30"), ("h30_flow", "ovn_h30f")):      # plain + h20 retired 6 Nov; h30_flow added 7 Nov
             V = (r.get("versions") or {}).get(v)
             if not V:
                 continue
             legs = " + ".join(f"{'buy' if lg['qty'] > 0 else 'sell'} {lg['strike']:.0f} {lg['cp']}" for lg in V["legs"].values())
             t = {"rule": rule, "key": r["key"], "side": r["side"], "opened": f"{r['day']} {O.AT}", "entry": r["spot"], "stop": None, "target": None,
-                 "how": f"exit next trading day at the first option snapshot after 09:15 · net delta {V['net_delta']}",
+                 "how": f"exit next trading day at the first option snapshot after 09:15 · net delta {V['net_delta']}"
+                        + (f" · order flow at 15:12: CVD last hour {(r.get('flow') or {}).get('cvd60', 0):+,} ({(r.get('flow') or {}).get('cvd60_pct')}% of volume), day {(r.get('flow') or {}).get('cvd_day', 0):+,}, book lean {(r.get('flow') or {}).get('book_lean')} - {(r.get('flow') or {}).get('h30_flow', '')}" if r.get("flow") else ""),
                  "instrument": f"{NAME.get(r['key'], r['key'])} {r.get('expiry')} options, 1 lot: {legs}", "size": None, "ccy": "₹",
                  "status": r["status"], "why": r.get("why", ""), "_src": ("ovn", (r, v))}
             if r["status"] == "closed":

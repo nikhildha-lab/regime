@@ -382,7 +382,7 @@ def for_ovn(r, v):
     legs = [{"act": "buy" if lg["qty"] > 0 else "sell", "strike": lg["strike"], "cp": lg["cp"], "entry": lg.get("entry"),
              "exit": (V.get("exit_px") or {}).get(n), "src": "LTP", "snap_in": lg.get("snap") or r.get("snap"), "snap_out": V.get("exit_snap")}
             for n, lg in (V.get("legs") or {}).items()]
-    kind = "synthetic" if v == "plain" else f"synthetic + {v[1:]}-delta hedge"
+    kind = "synthetic" if v == "plain" else "synthetic + 0.3-delta hedge (order-flow filtered)" if v == "h30_flow" else f"synthetic + 0.{v[1:]}-delta hedge"
     return {"kind": kind, "ok": bool(legs), "expiry": r.get("expiry"), "lot": LOT.get(r["key"]), "legs": legs,
             "gross": V.get("gross"), "costs": V.get("costs"), "net": V.get("pnl"), "flags": []}
 

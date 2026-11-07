@@ -206,6 +206,54 @@ def evaluate(key, day, spot, hi, lo, prev_c, a):
                    f"{'up' if sd > 0 else 'down'} {abs(spot / prev_c - 1) * 100:.2f} % on the day at {AT}"}
 
 
+OFD = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data", "of")
+
+
+def _flow(key, day, at=AT):
+    """2026-11-07 (Nikhil: "add this to take the decision for that strategy"): the order-flow picture at the signal, from the Dhan
+    order-flow engine (futures): CVD for the day / last 60 min / last 15 min (market buys - market sells), the last-hour price move,
+    and the 20-level book lean (last 5 min vs the last hour's normal). Recorded on every signal; used by the h30_flow version."""
+    out = {}
+    try:
+        bars = []
+        for line in open(os.path.join(OFD, day, f"footprint_{key}.jsonl")):
+            try:
+                b = json.loads(line)
+            except Exception:
+                continue
+            t = str(b.get("time") or "")
+            if "09:15" <= t < at and b.get("c") is not None:
+                bars.append((t, (b.get("buy") or 0) - (b.get("sell") or 0), (b.get("buy") or 0) + (b.get("sell") or 0), b["c"]))
+        if bars:
+            hh, mm = map(int, at.split(":")); m0 = hh * 60 + mm
+            mins = lambda t: int(t[:2]) * 60 + int(t[3:5])
+            l60 = [x for x in bars if mins(x[0]) >= m0 - 60]; l15 = [x for x in bars if mins(x[0]) >= m0 - 15]
+            out.update(cvd_day=round(sum(x[1] for x in bars)), cvd60=round(sum(x[1] for x in l60)), cvd15=round(sum(x[1] for x in l15)),
+                       vol60=round(sum(x[2] for x in l60)), px60=round(bars[-1][3] - l60[0][3], 1) if l60 else None, fut_last=bars[-1][3])
+            out["cvd60_pct"] = round(100 * out["cvd60"] / out["vol60"], 1) if out["vol60"] else None
+    except OSError:
+        out["err"] = "no footprint file"
+    try:
+        t_at = datetime.fromisoformat(f"{day} {at}").timestamp(); rows = []
+        for line in open(os.path.join(OFD, day, f"sec_{key}.csv")):
+            c = line.split(",")
+            if c[0] == "t" or len(c) < 12:
+                continue
+            try:
+                t = int(c[0]); im = float(c[11]) if c[11] else None
+            except ValueError:
+                continue
+            if im is not None and t_at - 3600 <= t < t_at:
+                rows.append((t, im))
+        if len(rows) > 600:
+            v = sorted(x[1] for x in rows); last5 = [x[1] for x in rows if x[0] >= t_at - 300]
+            if last5:
+                out["book_lean"] = round(sum(last5) / len(last5) - v[len(v) // 2], 3)
+    except OSError:
+        pass
+    return out
+
+
 def close_row(r):
     """Close an open row with the next trading day's first snapshot after 09:15 (if that file exists)."""
     TT = _TT()
@@ -248,6 +296,17 @@ def tick(force: bool = False) -> bool:
                 spot, hi, lo, src = b
                 r = evaluate(key, day, spot, hi, lo, pc, a)
                 r.update(source=src, prev_close_day=pc_day, recorded=now.isoformat(timespec="seconds"), mode="live")
+                if r.get("status") == "open":                  # 2026-11-07: order-flow filter version (new, beside h30)
+                    F = _flow(key, day); r["flow"] = F
+                    V = (r.get("versions") or {}).get("h30")
+                    if V and F.get("vol60"):
+                        agree = (F["cvd60"] > 0) == (r["side"] == "long")
+                        F["h30_flow"] = ("taken - the last hour's CVD agrees with the trade" if agree
+                                         else "skipped - the last hour's CVD is against the trade")
+                        if agree:
+                            r["versions"]["h30_flow"] = json.loads(json.dumps(V))
+                    elif V:
+                        F["h30_flow"] = "skipped - no order-flow data"
                 rows.append(r); changed = True
             except Exception as e:
                 S[f"err_{key}"] = str(e)[:160]

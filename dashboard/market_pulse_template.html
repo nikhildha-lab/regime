@@ -1198,7 +1198,7 @@ FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profi
 function fxLayer(k, desk){ FX.L[k] = FX.L[k] ? 0 : 1; try { localStorage.setItem("mp.fxlayers", JSON.stringify(FX.L)); } catch(e){} ldLoad(desk); }
 FX.trd = {};
 // 2026-11-06 (Nikhil: "drop down to select strategy for trades, default is DOM index"): which strategy's paper trades the chart draws
-const FX_TS = [["dom_ix","DOM Index",["dom_ix"]],["touchv2","Touch v2",["touchv2"]],["sorb","Stocks ORB",["sorb"]],["ovn","Overnight",["ovn_h30"]],
+const FX_TS = [["dom_ix","DOM Index",["dom_ix"]],["touchv2","Touch v2",["touchv2"]],["sorb","Stocks ORB",["sorb"]],["ovn","Overnight",["ovn_h30","ovn_h30f"]],
   ["vcy","Vol cycle",["vcy_night","vcy_day","vcy_day_sk","vcy_day_bw","vcy_day_dh"]],["b4h","4H break",["b4h","b4h_v4","b4h_h2","b4h_g2"]],["all","All strategies",null],["none","No trades",[]]];
 FX.ts = (() => { try { return localStorage.getItem("mp.fxtrades") || "dom_ix"; } catch(e){ return "dom_ix"; } })();
 function fxTs(v, desk){ FX.ts = v; try { localStorage.setItem("mp.fxtrades", v); } catch(e){} ldLoad(desk); }
@@ -1370,8 +1370,8 @@ function fxChart(V){
     if (pts.length) VWm = pts.at(-1)[1]; }
   if ((V.trades||[]).length){ // paper trades of every rule on this market: entry ▲▼, stop / target lines until the exit, exit ○ with the result
     const tfm = FX.tf[V.desk] || 15, nif = V.desk === "nifty";
-    const SPOT = new Set(["touchv2","ovn_h30","vcy_night","vcy_day","vcy_day_sk","vcy_day_bw","vcy_day_dh"]);
-    const TAGS = {dom_ix:"DOM", touchv2:"T2", sorb:"ORB", ovn_h30:"OVN", vcy_night:"VCn", vcy_day:"VCd", vcy_day_sk:"VCs", vcy_day_bw:"VCb", vcy_day_dh:"VCh", b4h:"4H", b4h_v4:"4Hv4", b4h_h2:"4Hh2", b4h_g2:"G2"};
+    const SPOT = new Set(["touchv2","ovn_h30","ovn_h30f","vcy_night","vcy_day","vcy_day_sk","vcy_day_bw","vcy_day_dh"]);
+    const TAGS = {dom_ix:"DOM", touchv2:"T2", sorb:"ORB", ovn_h30:"OVN", ovn_h30f:"OVNf", vcy_night:"VCn", vcy_day:"VCd", vcy_day_sk:"VCs", vcy_day_bw:"VCb", vcy_day_dh:"VCh", b4h:"4H", b4h_v4:"4Hv4", b4h_h2:"4Hh2", b4h_g2:"G2"};
     const xAt = s0 => { if (!s0) return null; const u = new Date(String(s0).slice(0,16).replace(" ", "T") + ":00+05:30"); if (isNaN(u)) return null;
       let d, m, o0; if (nif){ const ist = new Date(u.getTime() + 330*60000); d = ist.toISOString().slice(0,10); m = ist.getUTCHours()*60 + ist.getUTCMinutes(); o0 = 555; }
       else { d = u.toISOString().slice(0,10); m = u.getUTCHours()*60 + u.getUTCMinutes(); o0 = 0; }
