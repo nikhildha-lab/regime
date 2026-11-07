@@ -1323,6 +1323,9 @@ function fxChart(V){
   const CW = FIT ? Math.max(10, Math.min(fill, 150)) : Math.max(need, 86, Math.min(fill, 150)), TXT = CW >= 60, CL = TXT ? 18 : Math.max(4, Math.round(CW*0.35));
   const W = X0 + bars.length*CW + PW + WW + AW + LW, PH = TOP + nR*RH + 6, CP = FX.L.cvd ? 58 : 0, H = PH + 58 + CP;   // CL = candle lane, PW = day-profile column
   const y = p => TOP + (hi - p)/RS*RH;
+  // 2026-11-08 (Nikhil: "latest candle not showing properly"): a price sits in the middle of ITS sub-row. Rows group several price steps
+  // (RS = grp x step), so the old "+ RH/2" pushed candles, wicks and lines up to half a row below their own footprint cells.
+  const HC = RH*step/RS/2;
   const fit = (t, w, px = 5.9) => { if (w < 24) return ""; t = String(t); const n = Math.max(3, Math.floor(w / px)); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
   const mx = Math.max(...bars.flatMap(b => b.bins.map(x => (+x.b)+(+x.s))), 1);
   let g = "";
@@ -1343,9 +1346,9 @@ function fxChart(V){
         const flush = () => { if (s0 != null && pv - s0 >= 2) g += `<rect x="${x+CW-6}" y="${TOP+s0*RH}" width="3" height="${(pv-s0+1)*RH-2}" fill="${col}"><title>stacked ${side} imbalance: ${pv-s0+1} rows in a row</title></rect>`; };
         ks.forEach(k => { if (pv != null && k === pv + 1) pv = k; else { flush(); s0 = pv = k; } }); flush(); };
       run(bi, "var(--bull)", "buy"); run(si, "var(--bear)", "sell"); }
-    const up = b.c >= b.o, yo = y(Math.max(b.o,b.c)) + RH/2, yc = y(Math.min(b.o,b.c)) + RH/2;
+    const up = b.c >= b.o, yo = y(Math.max(b.o,b.c)) + HC, yc = y(Math.min(b.o,b.c)) + HC;
     { const cc = up?"var(--bull)":"var(--bear)", doji = Math.abs(b.c-b.o) < 1e-9;
-      g += `<line x1="${x+CL/2}" x2="${x+CL/2}" y1="${y(b.h)+RH/2}" y2="${y(b.l)+RH/2}" stroke="${doji?"var(--muted)":cc}" stroke-width="1.6"/>`;
+      g += `<line x1="${x+CL/2}" x2="${x+CL/2}" y1="${y(b.h)+HC}" y2="${y(b.l)+HC}" stroke="${doji?"var(--muted)":cc}" stroke-width="1.6"/>`;
       g += doji ? `<rect x="${x+CL/2-Math.min(6,CL/2)}" width="${Math.min(12,CL)}" y="${yo-1.5}" height="3" fill="var(--ink)"/>` : `<rect x="${x+CL/2-Math.min(5,CL/2-1)}" width="${Math.min(10,CL-2)}" y="${yo}" height="${Math.max(3,yc-yo)}" rx="1" fill="${cc}"/>`; }
     { const T = {NL:["new longs","var(--bull)"], SC:["short cover","var(--wait)"], NS:["new shorts","var(--bear)"], LX:["longs exit","var(--muted)"]}[b.oi_tag];   // 2026-10-25 chart marks
       if (T && TXT) g += `<text x="${x+CW/2+4}" y="${PH+54}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${T[1]}"><title>OI ${b.oi_pct>0?"+":""}${b.oi_pct}% over this bar · price ${b.c>=b.o?"up":"down"}</title>${T[0]} ${b.oi_pct>0?"+":""}${fmt(b.oi_pct,2)}%</text>`;
@@ -1370,7 +1373,7 @@ function fxChart(V){
   if (FX.L.vwap){ let pv = 0, vv = 0, sess = null; const pts = [];
     bars.forEach((b, i) => { if (b.d !== sess){ sess = b.d; pv = 0; vv = 0; } b.bins.forEach(c => { const q = (+c.b) + (+c.s); pv += (+c.p)*q; vv += q; }); if (vv) pts.push([X0 + i*CW + CW/2 + 4, pv/vv]); });
     const vis = pts.filter(q => q[1] >= lo && q[1] <= hi);
-    if (vis.length > 1) g += `<path d="${vis.map((q, j) => `${j?"L":"M"}${q[0]} ${(y(q[1])+RH/2).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.8" opacity="0.9"><title>VWAP, bar by bar (volume-weighted price so far today)</title></path>`;
+    if (vis.length > 1) g += `<path d="${vis.map((q, j) => `${j?"L":"M"}${q[0]} ${(y(q[1])+HC).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.8" opacity="0.9"><title>VWAP, bar by bar (volume-weighted price so far today)</title></path>`;
     if (pts.length) VWm = pts.at(-1)[1]; }
   if ((V.trades||[]).length){ // paper trades of every rule on this market: entry ▲▼, stop / target lines until the exit, exit ○ with the result
     const tfm = FX.tf[V.desk] || 15, nif = V.desk === "nifty";
@@ -1387,13 +1390,13 @@ function fxChart(V){
       const xx = t.status === "closed" ? (xAt(t.closed) ?? bx) : bx, sd = t.side === "long" ? 1 : -1;
       const sh = (nif && V.basis != null && SPOT.has(t.rule)) ? +V.basis : 0, P = v => v == null ? null : +v + sh;
       const col = sd > 0 ? "var(--bull)" : "var(--bear)", e = P(t.entry); if (e == null || e < lo || e > hi) return;
-      const seg = (v, c, da, nm) => { if (v == null || v < lo || v > hi) return; const yy = y(v) + RH/2;
+      const seg = (v, c, da, nm) => { if (v == null || v < lo || v > hi) return; const yy = y(v) + HC;
         g += `<line x1="${xe}" x2="${Math.max(xx, xe + 6)}" y1="${yy}" y2="${yy}" stroke="${c}" stroke-width="1.6" stroke-dasharray="${da}"><title>${esc(t.rule_label)} · ${nm} ${ldPx(v)}</title></line>`; };
       seg(e, "var(--ink)", "", "entry"); seg(P(t.stop), "var(--bear)", "5 3", "stop");
       (t.targets || (t.target != null ? [t.target] : [])).forEach(v => seg(P(v), "var(--bull)", "5 3", "target"));
-      const ye = y(e) + RH/2, tag = TAGS[t.rule] || t.rule;
+      const ye = y(e) + HC, tag = TAGS[t.rule] || t.rule;
       g += `<g><title>${esc(t.rule_label)} · ${esc(t.side)} ${ldPx(t.entry)}${sh ? ` (spot price, drawn +${sh} on the futures chart)` : ""} · ${esc(String(t.opened).slice(11,16))}${t.status === "closed" ? ` → ${esc(String(t.closed||"").slice(11,16))} ${esc(t.exit_reason||"")} ${t.pnl != null ? (t.pnl >= 0 ? "+" : "−") + fxK(t.pnl) : ""}` : " · open"}</title><path d="${sd > 0 ? `M${xe} ${ye+3} l-6 10 l12 0z` : `M${xe} ${ye-3} l-6 -10 l12 0z`}" fill="${col}" stroke="var(--surface)" stroke-width="1"/>${TXT ? `<text x="${xe+8}" y="${sd > 0 ? ye+14 : ye-6}" font-size="10" font-weight="700" fill="${col}" stroke="var(--surface)" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${esc(tag)}</text>` : ""}</g>`;
-      if (t.status === "closed" && t.exit != null){ const x2 = P(t.exit); if (x2 >= lo && x2 <= hi){ const yx = y(x2) + RH/2, pc = (t.pnl || 0) >= 0 ? "var(--bull)" : "var(--bear)";
+      if (t.status === "closed" && t.exit != null){ const x2 = P(t.exit); if (x2 >= lo && x2 <= hi){ const yx = y(x2) + HC, pc = (t.pnl || 0) >= 0 ? "var(--bull)" : "var(--bear)";
         g += `<circle cx="${xx}" cy="${yx}" r="4.5" fill="var(--surface)" stroke="${pc}" stroke-width="2"><title>${esc(t.rule_label)} exit ${ldPx(t.exit)} · ${esc(t.exit_reason||"")}</title></circle>`;
         if (TXT) g += `<text x="${xx+7}" y="${yx+4}" font-size="10" font-weight="700" fill="${pc}" stroke="var(--surface)" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${t.pnl != null ? (t.pnl >= 0 ? "+" : "−") + fxK(t.pnl) : ""}</text>`; } } }); }
   { const cvs = bars.map(b => b.cvd).filter(v => v!=null);
@@ -1418,7 +1421,7 @@ function fxChart(V){
     const off = (V.desk==="nifty" && V.basis!=null && isFinite(V.basis)) ? +V.basis : 0;
     const op = {strong:.16, medium:.10, weak:.06};
     const [w0, w1] = V.__win || [-Infinity, Infinity];
-    BK.filter(b => b.lo!=null && b.hi+off >= lo-RS && b.lo+off <= hi+RS && b.hi+off >= w0 && b.lo+off <= w1).forEach(b => { const y1 = y(b.hi+off)+RH/2, y2 = y(b.lo+off)+RH/2, col = b.side==="R" ? "var(--bear)" : b.side==="IN" ? "var(--wait)" : "var(--bull)";
+    BK.filter(b => b.lo!=null && b.hi+off >= lo-RS && b.lo+off <= hi+RS && b.hi+off >= w0 && b.lo+off <= w1).forEach(b => { const y1 = y(b.hi+off)+HC, y2 = y(b.lo+off)+HC, col = b.side==="R" ? "var(--bear)" : b.side==="IN" ? "var(--wait)" : "var(--bull)";
       g = `<rect x="${X0}" y="${Math.min(y1,y2)-2}" width="${lx-X0}" height="${Math.max(4, Math.abs(y2-y1)+4)}" fill="${col}" fill-opacity="${op[b.strength]||.08}"><title>${esc(b.strength)} block ${esc(b.range)}${off?" (spot; shifted by the futures basis)":""}</title></rect>
         <text x="${X0+4}" y="${Math.max(TOP+10, Math.min(y1,y2)-4)}" font-size="10.5" font-weight="${b.strength==="strong"?700:500}" fill="${col}" opacity=".85">${b.side==="R"?"R block":b.side==="IN"?"Price in block":"S block"} ${esc(b.range)} · ${esc(b.strength)}${b.star?" ★":""}</text>` + g; });
     const tfm = FX.tf[V.desk] || 15;
@@ -1472,7 +1475,7 @@ function fxChart(V){
     if (v5) [["5d POC", v5.poc], ["5d VAH", v5.vah], ["5d VAL", v5.val]].forEach(([k, v]) => { if (v >= lo && v <= hi) LV.push([k, v]); }); }
   // support (green) / resistance (red) zones: thick translucent bands under the other lines
   SRL.filter(([k,v]) => v>=lo-RS && v<=hi+RS).forEach(([k,v]) => { const sup = k==="S" || k==="PDL" || k==="PWL" || (k!=="R" && k!=="PDH" && k!=="PWH" && V.spot!=null && v < V.spot);
-    const yy = y(v)+RH/2; g = `<rect x="${X0}" y="${yy-3}" width="${lx-X0}" height="6" fill="${sup?"var(--bull)":"var(--bear)"}" fill-opacity="0.13"/><line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="${sup?"var(--bull)":"var(--bear)"}" stroke-width="1.3" stroke-dasharray="2 3" opacity="0.85"/>` + g; });
+    const yy = y(v)+HC; g = `<rect x="${X0}" y="${yy-3}" width="${lx-X0}" height="6" fill="${sup?"var(--bull)":"var(--bear)"}" fill-opacity="0.13"/><line x1="${X0}" x2="${lx}" y1="${yy}" y2="${yy}" stroke="${sup?"var(--bull)":"var(--bear)"}" stroke-width="1.3" stroke-dasharray="2 3" opacity="0.85"/>` + g; });
   if (WW){ // 2026-11-07 (Nikhil: "can we see this info on the dashboard"): big resting orders in the book, in their own column (never over the cells)
     const up0 = Math.min(3, BWL.filter(w => w.price > hi).length), wx = bx + PW + 4, mxX = Math.max(...BWL.map(w => +w.x), 4), sz = w => Math.max(16, Math.min(1, w.x/mxX)*(WW - 12));
     g += `<text x="${wx}" y="${Math.max(10, TOP-3-13*up0)}" font-size="9.5" fill="var(--muted)"><title>${esc(BWD.rule||"")} · ${esc(BWD.source||"")} ${esc(BWD.as_of||"")}</title>Big walls${BWD.source==="live"?"":" · close"}</text>`;
@@ -1497,13 +1500,13 @@ function fxChart(V){
     const items = [];
     [...LV, ...WL, ...SRL].filter(([k,v]) => v>=lo-RS && v<=hi+RS).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
       const wall = k.includes("wall"), srk = ["S","R","PDH","PDL","PWH","PWL"].includes(k);
-      if (!srk && k !== "VWAP·") g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+RH/2}" y2="${y(v)+RH/2}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
+      if (!srk && k !== "VWAP·") g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+HC}" y2="${y(v)+HC}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
       const last = items.at(-1);
       if (last && !last.spot && Math.abs(last.v - v) < RS*0.75){ if (!last.names.includes(nm(k))) last.names.push(nm(k)); last.bold = last.bold || wall || srk; return; }
-      items.push({v, names:[nm(k)], col: lcol2(k), bold: wall || srk, want: y(v) + RH/2});
+      items.push({v, names:[nm(k)], col: lcol2(k), bold: wall || srk, want: y(v) + HC});
     });
     const spotIn = V.spot!=null && V.spot>=lo && V.spot<=hi;
-    if (spotIn){ const sy = y(V.spot) + RH/2; items.push({v: +V.spot, spot: true, want: sy}); items.sort((a,b) => b.v - a.v);
+    if (spotIn){ const sy = y(V.spot) + HC; items.push({v: +V.spot, spot: true, want: sy}); items.sort((a,b) => b.v - a.v);
       g += `<line x1="${X0}" x2="${lx}" y1="${sy}" y2="${sy}" stroke="var(--ink)" stroke-width="1.4"/>`; }
     const GAP = 15, top = TOP + 6, bot = PH - 4;
     items.forEach((it, j) => { it.yy = Math.max(it.want, top, j ? items[j-1].yy + GAP : -1e9); });
