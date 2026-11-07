@@ -2775,6 +2775,13 @@ function istOf(at, tz){ const s = String(at||""); if (s.length < 16) return [nul
 function dataOld(at, tz, maxMin){ const [d, t] = istOf(at, tz); return d ? ageMin(d, t) > (maxMin||20) : false; }
 function recLine(n, txt){ return `<div class="rec">Track record: ${n ? txt : "none yet - logging, graded once there are enough readings"}</div>`; }
 
+// 2026-11-07: price axis for the block maps - about 6 round-number ticks between lo and hi
+function blockAxis(lo, hi, X, dp, y){
+  const raw = (hi - lo) / 6, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))), step = [1, 2, 2.5, 5, 10].map(k => k * mag).find(k => k >= raw) || raw;
+  let g = `<line x1="20" x2="980" y1="${y}" y2="${y}" stroke="currentColor" opacity="0.25"/>`;
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step){ const x = X(v);
+    g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 5}" stroke="currentColor" opacity="0.4"/><text x="${x}" y="${y + 19}" text-anchor="middle" font-size="13" fill="var(--muted, #8a97a3)" font-family="IBM Plex Mono,monospace">${fmt(v, step < 1 ? Math.max(dp, String(step).split(".")[1]?.length || 0) : dp)}</text>`; }
+  return g; }
 // 2026-10-25: block map SVG shared by Overnight prep and the Nifty 50 stock view
 function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !(M.levels||[]).length)) return ""; const dp = M.spot > 2000 ? 0 : M.spot > 200 ? 1 : 2;
     const all = ["strong","medium","weak"].flatMap(st => ((M.blocks||{})[st]||[]).map(b => Object.assign({st}, b))).filter(b => b.lo && b.hi);
@@ -2785,16 +2792,17 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
     const refs = (M.levels||[]).filter(x => x.px && near(x));
     let lo = Math.min(spot, ...all.map(b=>b.lo), ...refs.map(x=>x.px), r5 ? r5.lo : spot), hi = Math.max(spot, ...all.map(b=>b.hi), ...refs.map(x=>x.px), r5 ? r5.hi : spot);
     const pad = (hi - lo) * 0.03; lo -= pad; hi += pad;
-    const W = 1000, X = v => 20 + (v - lo) / (hi - lo) * (W - 40), Y = 78;
+    const W = 1000, X = v => 20 + (v - lo) / (hi - lo) * (W - 40), Y = 86;
     const RC = x => /^(VAH|VAL|POC)$/.test(x.short) ? "#8B7CF6" : x.short === "VWAP" ? "#E8A33C" : /^IB/.test(x.short) ? "#2F9BD6" : "var(--muted, #8a97a3)";
     const grp = [];                                     // levels a few px apart share one line
     refs.slice().sort((a,b) => a.px - b.px).forEach(x => { const g = grp[grp.length-1]; if (g && X(x.px) - X(g[0].px) < 6) g.push(x); else grp.push([x]); });
     const rows = [];                                    // labels on up to 3 rows so they do not overlap
-    const refSvg = grp.map(g => { const x = X(g[0].px), lab = g.map(e => e.short).join("·"), w = lab.length * 6.6 + 8;
+    // 2026-11-07 (Nikhil: "mention the price for each level or give x axis, for all tabs"): each label carries its price, plus a price axis below
+    const refSvg = grp.map(g => { const x = X(g[0].px), lab = g.map(e => e.short).join("·") + " " + fmt(g[0].px, dp), w = lab.length * 7.6 + 10;
       let r = rows.findIndex(end => end < x - w / 2); if (r < 0) r = rows.length < 3 ? rows.length : 2; rows[r] = x + w / 2;
-      const ly = 12 + r * 12, c = RC(g[0]);
+      const ly = 14 + r * 17, c = RC(g[0]);
       return `<g><title>${esc(g.map(e => `${e.name} ${fmt(e.px,dp)}`).join("\n"))}</title><line x1="${x}" x2="${x}" y1="${ly + 3}" y2="${Y + 22}" stroke="${c}" stroke-width="1.4" stroke-dasharray="4 3" opacity=".9"/>
-        <text x="${x}" y="${ly}" text-anchor="middle" font-size="10.5" font-weight="600" fill="${c}">${esc(lab)}</text></g>`; }).join("");
+        <text x="${x}" y="${ly}" text-anchor="middle" font-size="13" font-weight="600" fill="${c}">${esc(lab)}</text></g>`; }).join("");
     const col = (b) => b.side === "R" ? "var(--bear)" : b.side === "IN" ? "var(--wait)" : "var(--bull)";
     const th = {strong: 22, medium: 14, weak: 7}, op = {strong: 0.85, medium: 0.6, weak: 0.4};
     const bands = all.map(b => { const x1 = X(b.lo), x2 = Math.max(X(b.hi), x1 + 3);
@@ -2804,7 +2812,7 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
       return `<text x="${x}" y="${up ? Y - 20 : Y + 30}" text-anchor="middle" font-size="12" fill="${col(b)}" font-weight="${b.st==="strong"?700:400}">${b.star?"★ ":""}${esc(b.range)}</text>`; }).join("");
     const rng = r5 ? `<rect x="${X(r5.lo)}" y="${Y-3}" width="${X(r5.hi)-X(r5.lo)}" height="6" rx="3" fill="var(--accent)" opacity="0.35"/><text x="${X(r5.lo)}" y="${Y+52}" font-size="10.5" fill="var(--muted, #8a97a3)">5-day ${fmt(r5.lo,dp)}</text><text x="${X(r5.hi)}" y="${Y+52}" font-size="10.5" text-anchor="end" fill="var(--muted, #8a97a3)">${fmt(r5.hi,dp)}</text>` : "";
     return `<div style="margin-top:6px"><div class="eyebrow">${esc(name)} · blocks around ${fmt(spot,dp)}</div>
-      <svg viewBox="0 0 ${W} 138" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(name)} block map">
+      <svg viewBox="0 0 ${W} 188" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(name)} block map">${blockAxis(lo, hi, X, dp, 160)}
         <line x1="20" x2="${W-20}" y1="${Y}" y2="${Y}" stroke="currentColor" opacity="0.15" stroke-width="2"/>${refSvg}${rng}${bands}${lab}
         <circle cx="${X(spot)}" cy="${Y}" r="7" fill="#fff" stroke="#000" stroke-width="1"/><line x1="${X(spot)}" x2="${X(spot)}" y1="${Y+10}" y2="${Y+40}" stroke="currentColor" opacity="0.35" stroke-dasharray="2 3"/>
         <text x="${X(spot)}" y="${Y+55}" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">now ${fmt(spot,dp)}</text>
