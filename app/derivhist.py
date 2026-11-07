@@ -121,7 +121,13 @@ def fetch_coin(c, days15=30, years1h=2, quick=False):
                      D["top_pos"].get(ts, {}).get("longShortRatio", ""), D["top_acc"].get(ts, {}).get("longShortRatio", ""),
                      D["glob_acc"].get(ts, {}).get("longShortRatio", ""), D["taker_bs"].get(ts, {}).get("buySellRatio", "")])
     _write(os.path.join(OUT, f"der15_{c}.csv"), ["ts", "oi", "oi_usd", "top_pos", "top_acc", "glob_acc", "taker_bs"], rows)
-    if quick:
+    if quick:                                          # 2026-11-07: keep funding fresh too (the score uses it)
+        try:
+            x = _get("/fapi/v1/fundingRate", symbol=sym, startTime=now - 3 * 86400_000, limit=100)
+            if isinstance(x, list) and x:
+                _write(os.path.join(OUT, f"fund_{c}.csv"), ["ts", "rate"], [[int(r["fundingTime"]), r["fundingRate"]] for r in x])
+        except Exception:
+            pass
         return len(rows)
     _status(step=f"{c} 1-hour candles (2 years)")
     s1h = now - int(years1h * 365 * 86400_000)

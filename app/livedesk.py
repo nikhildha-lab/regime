@@ -486,6 +486,10 @@ def poll_once():
                 B4.tick()
             except Exception as e:
                 _STATE["break4h_error"] = str(e)[:160]
+            try:                                   # 2026-11-07 (Nikhil): crypto rise / fall score every 5 min (fetch + score + log + check)
+                _hot("cryptoscore").tick()
+            except Exception as e:
+                _STATE["cryptoscore_error"] = str(e)[:160]
             try:                                   # 2026-11-07 (Nikhil): keep saving Binance OI / long-short / taker data hourly (app/derivhist.py)
                 _hot("derivhist").tick()
             except Exception as e:
@@ -890,6 +894,8 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/cryptoscore":            # 2026-11-07 (Nikhil): SOL / BTC / ETH rise-fall score, 15m / 1h / 4h (app/cryptoscore.py)
+        return _hot("cryptoscore").api()
     if path == "/api/livedesk/run_tool" and q.get("name") == "fetch_deriv":         # 2026-11-07: Binance OI / long-short / funding / CVD history (research)
         return _hot("derivhist").start([c for c in (q.get("coins") or "").split(",") if c] or None)
     if path == "/api/livedesk/run_tool" and q.get("name") == "deriv_status":
