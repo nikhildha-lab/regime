@@ -837,7 +837,7 @@ def start_tracker(desk: str, restart: bool = False) -> dict:
         return CL.restart() if restart else (CL.start() if not CL._E["running"] else {"ok": True, "detail": "already running"})
     if not name:
         return {"ok": False, "detail": "unknown tracker"}
-    d = os.path.abspath(os.path.join(ROOT, "..", "..", name))
+    d = os.environ.get("MP_METALS_DIR") if name == "metals-tracker" and os.environ.get("MP_METALS_DIR") else os.path.abspath(os.path.join(ROOT, "..", "..", name))
     if not os.path.exists(os.path.join(d, "run_forever.sh")):
         return {"ok": False, "detail": f"{name} not found"}
     if restart:
@@ -885,11 +885,11 @@ def handle_get(path: str, q: dict):
                 "error": None if I.get("ladder") else "no order book yet (market opens 09:15; the engine needs a minute to connect)"}
     if path == "/api/livedesk/run_tool" and q.get("name") == "restart_of_engine":  # 2026-11-03: restart the Dhan order-flow engine (loads code changes)
         import subprocess
-        d = os.path.join(HOME, "Documents", "dhan", "orderflow")
+        d = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "orderflow")
         subprocess.run(["pkill", "-f", "of_engine.py"])
         time.sleep(2)
         log = open(os.path.join(d, "of_engine.log"), "a")
-        p = subprocess.Popen(["caffeinate", "-i", os.path.join(HOME, "Documents", "dhan", "venv", "bin", "python"), "-u", "of_engine.py"],
+        p = subprocess.Popen((["caffeinate", "-i"] if __import__("shutil").which("caffeinate") else []) + [os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "venv", "bin", "python"), "-u", "of_engine.py"],
                              cwd=d, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
         return {"ok": True, "pid": p.pid, "detail": "order-flow engine restarting - book back in about a minute"}
     if path == "/api/livedesk/run_tool" and q.get("name") == "tabnews_now":
