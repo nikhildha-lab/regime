@@ -545,6 +545,12 @@ def api(q=None):
         if not (S.get("bf") or {}).get("running"):
             threading.Thread(target=backfill, args=(q.get("from") or "2024-07-08",), daemon=True, name="fno_backfill").start()
         return {"started": True, "status": S.get("bf")}
+    if q.get("bures"):                                      # 2026-11-08: BuildUp v1 research data job (app/buresearch.py)
+        import importlib
+        import buresearch as BR
+        if q.get("bures") == "start" and not BR.S.get("running"):
+            BR = importlib.reload(BR)
+        return BR.api(q)
     if q.get("rpstatus"):
         return S.get("rp") or {}
     if q.get("bfstatus"):
