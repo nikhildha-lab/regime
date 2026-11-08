@@ -93,6 +93,7 @@ def _prev(sym, day):
             S["prev_err"] = f"{sym}: {str(e)[:100]}"
     if len(d):
         d = d.drop_duplicates("ts").sort_values("ts")
+        d = d[d.ts.dt.weekday < 5]                     # 2026-11-08: weekend special sessions (Muhurat) are not "yesterday" - skip them
         keep = sorted(d.ts.dt.strftime("%Y-%m-%d").unique())[-15:]
         d = d[d.ts.dt.strftime("%Y-%m-%d").isin(keep)]
     _PREV[k] = d
