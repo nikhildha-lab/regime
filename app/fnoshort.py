@@ -1,0 +1,171 @@
+"""F&O SHORT BUILD-UP v1 - PAPER ONLY (2026-11-08, Nikhil: "build a strategy around this [F&O flow] .. can we get some edge .. can take
+real data feed trades"). Never places orders.
+
+Research (scripts/research/fno_flow_research.py .. research4.py, NSE F&O bhavcopy 8 Jul 2024 - 6 Nov 2026, 578 sessions, ~280 stocks):
+  * build-up classes on ordinary days, breadth, writer levels, pinning, daily long-short sorts: no edge after costs.
+  * ONE effect held everywhere it was checked: a stock future that FALLS >= 2 % on the day while total futures OI RISES >= 10 %
+    (fresh shorts, not longs leaving) keeps underperforming. Smooth across every threshold tried (OI 5-30 %, fall 1.5-5 %); a fall with
+    flat OI does the opposite (bounces); the long-side mirror shows nothing beyond the market.
+  * Rule below (picked from 27 variants of hold / stop / filter, all positive): 596 trades, +0.72 % a trade after 0.06 % costs (t 3.6),
+    win 54 %, halves +0.76 / +0.68, every year positive (2024 +0.78, 2025 +0.82, 2026 +0.55).
+Rule:
+  signal   after the close (NSE F&O bhavcopy, same numbers the test used): most-held futures contract down >= 2 % vs its previous
+           close, total futures OI (all months) up >= 10 %, close in the lower half of the day's range; |move| <= 20 % (corporate
+           actions out). At most 5 a day - the biggest OI rises.
+  entry    SHORT that stock's future at the next session's open (Dhan quote: day open), 1 lot
+  stop     5 % above entry, checked every minute on the day's high (filled at the stop, or the open if it gaps above)
+  exit     close of the 5th session (15:25 last price)
+  roll     if the contract expires inside the hold, the next month is used from the start
+Paper P&L: % after 0.06 % round trip, and rupees for 1 lot. Judge after ~40 trades.
+"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+from datetime import date, datetime, timedelta
+
+import pandas as pd
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+OUT = os.path.join(ROOT, "data_store", "livedesk", "fnoshort")
+HIST = os.path.join(ROOT, "data_store", "research", "fno_hist")
+FALL, OI_UP, MAX_DAY, STOP, HOLD, COST = -2.0, 10.0, 5, 5.0, 5, 0.06
+S: dict = {"t": 0, "busy": False, "err": None}
+
+
+def _load():
+    try:
+        return json.load(open(os.path.join(OUT, "state.json")))
+    except Exception:
+        return {"signals": {}, "trades": []}
+
+
+def _save(st):
+    os.makedirs(OUT, exist_ok=True); p = os.path.join(OUT, "state.json"); tmp = p + ".tmp"
+    json.dump(st, open(tmp, "w"), indent=1, default=str); os.replace(tmp, p)
+
+
+def signals_for(day: str) -> list:
+    """The rule on one session's compact bhavcopy (data_store/research/fno_hist/fut_<day>.csv.gz)."""
+    f = pd.read_csv(os.path.join(HIST, f"fut_{day}.csv.gz"))
+    f = f[(f.kind == "STF") & (f.close > 0)]
+    tot = f.groupby("sym").agg(oi=("oi", "sum"), chg=("chg_oi", "sum"))
+    live = f[f.expiry > day].sort_values("oi").groupby("sym").tail(1).set_index("sym")
+    out = []
+    for sym, r in live.iterrows():
+        t = tot.loc[sym]; base = t.oi - t.chg
+        if base <= 0 or not r.prev:
+            continue
+        ret = (r.close / r.prev - 1) * 100; oic = t.chg / base * 100
+        clv = ((r.close - r.low) - (r.high - r.close)) / (r.high - r.low) if r.high > r.low else 0
+        if ret <= FALL and oic >= OI_UP and clv < -0.5 and abs(ret) <= 20:
+            out.append({"sym": sym, "day": day, "ret": round(ret, 2), "oi_chg": round(float(oic), 1), "clv": round(float(clv), 2), "close": float(r.close), "expiry": r.expiry})
+    return sorted(out, key=lambda x: -x["oi_chg"])[:MAX_DAY]
+
+
+def _contract(sym, today):
+    """Futures security id + lot + expiry for the hold: nearest expiry at least 8 calendar days away."""
+    import fnoflow as FF
+    U = FF.universe().get(sym) or {}
+    lim = str(date.fromisoformat(today) + timedelta(days=8))
+    for exp, sid, lot in U.get("futs", []):
+        if exp >= lim:
+            return exp, sid, lot
+    return (U["futs"][-1] if U.get("futs") else (None, None, None))
+
+
+def _evening(st):
+    """After the bhavcopy is out: make sure the compact file exists (fnoflow.backfill skips files it has) and record the signals."""
+    import fnoflow as FF
+    d = date.today()
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    day = str(d)
+    if day in st["signals"]:
+        return
+    FF.backfill(str(d - timedelta(days=6)))
+    if os.path.exists(os.path.join(HIST, f"fut_{day}.csv.gz")):
+        st["signals"][day] = signals_for(day)
+
+
+def _session(st):
+    """Market hours: open new trades from the latest unfilled signal day, then manage every open trade on live quotes."""
+    import dhan_live as DL
+    today = datetime.now().strftime("%Y-%m-%d"); hm = datetime.now().strftime("%H:%M")
+    pend = [s for d, L in st["signals"].items() if d < today for s in L
+            if not any(t["sym"] == s["sym"] and t["signal_day"] == d for t in st["trades"]) and not s.get("skipped")]
+    for s in pend:
+        exp, sid, lot = _contract(s["sym"], today)
+        if not sid:
+            s["skipped"] = "no contract"; continue
+        st["trades"].append({"sym": s["sym"], "signal_day": s["day"], "sid": sid, "expiry": exp, "lot": lot, "status": "pending",
+                             "why": f"{s['day']}: futures {s['ret']:+.2f}% with OI {s['oi_chg']:+.1f}% (fresh shorts), closed near the day's low"})
+    live = [t for t in st["trades"] if t["status"] in ("pending", "open")]
+    if not live:
+        return
+    Q = (DL.quote({"NSE_FNO": [t["sid"] for t in live]}).get("NSE_FNO") or {})
+    for t in live:
+        q = Q.get(str(t["sid"]))
+        if not q or not str(q.get("last_trade_time", "")).startswith(datetime.now().strftime("%d/%m/%Y")):
+            continue                                                 # no trade today yet (holiday / pre-open)
+        o = q.get("ohlc") or {}; lp = q.get("last_price")
+        if t["status"] == "pending":
+            if t["signal_day"] >= today or not o.get("open"):
+                continue
+            e = float(o["open"])
+            t.update(status="open", entry=e, entry_day=today, opened=f"{today} 09:15", stop=round(e * (1 + STOP / 100), 2), sessions=[today])
+        if today not in t["sessions"]:
+            t["sessions"].append(today)
+        hi = float(o.get("high") or 0)
+        if hi >= t["stop"]:
+            px = t["stop"] if float(o.get("open") or 0) < t["stop"] or len(t["sessions"]) == 1 and o.get("open") == t["entry"] else float(o["open"])
+            _close(t, px, "stop 5 %"); continue
+        if len(t["sessions"]) >= HOLD and hm >= "15:25":
+            _close(t, float(lp), f"{HOLD} sessions"); continue
+        t["now"] = lp; t["pnl_open_pct"] = round((t["entry"] - lp) / t["entry"] * 100 - COST, 2)
+        t["pnl_open"] = round((t["entry"] - lp - t["entry"] * COST / 100) * (t["lot"] or 0))
+
+
+def _close(t, px, why):
+    pct = (t["entry"] - px) / t["entry"] * 100 - COST
+    t.update(status="closed", exit=round(px, 2), exit_reason=why, closed=datetime.now().strftime("%Y-%m-%d %H:%M"), pnl_pct=round(pct, 2),
+             pnl=round((t["entry"] - px - t["entry"] * COST / 100) * (t["lot"] or 0)))
+    for k in ("now", "pnl_open_pct", "pnl_open"):
+        t.pop(k, None)
+
+
+def _work():
+    try:
+        st = _load(); now = datetime.now(); hm = now.strftime("%H:%M")
+        if now.weekday() < 5 and "09:16" <= hm <= "15:30":
+            _session(st)
+        if hm >= "19:05" or hm < "08:00":
+            _evening(st)
+        st["at"] = now.isoformat(timespec="seconds"); _save(st); S["err"] = None
+    except Exception as e:
+        S["err"] = f"{type(e).__name__}: {str(e)[:160]}"
+    finally:
+        S["busy"] = False
+
+
+def tick(force=False):
+    if S["busy"] or (not force and time.time() - S["t"] < 55):
+        return False
+    S["t"] = time.time(); S["busy"] = True
+    threading.Thread(target=_work, name="fnoshort", daemon=True).start()
+    return True
+
+
+def trades():
+    return [t for t in _load().get("trades", []) if t.get("status") in ("open", "closed")]
+
+
+def api():
+    st = _load()
+    last = sorted(st.get("signals", {}).items())[-1] if st.get("signals") else (None, [])
+    return {"last_signal_day": last[0], "signals": last[1], "open": [t for t in st.get("trades", []) if t["status"] in ("pending", "open")],
+            "closed": [t for t in st.get("trades", []) if t["status"] == "closed"][-30:], "err": S.get("err"), "at": st.get("at"),
+            "rule": "Short the stock future at the next open after a day with futures down >= 2 %, total OI up >= 10 % and a close in the lower half of "
+                    "the range (max 5 a day, biggest OI rises); stop 5 %; out at the close of the 5th session. Paper only."}

@@ -261,6 +261,65 @@ def _bu(px, oi):
     return "LONG_BUILD" if px > 0 and oi > 0 else "SHORT_BUILD" if px < 0 and oi > 0 else "SHORT_COVER" if px > 0 else "LONG_UNWIND"
 
 
+def _build_replay(day):
+    """2026-11-08 (Nikhil: chart should look like the sample replay): 5-min futures bars of one past session from Dhan, one call per name
+    (~0.5 s apart), saved as replay_<day>.json {sym: [[HH:MM, % vs previous close], ...]}. Each path is anchored so its last point equals the
+    bhavcopy move of the most-held contract (bars are the nearest-month contract)."""
+    import dhan_live as DL
+    S["rp"] = {"running": True, "day": day, "done": 0, "err": None}
+    try:
+        R = eod().get("rows") or {}; U = universe(); d = date.fromisoformat(day); out = {}; bad = 0
+        for sym, e in R.items():
+            u = U.get(sym) or {}; futs = [f for f in u.get("futs", []) if f[0] >= day]
+            if not futs or not e.get("fut_prev"):
+                continue
+            try:
+                bars = DL.intraday("NSE_FNO", futs[0][1], "FUTIDX" if u.get("kind") == "index" else "FUTSTK", d, d, mins=5, oi=False)
+            except Exception as ex:
+                bad += 1; S["rp"]["err"] = f"{sym}: {str(ex)[:80]}"; time.sleep(1.5); continue
+            bars = [b for b in bars if b["ts"].strftime("%Y-%m-%d") == day and b.get("close")]
+            S["rp"]["done"] += 1; time.sleep(0.45)
+            if len(bars) < 5:
+                continue
+            mv = e["fut_close"] / e["fut_prev"]; last = bars[-1]["close"]
+            pts = [["09:14", 0.0]] + [[(b["ts"] + timedelta(minutes=5)).strftime("%H:%M"), round((b["close"] / last * mv - 1) * 100, 2)] for b in bars]
+            out[sym] = pts[:1] + pts[1:-1:2] + pts[-1:]                       # every 10 min + the close
+        if len(out) >= max(20, 0.5 * len(R)):
+            with open(os.path.join(OUT, f"replay_{day}.json"), "w") as f:
+                json.dump(out, f)
+        S["rp"].update(running=False, names=len(out), failed=bad)
+    except Exception as ex:
+        S["rp"].update(running=False, err=f"{type(ex).__name__}: {str(ex)[:120]}")
+
+
+def _replay(day):
+    """Cached replay paths for a past session; starts the one-off build in the background if missing."""
+    if not day:
+        return {}
+    c = S.get("rpc")
+    if c and c[0] == day:
+        return c[1]
+    p = os.path.join(OUT, f"replay_{day}.json")
+    if os.path.exists(p):
+        try:
+            S["rpc"] = (day, json.load(open(p))); return S["rpc"][1]
+        except Exception:
+            pass
+    if not (S.get("rp") or {}).get("running") and time.time() - (S.get("rp_t") or 0) > 600:
+        S["rp_t"] = time.time(); threading.Thread(target=_build_replay, args=(day,), daemon=True, name="fno_replay").start()
+    return {}
+
+
+def _prev_spot(day):
+    """Underlying close of the session before `day` (option bhavcopy, data_store/research/fno_hist/opt_<d>.csv.gz)."""
+    try:
+        fs = sorted(f for f in os.listdir(HIST) if f.startswith("opt_") and f[4:14] < day)
+        o = pd.read_csv(os.path.join(HIST, fs[-1]), usecols=["sym", "und"])
+        return o.dropna().groupby("sym").und.first().to_dict()
+    except Exception:
+        return {}
+
+
 def _latest_snap():
     files = sorted(f for f in os.listdir(OUT) if f.startswith("snap_")) if os.path.isdir(OUT) else []
     return os.path.join(OUT, files[-1]) if files else None
@@ -269,6 +328,9 @@ def _latest_snap():
 def board(univ="all"):
     E = eod(); R = E.get("rows") or {}
     sp = _latest_snap(); live = sp is not None and os.path.basename(sp)[5:15] == _today()
+    if live and pd.read_csv(sp, usecols=["m"]).m.nunique() < 10:                # a couple of manual snapshots are not a session: show the replay
+        live = False
+    replay = False
     sec = sectors(); NM = names_map(); n50 = nifty50() if univ == "nifty50" else None
     names = {}
     if live:
@@ -297,11 +359,18 @@ def board(univ="all"):
         at = f"{os.path.basename(sp)[5:15]} {m_now}"
         src = "live" if datetime.now().weekday() < 5 and datetime.now().strftime("%H:%M") <= "15:35" else "session snapshots (market closed)"
     else:
+        RP = _replay(E.get("day")); PS = _prev_spot(E.get("day") or _today()); replay = bool(RP)
         for sym, e in R.items():
             mv = (e["fut_close"] / e["fut_prev"] - 1) * 100 if e.get("fut_prev") else None
             oic = (e["oi"] / e["oi_prev"] - 1) * 100 if e.get("oi_prev") else None
-            names[sym] = {"move": mv, "oi_chg": oic, "spot_move": None, "fut": e.get("fut_close"), "fut_prev": e.get("fut_prev"), "oi": e.get("oi"), "w": {}, "path": []}
-        at = E.get("day"); src = "last session (NSE end of day)"
+            pth = RP.get(sym) or []; w = {}
+            if len(pth) > 8:                                                    # last hour from the replay (price only - no minute OI)
+                a = next((p for p in reversed(pth) if p[0] <= "14:30"), None)
+                if a:
+                    pm = ((1 + pth[-1][1] / 100) / (1 + a[1] / 100) - 1) * 100; w["60m"] = {"move": round(pm, 2), "oi": None, "bu": "NEUTRAL"}
+            spm = (e["spot_close"] / PS[sym] - 1) * 100 if e.get("spot_close") and PS.get(sym) else None
+            names[sym] = {"move": mv, "oi_chg": oic, "spot_move": spm, "fut": e.get("fut_close"), "fut_prev": e.get("fut_prev"), "oi": e.get("oi"), "w": w, "path": pth}
+        at = E.get("day"); src = f"NSE archive {E.get('day')} · replay" if replay else "last session (NSE end of day)"
     U = S.get("uni")[1] if S.get("uni") else {}
     rows = []
     for sym, n in names.items():
@@ -366,9 +435,62 @@ def board(univ="all"):
     idx = {r["sym"]: r for r in rows if r["kind"] == "index"}
     return {"at": at, "source": src, "eod_day": E.get("day"), "universe": univ, "breadth": br, "sectors": secs, "index": idx,
             "rows": sorted([r for r in rows if r["kind"] == "stock"], key=lambda r: -r["move"]), "breadth_hist": hist, "err": S.get("err"),
-            "note": ("" if live else "Market closed: the 'stock agrees' and 'last hour' checks need live data, so conviction tops out at 3 of 5. ")
+            "replay": S.get("rp") if not live and not replay else None,
+            "note": ("" if live else "Market closed: last session replayed from 5-min futures bars (last hour = price only); spot vs the session before from the bhavcopy. "
+                     if replay else "Market closed: the replay of the last session is being built (about 2 min); until then 'last hour' cannot pass. ")
                     + "Futures move vs previous close; OI = all listed months vs yesterday (NSE bhavcopy); levels = yesterday's option OI. "
                     "Context only - descriptive, not a tested signal."}
+
+
+# ------------------------------------------------------------------ history for research (2026-11-08)
+HIST = os.path.join(ROOT, "data_store", "research", "fno_hist")
+
+
+def _compact(df, day):
+    """One bhavcopy -> (futures rows: every stock / index future, every expiry) and (options: per underlying, nearest expiry)."""
+    f = df[df.FinInstrmTp.isin(["STF", "IDF"])].copy()
+    fut = pd.DataFrame({"day": str(day), "sym": f.TckrSymb.values, "kind": f.FinInstrmTp.values, "expiry": f.XpryDt.astype(str).str[:10].values,
+                        "open": f.OpnPric.values, "high": f.HghPric.values, "low": f.LwPric.values, "close": f.ClsPric.values, "prev": f.PrvsClsgPric.values,
+                        "oi": f.OpnIntrst.values, "chg_oi": f.ChngInOpnIntrst.values, "vol": f.TtlTradgVol.values, "val": f.TtlTrfVal.values, "und": f.UndrlygPric.values})
+    o = df[df.FinInstrmTp.isin(["STO", "IDO"])].copy(); o["XpryDt"] = o.XpryDt.astype(str).str[:10]
+    rows = []
+    for sym, g in o.groupby("TckrSymb"):
+        g = g[g.XpryDt == g.XpryDt.min()]; und = g.UndrlygPric.dropna()
+        px = float(und.iloc[0]) if len(und) else np.nan
+        ce, pe = g[g.OptnTp == "CE"], g[g.OptnTp == "PE"]
+        sup = pe[pe.StrkPric <= px].sort_values("OpnIntrst").tail(1); res = ce[ce.StrkPric >= px].sort_values("OpnIntrst").tail(1)
+        rows.append({"day": str(day), "sym": sym, "expiry": g.XpryDt.iloc[0], "und": px, "ce_oi": ce.OpnIntrst.sum(), "pe_oi": pe.OpnIntrst.sum(),
+                     "ce_chg": ce.ChngInOpnIntrst.sum(), "pe_chg": pe.ChngInOpnIntrst.sum(), "ce_vol": ce.TtlTradgVol.sum(), "pe_vol": pe.TtlTradgVol.sum(),
+                     "sup": float(sup.StrkPric.iloc[0]) if len(sup) else np.nan, "res": float(res.StrkPric.iloc[0]) if len(res) else np.nan,
+                     "sup_oi": float(sup.OpnIntrst.iloc[0]) if len(sup) else np.nan, "res_oi": float(res.OpnIntrst.iloc[0]) if len(res) else np.nan})
+    return fut, pd.DataFrame(rows)
+
+
+def backfill(start="2024-07-08"):
+    """Download every NSE F&O bhavcopy from `start` (UDiFF format) and keep compact daily files in data_store/research/fno_hist."""
+    import updater as U
+    os.makedirs(HIST, exist_ok=True); d = date.fromisoformat(start); done = 0; miss = 0
+    S["bf"] = {"running": True, "done": 0, "missing": 0, "at": None}
+    try:
+        while d < date.today():
+            fp = os.path.join(HIST, f"fut_{d}.csv.gz")
+            if d.weekday() < 5 and not os.path.exists(fp) and not os.path.exists(fp + ".none"):
+                try:
+                    raw = U.http_get(f"{U.NSE}/fo/BhavCopy_NSE_FO_0_0_0_{d:%Y%m%d}_F_0000.csv.zip", U.NSE_HEADERS)
+                    fut, opt = _compact(U._unzip_csv(raw), d)
+                    fut.to_csv(fp, index=False, compression="gzip"); opt.to_csv(os.path.join(HIST, f"opt_{d}.csv.gz"), index=False, compression="gzip")
+                    done += 1
+                except U.NotFound:
+                    if d < date.today() - timedelta(days=3):                # recent days may simply not be published yet
+                        open(fp + ".none", "w").close()
+                    miss += 1
+                except Exception as e:
+                    S["bf"]["err"] = f"{d}: {str(e)[:100]}"
+                time.sleep(0.4)
+            S["bf"].update(done=done, missing=miss, at=str(d))
+            d += timedelta(days=1)
+    finally:
+        S["bf"]["running"] = False
 
 
 _CHAIN_T = [0.0]
@@ -419,6 +541,14 @@ def api(q=None):
     q = q or {}
     if q.get("snap") == "1":                               # manual snapshot (testing / outside the schedule)
         return {"started": tick(force=True)}
+    if q.get("backfill"):
+        if not (S.get("bf") or {}).get("running"):
+            threading.Thread(target=backfill, args=(q.get("from") or "2024-07-08",), daemon=True, name="fno_backfill").start()
+        return {"started": True, "status": S.get("bf")}
+    if q.get("rpstatus"):
+        return S.get("rp") or {}
+    if q.get("bfstatus"):
+        return S.get("bf") or {}
     if q.get("detail"):
         return detail(q["detail"])
     if q.get("raw"):                                        # one name's raw Dhan quote rows (checking)

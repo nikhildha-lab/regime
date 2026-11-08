@@ -37,6 +37,7 @@ RULES = {
     "us_manual": {"label": "US paper trade (your form)", "edge": "your own US paper trade from the dashboard form - record only"},
     "svb": {"label": "Stock Volume Break v1 · target 2R (MIS 5x)", "edge": "new 9 Nov - backtest 81 days: 149 trades, +0.23 % a trade after costs, halves +0.21 / +0.25; picked from a grid - judge after 30-40"},
     "svb_tr": {"label": "Stock Volume Break v1 · 2-ATR trail (MIS 5x)", "edge": "new 9 Nov - same entries, trail 2 ATR after +1R, target 3R: backtest +0.19 % a trade, win 53 %"},
+    "fsb": {"label": "F&O Short Build-up v1 (stock futures, 1 lot)", "edge": "new 9 Nov - bhavcopy test Jul 2024-Nov 2026: 596 trades, +0.72 % a trade after costs (t 3.6), every year positive; judge after ~40"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -275,6 +276,21 @@ def _svb(hot):
     return out
 
 
+def _fsb(hot):
+    """2026-11-08: F&O Short Build-up v1 (app/fnoshort.py) - short stock futures, 1 lot, rupees after 0.06 %."""
+    out = []
+    for x in hot("fnoshort").trades():
+        t = {"rule": "fsb", "key": x["sym"], "side": "short", "opened": x.get("opened"), "entry": x.get("entry"), "stop": x.get("stop"), "target": None,
+             "how": "stop 5 % above entry (day's high) · out at the close of the 5th session", "instrument": f"{x['sym']} futures {x.get('expiry','')}, 1 lot ({x.get('lot')})",
+             "size": x.get("lot"), "ccy": "₹", "status": x["status"], "why": x.get("why", "")}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
 def _ovn(hot):
     """2026-11-06: Overnight hold (app/overnight.py) - three versions of the same signal, each its own row, rupees per 1 lot after costs."""
     O = hot("overnight"); out = []
@@ -449,7 +465,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -476,7 +492,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
