@@ -432,6 +432,21 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 .fno-tall,.fno-big{border:1.5px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);cursor:pointer}
 .fno-big .fno-lv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 .fno-big .fno-lv b{display:block;font-size:15px}
+.fno-ccgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:12px;margin-top:10px}
+.fno-cc{border:1.5px solid var(--cc);border-radius:14px;padding:10px 12px;background:linear-gradient(180deg,var(--surface),var(--surface-2));cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:transform .15s,box-shadow .15s}
+.fno-cc:hover{transform:translateY(-2px);box-shadow:0 10px 24px -14px var(--cc)}
+.fno-cc-h{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center}
+.fno-cc-h b{font-size:15px}
+.fno-cc-sec{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fno-cc-pill{background:var(--cc);color:#fff;font-weight:700;font-size:10.5px;padding:2px 8px}
+.fno-cc-h svg{width:32px;height:32px}
+.fno-cc-m{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;color:var(--cc)}
+.fno-cc-pct{font-family:var(--display);font-size:26px;font-weight:800;line-height:1}
+.fno-cc-f{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:6px;border-top:1px solid var(--line);padding-top:6px}
+.fno-cc-f span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}
+.fno-cc-f b{font-size:13.5px}
+.fno-cc-f div:last-child{text-align:right}
+
 /* 2026-11-08 Options Lab (F&O tab sections) */
 .lab-nav{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 4px;padding:5px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);position:sticky;top:6px;z-index:5}
 .lab-nav button{border:0;background:transparent;color:var(--muted);font-weight:600;padding:7px 14px;border-radius:10px;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
@@ -2080,8 +2095,9 @@ function fnoRender(){
   FNO.lastSec = FNO.sec;
   // strongest names: tall tile (option OI by strike) + big card
   const S = fnoStrongest();
-  h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3><span class="small muted">conviction 4 or 5 of 5 · up to 6 each side · option OI by strike: puts left, calls right · live chain when available</span></div>
-    ${S.length ? `<div class="fno-strong">${S.map(r => `<div class="fno-pair">${fnoTall(r)}${fnoBig(r)}</div>`).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No name has 4 or more of the 5 checks right now.</p>`}</section>`;
+  fnoObs(S.map(r => r.sym));                                   // 2026-11-08: compact cards with order blocks (click a card for the option ladder and detail)
+  h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3><span class="small muted">conviction 4 or 5 of 5 · up to 6 each side · shaded bands = order blocks (green bull block below, red supply above) · dashed = option support / resistance · click for detail</span></div>
+    ${S.length ? `<div class="fno-ccgrid">${S.map(fnoCompact).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No name has 4 or more of the 5 checks right now.</p>`}</section>`;
   // lists
   const pick = D.rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
   const bull = pick.filter(r => r.side > 0).sort((a,b) => b.conviction - a.conviction || b.move - a.move).slice(0, 15);
@@ -2638,6 +2654,46 @@ function labSection(){
   if (FNO.sec === "inst") return labInst();
   if (FNO.sec === "roll") return fnoRollCard(FNO.ex || {}) || labCard("Rollover", "", `<p class="small muted">Loading…</p>`);
   return "";
+}
+// ---------------------------------------------------------------- compact Strongest Readings card (2026-11-08, Nikhil: "reduce the size of these cards ..
+// 3-4 in a row .. clearly visible and order block should be placed on all of them"). Order blocks: /api/livedesk/fnoflow?lab=ob (same detection as BuildUp v2).
+function fnoObs(syms){
+  FNO.obs = FNO.obs || {}; const miss = syms.filter(s => !(s in FNO.obs));
+  if (!miss.length || FNO.obBusy) return;
+  FNO.obBusy = true;
+  fetch(`/api/livedesk/fnoflow?lab=ob&syms=${encodeURIComponent(miss.join(","))}`).then(r => r.json()).then(d => {
+    FNO.obBusy = false; if (!d || !d.obs) return;                     // error reply: try again on the next refresh
+    miss.forEach(s => FNO.obs[s] = d.obs[s] || null); if (FNO.sec === "board") fnoRender(); }).catch(() => { FNO.obBusy = false; });
+}
+function fnoCompactChart(r, ob, W, H){
+  const p = (r.path||[]).length > 1 ? r.path : [["09:15", 0], ["15:30", r.move]], fp = r.fut_prev || (r.fut / (1 + r.move/100));
+  const vals = p.map(z => fp * (1 + z[1]/100)), last = vals.at(-1), near = v => v != null && Math.abs(v / last - 1) < 0.06;
+  const zones = []; if (ob && ob.ob) zones.push([ob.ob, "var(--bull)", "Bull OB"]); if (ob && ob.supply) zones.push([ob.supply, "var(--bear)", "Supply"]);
+  const lv = [r.support, r.resistance].filter(near), zv = zones.flatMap(z => z[0]).filter(near);
+  const lo = Math.min(...vals, ...lv, ...zv) * 0.998, hi = Math.max(...vals, ...lv, ...zv) * 1.002, R = W - 58;
+  const y = v => 4 + (hi - Math.max(lo, Math.min(hi, v))) / (hi - lo) * (H - 8), x = i => 2 + i / Math.max(1, vals.length - 1) * (R - 4);
+  let g = ""; const labs = [];
+  zones.forEach(([z, col, lab]) => { const inR = near(z[0]) || near(z[1]);
+    if (inR){ const a = y(z[1]), b = y(z[0]); g += `<rect x="0" y="${a.toFixed(1)}" width="${R}" height="${Math.max(3, b - a).toFixed(1)}" fill="${col}" opacity="0.16" rx="2"/>`; labs.push([(a + b) / 2, col, lab]); }
+    else { const up = z[0] > last; labs.push([up ? 8 : H - 4, col, `${lab} ${up ? "↑" : "↓"} ${ldPx(z[0])}`]); } });
+  [[r.resistance, "var(--bear)", "R1"], [r.support, "var(--bull)", "S1"]].forEach(([v, col, lab]) => { if (!near(v)) return;
+    g += `<line x1="0" x2="${R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${col}" stroke-dasharray="3 3" opacity="0.8"/>`; labs.push([y(v), col, `${lab} ${ldPx(v)}`]); });
+  labs.sort((a, b) => a[0] - b[0]); for (let i = 1; i < labs.length; i++) labs[i][0] = Math.max(labs[i][0], labs[i-1][0] + 10);
+  labs.forEach(([yy, col, t]) => g += `<text x="${W - 1}" y="${Math.min(H - 1, yy + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="${col}">${t}</text>`);
+  const col = r.move >= 0 ? "var(--bull)" : "var(--bear)";
+  g += `<polyline fill="none" stroke="${col}" stroke-width="1.6" points="${vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/><circle cx="${x(vals.length - 1)}" cy="${y(last)}" r="2.6" fill="var(--ink)"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="today's path with order blocks and option levels">${g}</svg>`;
+}
+function fnoCompact(r){
+  const col = r.side > 0 ? "var(--bull)" : "var(--bear)", ob = (FNO.obs || {})[r.sym], ch = r.fut_prev ? r.fut - r.fut_prev : null;
+  const zone = ob === undefined ? "…" : !ob || (!ob.ob && !ob.supply) ? "none in 60 days" : r.side > 0 ? (ob.ob ? `${ldPx(ob.ob[0])}–${ldPx(ob.ob[1])}` : "none below") : (ob.supply ? `${ldPx(ob.supply[0])}–${ldPx(ob.supply[1])}` : "none above");
+  return `<div class="fno-cc" style="--cc:${col}" onclick="fnoPop('${esc(r.sym)}')" title="${esc(r.name||r.sym)} - click for detail">
+    <div class="fno-cc-h"><span class="fno-ab">${esc(fnoAb(r.sym))}</span><div style="min-width:0"><b>${esc(r.sym)}</b><div class="small muted fno-cc-sec">${esc(r.sector)}</div></div>
+      <span class="pill fno-cc-pill">${r.side > 0 ? "BULLISH" : "BEARISH"}</span>${fnoRing(r.conviction, col)}</div>
+    <div class="fno-cc-m"><span class="fno-cc-pct">${r.move > 0 ? "+" : ""}${fmt(r.move, 2)}%</span><span class="small">₹${ldPx(r.fut)}${ch == null ? "" : ` ${ch > 0 ? "+" : ""}${fmt(ch, 2)}`} · ${BU[r.bu][0]}</span></div>
+    ${fnoCompactChart(r, ob, 300, 96)}
+    <div class="fno-cc-f"><div><span>Support</span><b>${r.support == null ? "–" : ldPx(r.support)}</b></div><div><span>Resistance</span><b>${r.resistance == null ? "–" : ldPx(r.resistance)}</b></div>
+      <div><span>${r.side > 0 ? "Bull order block" : "Supply block"}</span><b style="color:${col}">${zone}</b></div></div></div>`;
 }
 // ---------------------------------------------------------------- detail popup
 function fnoList(sym){ const R = FNO.D.rows, r = R.find(z => z.sym === sym); if (!r) return [];

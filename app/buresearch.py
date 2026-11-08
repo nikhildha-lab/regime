@@ -206,7 +206,55 @@ def _iv_job():
         S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
 
 
+CH = os.path.join(ROOT, "data_store", "research", "chains")
+
+
+def chains_day(df, day):
+    """One UDiFF bhavcopy -> compact per-strike option rows for every F&O name: strikes within 12 % of the underlying, the nearest 2
+    expiries (indices: nearest 4, so the monthly is in), plus the near futures close. OI and volume are in units (UDiFF)."""
+    o = df[df.FinInstrmTp.isin(["STO", "IDO"])].copy(); o["XpryDt"] = o.XpryDt.astype(str).str[:10]
+    o = o[(o.StrkPric / o.UndrlygPric - 1).abs() <= 0.12]
+    n = o.groupby("TckrSymb").XpryDt.transform(lambda x: x.isin(sorted(x.unique())[:4] if x.name in ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY") else sorted(x.unique())[:2]))
+    o = o[n]
+    col = lambda c: o[c].values if c in o.columns else np.nan
+    return pd.DataFrame({"day": day, "sym": o.TckrSymb.values, "expiry": o.XpryDt.values, "strike": o.StrkPric.values, "cp": o.OptnTp.values,
+                         "open": col("OpnPric"), "high": col("HghPric"), "low": col("LwPric"), "close": col("ClsPric"), "settle": col("SttlmPric"),
+                         "vol": col("TtlTradgVol"), "oi": col("OpnIntrst"), "und": col("UndrlygPric")})
+
+
+def _chains_job():
+    """2026-11-08 (Nikhil: "deep research and experimentation .. option, futures, MIS, spreads"): per-strike option history for every
+    F&O name, one NSE bhavcopy per session since 8 Jul 2024 -> chains/ch_<day>.csv.gz. Also refreshes iv_hist when missing."""
+    import updater as U
+    os.makedirs(CH, exist_ok=True); os.makedirs(IVH, exist_ok=True)
+    days = sorted(f[4:14] for f in os.listdir(HIST) if f.startswith("fut_") and f.endswith(".csv.gz"))
+    S.update(running=True, kind="chains", total=len(days), done=0, saved=0, missing=0, err=None, started=time.strftime("%H:%M:%S"))
+    try:
+        for day in days:
+            S["done"] += 1; fp = os.path.join(CH, f"ch_{day}.csv.gz")
+            if os.path.exists(fp):
+                continue
+            try:
+                df = U._unzip_csv(U.http_get(f"{U.NSE}/fo/BhavCopy_NSE_FO_0_0_0_{day.replace('-', '')}_F_0000.csv.zip", U.NSE_HEADERS))
+                chains_day(df, day).to_csv(fp, index=False, compression="gzip"); S["saved"] += 1
+                fi = os.path.join(IVH, f"iv_{day}.csv.gz")
+                if not os.path.exists(fi):
+                    iv_day(df, day).to_csv(fi, index=False, compression="gzip")
+            except U.NotFound:
+                S["missing"] += 1
+            except Exception as ex:
+                S["err"] = f"{day}: {type(ex).__name__} {str(ex)[:90]}"; time.sleep(2)
+            time.sleep(0.3)
+    except Exception as ex:
+        S["err"] = f"{type(ex).__name__}: {str(ex)[:120]}"
+    finally:
+        S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
+
+
 def api(q):
+    if q.get("bures") == "chains" and not S.get("running"):
+        threading.Thread(target=_chains_job, daemon=True, name="bures_ch").start()
+        time.sleep(0.2)
     if q.get("bures") == "iv_hist" and not S.get("running"):
         threading.Thread(target=_iv_job, daemon=True, name="bures_iv").start()
         time.sleep(0.2)

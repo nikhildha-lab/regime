@@ -333,7 +333,26 @@ def ban():
     return _cache("ban", 3600, go)
 
 
+def ob(syms):
+    """Order blocks for a few stocks (same detection as BuildUp v2, app/fnoshort.py): last bullish OB below and bearish OB (supply) above,
+    in futures-price terms, from the latest session's compact futures files."""
+    key = ("ob", tuple(sorted(syms)))
+    def go():
+        import fnoshort as FS
+        H = os.path.join(ROOT, "data_store", "research", "fno_hist")
+        day = sorted(f[4:14] for f in os.listdir(H) if f.startswith("fut_") and f.endswith(".csv.gz"))[-1]
+        st = FS._structure(day, list(syms)); out = {}
+        for s_, v in st.items():
+            ch = v[2] if len(v) > 2 else None
+            if ch:
+                out[s_] = {"ob": ch.get("ob"), "ob_day": ch.get("ob_day"), "supply": ch.get("supply"), "low60": ch.get("low60"), "late": bool(v[0]), "why": v[1]}
+        return {"day": day, "obs": out}
+    return _cache(key, 900, go)
+
+
 def api(q):
+    if q.get("lab") == "ob":
+        return ob([x for x in (q.get("syms") or "").upper().split(",") if x][:40])
     w = q.get("lab"); sym = (q.get("sym") or "NIFTY").upper(); day = q.get("day")
     if w == "vol":
         return vol(sym)

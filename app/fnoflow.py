@@ -661,7 +661,7 @@ def api(q=None):
     if q.get("bures"):                                      # 2026-11-08: BuildUp v1 research data job (app/buresearch.py)
         import importlib
         import buresearch as BR
-        if q.get("bures") in ("start", "opts", "nifty_monthly", "iv_hist") and not BR.S.get("running"):
+        if q.get("bures") in ("start", "opts", "nifty_monthly", "iv_hist", "chains") and not BR.S.get("running"):
             BR = importlib.reload(BR)
         return BR.api(q)
     if q.get("lab"):                                        # 2026-11-08: Options Lab (app/optlab.py), reloaded when the file changes
