@@ -2619,7 +2619,26 @@ function labGamma(){
       ${labKpi("Dealer total", `₹${labCr(G.dealer_total)} Cr`, "per 1% move")}</div></div>`;
   h += `<div class="lab-grid2">${labCard("Gamma by Strike", "₹ Cr per 1% move · within 5% of spot", labGexProfile(G, 620))}${labCard("Gamma vs Price", "where hedging flips from calming to amplifying", labGexCurve(G, 560, 300))}</div>`;
   h += `<p class="small faint">India seller view (writers short every option): total ₹${labCr(G.seller_total)} Cr. The dealer model is a US convention - treat the regime as context, not a signal.</p>`;
-  return h;
+  return h + labIdx();
+}
+// ---- 2026-11-09: index weekly strangle / condor paper trades (app/idxstrangle.py)
+function labIdx(){
+  if (!FNO.idx || Date.now() - FNO.idx.at > 60000){ FNO.idx = FNO.idx || {at: 0, d: null}; FNO.idx.at = Date.now();
+    fetch("/api/livedesk/idxstrangle").then(r => r.json()).then(d => { FNO.idx = {at: Date.now(), d}; if (FNO.sec === "gamma") fnoRender(); }).catch(() => {}); }
+  const D = FNO.idx.d; if (!D) return "";
+  const g = Object.entries(D.gex_last || {}).map(([i, v]) => v ? `<span class="lab-chip ${v[1].gex > 0 ? "bull" : "bear"}">${i} gamma ${v[1].gex > 0 ? "positive" : "negative"} · ${esc(v[0])}</span>` : "").join(" ");
+  const card = (t) => { const pnl = t.status === "closed" ? t.pnl : t.pnl_open, col = pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--bull)" : "var(--bear)";
+    return `<div class="fno-cc" style="--cc:${t.status === "open" ? "var(--accent)" : col}"><div class="fno-cc-h"><span class="fno-ab">${t.idx === "NIFTY" ? "NF" : "SX"}</span>
+      <div style="min-width:0"><b>${esc(t.idx)} ${esc(t.kind)}</b><div class="small muted fno-cc-sec">expiry ${esc(t.expiry)} · 1 lot (${t.lot})</div></div><span class="pill fno-cc-pill">${t.status === "open" ? "OPEN" : "SETTLED"}</span></div>
+      <div class="fno-cc-m"><span class="fno-cc-pct" style="color:${col}">${pnl == null ? "–" : `${pnl >= 0 ? "+" : "−"}₹${fmt(Math.abs(pnl), 0)}`}</span><span class="small muted">${t.status === "open" ? `marked ${esc(t.marked || "–")}` : `settled at ${fmt(t.spot_out, 1)}`}</span></div>
+      <div class="small">${t.legs.map(L => `<span class="lab-chip ${L.q < 0 ? "bear" : "bull"}">${L.q < 0 ? "sell" : "buy"} ${fmt(L.strike,0)} ${L.cp} @ ${fmt(L.entry,1)}</span>`).join(" ")}</div>
+      <div class="fno-cc-f"><div><span>Spot in</span><b>${fmt(t.spot_in,1)}</b></div><div><span>Credit</span><b>${fmt(t.credit,1)} pts</b></div><div><span>Gamma</span><b>${esc(t.gex_src||"")}</b></div></div></div>`; };
+  const T = [...(D.open || []), ...(D.closed || []).slice().reverse()];
+  return labCard("Index Strangle / Condor · Paper", "NIFTY strangle & SENSEX condor · entered 3 sessions before weekly expiry at ~15:25, only after a positive-gamma session · held to expiry · paper only",
+    `<div class="lab-ban">${g || `<span class="small muted">gamma readings start at 15:15 today</span>`}</div>
+     ${T.length ? `<div class="fno-ccgrid">${T.map(card).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No trade yet - the next entry is 3 sessions before each weekly expiry.</p>`}
+     ${(D.skips||[]).length ? `<div class="small muted" style="margin-top:6px">Skipped: ${D.skips.slice(-4).map(x => `${esc(x.idx)} ${esc(x.expiry)} (${esc(x.why)})`).join(" · ")}</div>` : ""}
+     ${D.err ? `<div class="small" style="color:var(--bear)">${esc(D.err)}</div>` : ""}`);
 }
 // ---- institutions
 function labInst(){

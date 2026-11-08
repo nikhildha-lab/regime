@@ -494,6 +494,10 @@ def poll_once():
                 _hot("fnoflow").tick()
             except Exception as e:
                 _STATE["fnoflow_error"] = str(e)[:160]
+            try:                                   # 2026-11-09 (Nikhil): index weekly strangle / condor, gamma filter (app/idxstrangle.py)
+                _hot("idxstrangle").tick()
+            except Exception as e:
+                _STATE["idxstrangle_error"] = str(e)[:160]
             try:                                   # 2026-11-08 (Nikhil): F&O Short Build-up v1 paper rule (app/fnoshort.py)
                 _hot("fnoshort").tick()
             except Exception as e:
@@ -912,6 +916,8 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/idxstrangle":            # 2026-11-09: index weekly strangle / condor paper trades
+        return _hot("idxstrangle").api(q)
     if path == "/api/livedesk/fnoshort":               # 2026-11-08: F&O Short Build-up v1 signals + trades
         return _hot("fnoshort").api()
     if path == "/api/livedesk/fnoflow":                # 2026-11-08 (Nikhil): F&O Flow tab - every F&O name from its futures (app/fnoflow.py)

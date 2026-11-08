@@ -38,6 +38,8 @@ RULES = {
     "svb": {"label": "Stock Volume Break v1 · target 2R (MIS 5x)", "edge": "new 9 Nov - backtest 81 days: 149 trades, +0.23 % a trade after costs, halves +0.21 / +0.25; picked from a grid - judge after 30-40"},
     "svb_tr": {"label": "Stock Volume Break v1 · 2-ATR trail (MIS 5x)", "edge": "new 9 Nov - same entries, trail 2 ATR after +1R, target 3R: backtest +0.19 % a trade, win 53 %"},
     # "fsb" BuildUp v1 retired 8 Nov before its first trade (Nikhil: "we will not use v1, retire that and then we use v2")
+    "istr_n": {"label": "Index Strangle · NIFTY weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2023-26: +Rs 1,700 a lot a week in positive-gamma weeks, win 78 %, worst week about -Rs 34k; judge after ~20 weeks"},
+    "icon_s": {"label": "Index Condor · SENSEX weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2024-26: +Rs 1,870 a lot a week in positive-gamma weeks, win 82 %, risk capped by wings; judge after ~20 weeks"},
     "fsb2": {"label": "BuildUp v2 · v1 minus 'late' shorts (at 60-day low / bullish order block broken)", "edge": "new 9 Nov - from Oct 2024: 210 trades, +0.77 % a trade after costs (t 2.7) vs v1 +0.43 % on the same period; judge after ~30"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
@@ -293,6 +295,22 @@ def _fsb(hot):
     return out
 
 
+def _idx(hot):
+    """2026-11-09: index weekly strangle (NIFTY) / condor (SENSEX), gamma filter (app/idxstrangle.py) - rupees per lot after fees at settlement."""
+    out = []
+    for x in hot("idxstrangle").trades():
+        legs = " + ".join(f"{'sell' if L['q'] < 0 else 'buy'} {L['strike']:.0f} {L['cp']} @ {L['entry']}" for L in x["legs"])
+        t = {"rule": x["rule"], "key": f"{x['idx']} {x['expiry']}", "side": "short vol", "opened": x.get("opened"), "entry": x.get("spot_in"), "stop": None, "target": None,
+             "how": "held to expiry, settled at intrinsic on the index close · no stop", "instrument": f"{x['idx']} {x['kind']} {x['expiry']}: {legs}",
+             "size": x.get("lot"), "ccy": "₹", "status": x["status"], "why": x.get("why", "")}
+        if x["status"] == "closed":
+            t.update(exit=x.get("spot_out"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now_pts"))
+        out.append(t)
+    return out
+
+
 def _ovn(hot):
     """2026-11-06: Overnight hold (app/overnight.py) - three versions of the same signal, each its own row, rupees per 1 lot after costs."""
     O = hot("overnight"); out = []
@@ -467,7 +485,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -494,7 +512,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
