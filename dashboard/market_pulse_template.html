@@ -417,6 +417,38 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 #domCard .dom tr.wall td.px{outline:2px solid var(--wait);outline-offset:-2px}
 #domCard .dom tr.sprd td{border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);font-size:11px;color:var(--muted);text-align:center}
 #domCard .dom td.ord{color:var(--muted);font-size:11px}
+/* 2026-11-08 F&O Flow board */
+.fno-top{display:grid;grid-template-columns:minmax(260px,560px) 1fr;gap:16px;align-items:center;margin-top:8px}
+.fno-sum{display:grid;gap:5px;font-size:13.5px}
+#fnoSvg .fln{transition:opacity .15s}
+#fnoSvg.fdim .fsym{opacity:.08 !important}
+#fnoSvg.fdim .fsym.fhl{opacity:1 !important}
+#fnoSvg.fdim path.fsym.fhl{stroke-width:2.6}
+#fnoSvg .ftile:hover rect:first-child{stroke-opacity:1;stroke-width:2}
+@keyframes fnoFlash{0%{opacity:.35}50%{opacity:1}100%{opacity:1}}
+#fnoSvg .fflash{animation:fnoFlash 1.2s ease-out 2}
+.fno-strong{display:grid;grid-template-columns:repeat(auto-fit,minmax(560px,1fr));gap:12px;margin-top:10px}
+.fno-pair{display:grid;grid-template-columns:170px 1fr;gap:10px}
+.fno-tall,.fno-big{border:1.5px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);cursor:pointer}
+.fno-big .fno-lv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+.fno-big .fno-lv b{display:block;font-size:15px}
+.fno-ab{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);font-size:10px;font-weight:700;color:var(--muted);background:var(--surface-2)}
+#fnoPop{position:fixed;inset:0;background:rgba(10,16,22,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}
+#fnoPop[hidden]{display:none}
+.fno-pop{background:var(--surface);color:var(--ink);border-radius:16px;max-width:720px;width:100%;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.fno-pop .btn-s{border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:8px;padding:3px 10px;font-size:15px;cursor:pointer}
+.fno-pop .btn-s[disabled]{opacity:.35;cursor:default}
+.fno-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.fno-why{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+.fno-why>div{display:flex;gap:10px;align-items:flex-start}
+.fno-ck{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.fno-ck.ok{background:var(--bull-soft);color:var(--bull)} .fno-ck.no{background:var(--bear-soft);color:var(--bear)}
+.fno-phone-note{display:none}
+@media (max-width:760px){
+  #fnoSvgWrap{display:none} .fno-phone-note{display:block}
+  .fno-top{grid-template-columns:1fr} .fno-strong{grid-template-columns:1fr} .fno-pair{grid-template-columns:1fr}
+  .fno-grid{grid-template-columns:1fr 1fr} .fno-why{grid-template-columns:1fr}
+}
 </style>
 
 <div class="wrap">
@@ -1925,13 +1957,16 @@ async function bigwLoad(){
     + `<p class="small faint" style="margin:6px 0 0">${esc((R[0]||{}).rule||"")}. Futures prices. Context only, not a signal: on 9 days of Nifty data walls held 47% of the time vs 52% for ordinary levels, and the biggest usually broke. `
     + `Best read at about 09:30 (after the opening book settles), then every 15–30 min and just before any entry; a wall that keeps shrinking or gets pulled is weaker than one that is growing. Paper only, never orders.</p>`;
 }
-// 2026-11-08 (Nikhil: "create a new tab for this" - idea from github.com/MrChartist/order-flow, rebuilt on our data in app/fnoflow.py):
-// F&O Flow - every NSE F&O name read from its futures: move, open-interest build-up, conviction checks, sectors and breadth.
-const FNO = {u: (() => { try { return localStorage.getItem("mp.fno.u") || "all"; } catch(e){ return "all"; } })(), t: null, f: "all", q: ""};
+// 2026-11-08 (Nikhil: "create a new tab for this" + "add all of this"): F&O Flow - every NSE F&O name read from its futures
+// (app/fnoflow.py). Layout idea from github.com/MrChartist/order-flow; drawn here from scratch (no code from that project).
+// Board = spread histogram · sector ladder · flow chart with bull / bear tunnels fanning out to tiles · strongest names as tall
+// tiles (option OI by strike) + big cards · detail popup (5-min candles, levels, why it ranks here) · lists for phones.
+const FNO = {u: (() => { try { return localStorage.getItem("mp.fno.u") || "all"; } catch(e){ return "all"; } })(), t: null, f: "all", q: "", prev: {}, det: {}, open: null};
 const BU = {LONG_BUILD:["Long build-up","var(--bull)",true], SHORT_COVER:["Short covering","var(--bull)",false], SHORT_BUILD:["Short build-up","var(--bear)",true],
             LONG_UNWIND:["Long unwinding","var(--bear)",false], NEUTRAL:["Neutral","var(--neutral)",false]};
 function fnoDot(b){ const x = BU[b] || BU.NEUTRAL; return `<span title="${x[0]}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;${x[2]?`background:${x[1]}`:`border:2px solid ${x[1]};box-sizing:border-box`}"></span>`; }
 function fnoPct(v, d=2){ return v==null ? "–" : `<span style="color:${v>0?"var(--bull)":v<0?"var(--bear)":"var(--muted)"}">${v>0?"+":""}${fmt(v,d)}%</span>`; }
+const fnoAb = s => String(s).replace(/[^A-Z]/g, "").slice(0, 2) || String(s).slice(0, 2);
 function fnoStart(){ clearInterval(FNO.t); fnoLoad(); FNO.t = setInterval(() => { if (!document.hidden && window.CUR_TAB === "fno") fnoLoad(); }, 60000); }
 function fnoStop(){ clearInterval(FNO.t); }
 async function fnoLoad(){
@@ -1939,77 +1974,242 @@ async function fnoLoad(){
   if (!el.innerHTML) el.innerHTML = `<section class="card"><p class="small muted">Loading the F&amp;O board…</p></section>`;
   let D; try { D = await fetch(`/api/livedesk/fnoflow?u=${FNO.u}`).then(r => r.json()); } catch(e){ return; }
   FNO.D = D; fnoRender();
+  fnoStrongest().slice(0, 4).forEach(r => fnoDetail(r.sym, true));       // live option chains for the strongest names (cached 2 min on the server)
 }
+async function fnoDetail(sym, quiet){
+  const c = FNO.det[sym]; if (c && Date.now() - c.at < 110000) return c.d;
+  try { const d = await fetch(`/api/livedesk/fnoflow?detail=${encodeURIComponent(sym)}`).then(r => r.json()); FNO.det[sym] = {at: Date.now(), d};
+    if (quiet){ const tt = document.getElementById("fnoTall_" + sym); if (tt) tt.outerHTML = fnoTall(FNO.D.rows.find(r => r.sym === sym)); }
+    if (FNO.open === sym) fnoPop(sym);
+    return d; } catch(e){ return null; }
+}
+function fnoStrongest(){
+  const R = (FNO.D && FNO.D.rows) || [];
+  const pick = sd => R.filter(r => r.side === sd).sort((a,b) => b.conviction - a.conviction || sd*(b.move - a.move)).slice(0, 2);
+  return [...pick(1), ...pick(-1)];
+}
+// ---------------------------------------------------------------- page
 function fnoRender(){
   const D = FNO.D, el = $("#fnoBoard"); if (!D || !el) return;
   if (!(D.rows||[]).length){ el.innerHTML = `<section class="card"><h2>F&amp;O Flow</h2><p class="small muted">No data yet${D.err?` · ${esc(D.err)}`:""}.</p></section>`; return; }
-  const B = D.breadth || {}, rows = D.rows, live = D.source === "live", snaps = /snapshots/.test(D.source||"");
+  const B = D.breadth || {}, live = D.source === "live";
   const sw = (k, l) => `<button class="${FNO.u===k?"on":""}" onclick="FNO.u='${k}';try{localStorage.setItem('mp.fno.u','${k}')}catch(e){};fnoLoad()">${l}</button>`;
-  const idx = ["NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY","NIFTYNXT50"].map(k => (D.index||{})[k]).filter(Boolean);
-  const NM = {NIFTY:"Nifty", BANKNIFTY:"Bank Nifty", FINNIFTY:"Fin Nifty", MIDCPNIFTY:"Midcap Select", NIFTYNXT50:"Nifty Next 50"};
+  const secs = D.sectors || [], lead = secs[0], lag = secs.at(-1);
   const sc = B.score || 0, scCol = sc > 0.05 ? "var(--bull)" : sc < -0.05 ? "var(--bear)" : "var(--muted)";
-  // header: source, universe switch, breadth
-  let h = `<section class="card"><div class="spread"><h2 style="margin:0">F&amp;O Flow <span class="small muted">· every F&amp;O name read from its futures</span></h2>
-    <span class="fx-tf">${sw("all","All F&amp;O")}${sw("nifty50","Nifty 50")}</span></div>
-    <p class="small muted" style="margin:4px 0 10px">${live ? `Live · ${esc(D.at||"")} IST · refreshes every minute` : `Market closed · showing the ${esc(D.source)} · ${esc(D.at||"")}`}
-      · ${B.names} stocks: <b class="pos">${B.up} up</b> · ${B.flat} flat · <b class="neg">${B.down} down</b></p>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:stretch">
-      <div class="mtile" style="min-width:170px"><div class="small muted">Breadth score</div><div style="font-size:24px;font-weight:700;color:${scCol}">${sc>0?"+":""}${fmt(sc*100,0)}</div>
-        <div class="small faint" title="(long build-up + short covering − short build-up − long unwinding) ÷ names, ×100">bulls minus bears, of 100</div></div>
-      ${[["LB","LONG_BUILD"],["SC","SHORT_COVER"],["SB","SHORT_BUILD"],["LU","LONG_UNWIND"],["NEUTRAL","NEUTRAL"]].map(([k,b]) => `<div class="mtile" style="min-width:120px"><div class="small muted">${fnoDot(b)}${BU[b][0]}</div><div style="font-size:20px;font-weight:700">${B[k]||0}</div></div>`).join("")}
+  let h = `<section class="card fno-card"><div class="spread"><div><h2 style="margin:0">F&amp;O Flow</h2>
+      <div class="small muted">${live ? `Live · ${esc(D.at||"")} IST · every minute` : `Market closed · ${esc(D.source)} · ${esc(D.at||"")}`}</div></div>
+    <span class="fx-tf">${sw("nifty50","Nifty 50")}${sw("all","All F&amp;O")}</span></div>
+    <div class="fno-top">
+      <div>${fnoHist(D)}</div>
+      <div class="fno-sum"><div><b class="pos">${B.up} up</b> · ${B.flat} flat · <b class="neg">${B.down} down</b> <span class="muted">of ${B.names}</span></div>
+        <div><span class="pos">▲ Bullish ${B.up}</span> &nbsp; <span class="neg">▼ Bearish ${B.down}</span> &nbsp; <span title="(long build-up + short covering − short build-up − long unwinding) ÷ names" style="color:${scCol}">Breadth ${sc>0?"+":""}${fmt(sc*100,0)}</span></div>
+        ${lead ? `<div class="small">Leading <b>${esc(lead.sector)}</b> ${fnoPct(lead.median)} · Lagging <b>${esc(lag.sector)}</b> ${fnoPct(lag.median)}</div>` : ""}
+        <div class="small">${[["LONG_BUILD","LB"],["SHORT_COVER","SC"],["SHORT_BUILD","SB"],["LONG_UNWIND","LU"]].map(([b,k]) => `${fnoDot(b)}${BU[b][0]} <b>${B[k]||0}</b>`).join(" &nbsp; ")}</div></div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${idx.map(r => `<span class="pill" title="${esc(BU[r.bu][0])} · OI ${r.oi_chg==null?"–":fmt(r.oi_chg,1)+"%"}">${fnoDot(r.bu)}<b>${NM[r.sym]||r.sym}</b> ${fnoPct(r.move)}</span>`).join("")}</div>
-    ${fnoStrip(rows)}</section>`;
-  // chart (live only): paths of the biggest movers + breadth score
-  if (live || snaps) h += `<section class="card"><div class="spread"><h3 style="margin:0">The Session</h3><span class="small muted">futures move from the previous close · 5 biggest each side · dotted = Nifty</span></div>${fnoChart(D)}</section>`;
-  // sectors
-  h += `<section class="card"><div class="spread"><h3 style="margin:0">Sectors</h3><span class="small muted">median futures move · up / down names · most common build-up</span></div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${(D.sectors||[]).map(s => `<span class="pill" style="cursor:pointer;${FNO.f===s.sector?"outline:2px solid var(--accent)":""}" onclick="FNO.f=FNO.f==='${esc(s.sector)}'?'all':'${esc(s.sector)}';fnoRender()" title="${s.n} names · ${s.up} up · ${s.down} down">${fnoDot(s.bu)}${esc(s.sector)} ${fnoPct(s.median)} <span class="faint">${s.up}↑ ${s.down}↓</span></span>`).join("")}</div></section>`;
-  // bulls / bears
-  const pick = rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
+    <div id="fnoSvgWrap">${fnoBoardSvg(D)}</div>
+    <p class="small faint fno-phone-note">The full board needs a wider screen - the lists below show the same names.</p></section>`;
+  // strongest names: tall tile (option OI by strike) + big card
+  const S = fnoStrongest();
+  if (S.length) h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3><span class="small muted">top 2 each side by conviction · option OI by strike: puts left, calls right · live chain when available</span></div>
+    <div class="fno-strong">${S.map(r => `<div class="fno-pair">${fnoTall(r)}${fnoBig(r)}</div>`).join("")}</div></section>`;
+  // lists
+  const pick = D.rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
   const bull = pick.filter(r => r.side > 0).sort((a,b) => b.conviction - a.conviction || b.move - a.move).slice(0, 15);
   const bear = pick.filter(r => r.side < 0).sort((a,b) => b.conviction - a.conviction || a.move - b.move).slice(0, 15);
-  h += `<div class="deskpair"><section class="card">${fnoTable(bull, "Bullish · strongest first", "var(--bull)")}</section><section class="card">${fnoTable(bear, "Bearish · strongest first", "var(--bear)")}</section></div>`;
-  // every name
-  const q = FNO.q.toUpperCase(), all = pick.filter(r => !q || r.sym.includes(q));
-  h += `<section class="card"><div class="spread"><h3 style="margin:0">Every Name ${FNO.f!=="all"?`· ${esc(FNO.f)} <a href="#" class="small" onclick="FNO.f='all';fnoRender();return false">(all sectors)</a>`:""}</h3>
+  const q = FNO.q.toUpperCase(), all = pick.filter(r => !q || r.sym.includes(q) || String(r.name||"").toUpperCase().includes(q));
+  h += `<div class="deskpair"><section class="card">${fnoTable(bull, "Bullish · strongest first", "var(--bull)")}</section><section class="card">${fnoTable(bear, "Bearish · strongest first", "var(--bear)")}</section></div>
+    <section class="card"><div class="spread"><h3 style="margin:0">Every Name ${FNO.f!=="all"?`· ${esc(FNO.f)} <a href="#" class="small" onclick="FNO.f='all';fnoRender();return false">(all sectors)</a>`:""}</h3>
     <input placeholder="Find a symbol" value="${esc(FNO.q)}" oninput="FNO.q=this.value;clearTimeout(FNO.qt);FNO.qt=setTimeout(fnoRender,250)" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)"></div>
     ${fnoTable(all, "", null, true)}
-    <p class="small faint" style="margin:8px 0 0">${esc(D.note||"")} Build-up: price and OI up = ${fnoDot("LONG_BUILD")}long build-up · price up, OI down = ${fnoDot("SHORT_COVER")}short covering · price down, OI up = ${fnoDot("SHORT_BUILD")}short build-up · price and OI down = ${fnoDot("LONG_UNWIND")}long unwinding (filled dot = new positions, hollow = positions closing). Conviction = how many of 5 checks hold: new positions with the move, the stock itself agrees, the last hour agrees, option writers added on the same side yesterday, the sector agrees. Support / resistance = yesterday's biggest put / call open interest; zone = where the most OI was added. Levels from the NSE bhavcopy of ${esc(D.eod_day||"")}.</p></section>`;
+    <p class="small faint" style="margin:8px 0 0">${esc(D.note||"")} Build-up: price and OI up = long build-up · price up, OI down = short covering · price down, OI up = short build-up · price and OI down = long unwinding (filled dot = new positions, hollow = positions closing). Conviction = how many of 5 checks hold. Support / resistance = biggest put / call open interest of the last session (S1, S2 / R1, R2); zone = strike where the most OI was added. Levels from the NSE bhavcopy of ${esc(D.eod_day||"")}. Context only, not a tested signal.</p></section>`;
   el.innerHTML = h;
+  fnoWire();
+  D.rows.forEach(r => FNO.prev[r.sym] = r.move);
 }
-function fnoStrip(rows){
-  const W = 1000, H = 46, mx = Math.max(2, ...rows.map(r => Math.abs(r.move))), x = v => W/2 + v/mx*(W/2 - 14);
-  let g = `<line x1="${W/2}" x2="${W/2}" y1="4" y2="${H-12}" stroke="var(--line)"/>`;
-  rows.forEach((r, i) => { const c = r.move > 0 ? "var(--bull)" : r.move < 0 ? "var(--bear)" : "var(--neutral)";
-    g += `<circle cx="${x(r.move).toFixed(1)}" cy="${10 + (i % 5) * 6}" r="3.2" fill="${c}" fill-opacity="0.75"><title>${esc(r.sym)} ${r.move>0?"+":""}${r.move}% · ${BU[r.bu][0]}</title></circle>`; });
-  g += `<text x="6" y="${H-2}" font-size="10" fill="var(--muted)">−${fmt(mx,1)}%</text><text x="${W-6}" y="${H-2}" font-size="10" text-anchor="end" fill="var(--muted)">+${fmt(mx,1)}%</text><text x="${W/2}" y="${H-2}" font-size="10" text-anchor="middle" fill="var(--muted)">0</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px">${g}</svg>`;
+// ---------------------------------------------------------------- spread histogram (Nifty = diamond)
+function fnoHist(D){
+  const R = D.rows, mx = Math.max(1, Math.ceil(Math.max(...R.map(r => Math.abs(r.move))) * 2) / 2), bw = mx > 4 ? 0.5 : 0.25;
+  const bins = {}; R.forEach(r => { const k = Math.floor(r.move / bw); bins[k] = (bins[k] || 0) + 1; });
+  const W = 520, H = 96, n = Math.max(...Object.values(bins), 1), x = v => 10 + (v + mx) / (2 * mx) * (W - 20);
+  let g = `<line x1="${x(-mx)}" x2="${x(mx)}" y1="${H-18}" y2="${H-18}" stroke="var(--line)" stroke-dasharray="3 3"/><line x1="${x(0)}" x2="${x(0)}" y1="6" y2="${H-14}" stroke="var(--muted)" stroke-width="0.8"/>`;
+  Object.entries(bins).forEach(([k, c]) => { const v0 = +k * bw, h_ = c / n * (H - 30), col = v0 + bw/2 > FLATV ? "var(--bull)" : v0 + bw/2 < -FLATV ? "var(--bear)" : "var(--neutral)";
+    g += `<rect x="${x(v0)+0.6}" y="${H-18-h_}" width="${Math.max(1.5, x(v0+bw)-x(v0)-1.2)}" height="${h_}" fill="${col}" opacity="0.85"><title>${fmt(v0,2)}% to ${fmt(v0+bw,2)}%: ${c} names</title></rect>`; });
+  const nf = (D.index||{}).NIFTY; if (nf) g += `<rect x="${x(nf.move)-4}" y="${H-22}" width="8" height="8" transform="rotate(45 ${x(nf.move)} ${H-18})" fill="var(--ink)"><title>Nifty ${nf.move>0?"+":""}${nf.move}%</title></rect>`;
+  g += `<text x="${x(-mx)}" y="${H-2}" font-size="10" fill="var(--muted)">−${fmt(mx,1)}%</text><text x="${x(0)}" y="${H-2}" font-size="10" text-anchor="middle" fill="var(--muted)">0</text><text x="${x(mx)}" y="${H-2}" font-size="10" text-anchor="end" fill="var(--muted)">+${fmt(mx,1)}%</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:560px;height:auto">${g}</svg>`;
 }
-function fnoChart(D){
-  const rows = D.rows.filter(r => (r.path||[]).length > 1), top = [...rows].sort((a,b) => b.move - a.move);
-  const sel = [...top.slice(0,5), ...top.slice(-5)], nif = (D.index||{}).NIFTY;
-  const all = [...sel, ...(nif && (nif.path||[]).length > 1 ? [nif] : [])]; if (!all.length) return `<p class="small muted">Waiting for minute snapshots - the session chart fills in as the day goes on.</p>`;
-  const mins = [...new Set(all.flatMap(r => r.path.map(p => p[0])))].sort(); const W = 1000, H = 300, L = 40, Rr = 120;
-  const vals = all.flatMap(r => r.path.map(p => p[1])); const hi = Math.max(0.5, ...vals), lo = Math.min(-0.5, ...vals);
-  const x = m => L + mins.indexOf(m) / Math.max(1, mins.length - 1) * (W - L - Rr), y = v => 10 + (hi - v) / (hi - lo) * (H - 30);
-  let g = `<line x1="${L}" x2="${W-Rr}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/>`;
-  [hi, lo].forEach(v => g += `<text x="${L-4}" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${v>0?"+":""}${fmt(v,1)}%</text>`);
-  const labs = [];
-  all.forEach(r => { const isN = r === nif, c = isN ? "var(--ink)" : r.move >= 0 ? "var(--bull)" : "var(--bear)";
-    g += `<polyline fill="none" stroke="${c}" stroke-width="${isN?1.6:1.4}" ${isN?'stroke-dasharray="3 3"':""} opacity="0.85" points="${r.path.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ")}"><title>${esc(r.sym)} ${r.move>0?"+":""}${r.move}%</title></polyline>`;
-    labs.push({yy: y(r.path.at(-1)[1]), t: `${isN?"Nifty":r.sym} ${r.move>0?"+":""}${fmt(r.move,1)}%`, c}); });
-  labs.sort((a,b) => a.yy - b.yy); let last = -99; labs.forEach(l => { const yy = Math.max(l.yy, last + 12); last = yy; g += `<text x="${W-Rr+6}" y="${yy+4}" font-size="10.5" fill="${l.c}">${esc(l.t)}</text>`; });
-  [mins[0], mins[Math.floor(mins.length/2)], mins.at(-1)].forEach(m => g += `<text x="${x(m)}" y="${H-4}" font-size="10" text-anchor="middle" fill="var(--muted)">${m}</text>`);
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${g}</svg>`;
+const FLATV = 0.25;
+// ---------------------------------------------------------------- the board: sector ladder · flow chart · tunnels · tiles
+function fnoBoardSvg(D){
+  const W = 1600, H = 900, Z = H / 2, CX0 = 250, CX1 = 860, TX = 1000, TW = 186, TH = 56, TG = 8, COLS = 3, ROWS = 6;
+  const R = D.rows, live = (R.some(r => (r.path||[]).length > 1));
+  const bulls = R.filter(r => r.side > 0).sort((a,b) => b.move - a.move), bears = R.filter(r => r.side < 0).sort((a,b) => a.move - b.move);
+  const tiled = new Map(); bulls.slice(0, COLS*ROWS).forEach((r, i) => tiled.set(r.sym, {r, i, sd: 1})); bears.slice(0, COLS*ROWS).forEach((r, i) => tiled.set(r.sym, {r, i, sd: -1}));
+  const tilePos = (i, sd) => { const c = i % COLS, rw = Math.floor(i / COLS); const y0 = sd > 0 ? 16 : Z + 24; return [TX + c * (TW + TG), y0 + rw * (TH + TG)]; };
+  // y scale: asinh so +0.1 % and +8 % both read
+  const all = R.flatMap(r => [r.move, ...(r.path||[]).map(p => p[1])]), vmax = Math.max(1, ...all.map(Math.abs));
+  const A = v => Math.asinh(v / 0.35), y = v => Z - A(v) / A(vmax * 1.05) * (Z - 36);
+  const t2x = m => { const [hh, mm] = m.split(":").map(Number); const k = (hh * 60 + mm - 555) / 375; return CX0 + Math.max(0, Math.min(1, k)) * (CX1 - CX0); };
+  let g = "";
+  // grid
+  [0.1, 0.5, 1, 2, 3, 5, 8].filter(v => v < vmax * 1.05).forEach(v => [v, -v].forEach(s => {
+    g += `<line x1="${CX0}" x2="${CX1}" y1="${y(s)}" y2="${y(s)}" stroke="var(--line)" stroke-width="0.6"/><text x="${CX0-6}" y="${y(s)+3}" font-size="10" text-anchor="end" fill="var(--muted)">${s>0?"+":""}${s}%</text>`; }));
+  ["09:15","11:00","12:00","13:00","14:00","15:30"].forEach(m => g += `<text x="${t2x(m)}" y="${H-6}" font-size="10" text-anchor="middle" fill="var(--muted)">${m}</text><line x1="${t2x(m)}" x2="${t2x(m)}" y1="20" y2="${H-20}" stroke="var(--line)" stroke-width="0.4"/>`);
+  // tunnels (green above, red below) and the zero bar
+  const TUx0 = CX1 + 30, TUx1 = TX - 70, tuB = [16 + 2 * (TH + TG), 16 + 4 * (TH + TG) - TG], tuS = [Z + 24 + 2 * (TH + TG), Z + 24 + 4 * (TH + TG) - TG];
+  g += `<rect x="${TUx0}" y="${tuB[0]}" width="${TUx1-TUx0}" height="${tuB[1]-tuB[0]}" rx="6" fill="var(--bull)" opacity="0.08"/><rect x="${TUx0}" y="${tuS[0]}" width="${TUx1-TUx0}" height="${tuS[1]-tuS[0]}" rx="6" fill="var(--bear)" opacity="0.08"/>`;
+  g += `<line x1="${CX0}" x2="${W-4}" y1="${Z}" y2="${Z}" stroke="var(--muted)" stroke-width="3" opacity="0.35"/><circle cx="${CX0}" cy="${Z}" r="4" fill="var(--surface)" stroke="var(--muted)"/>`;
+  // lines: path through the day -> into its tunnel -> out to its tile (flat names end in the zero bar)
+  const lines = [], nowX = live ? Math.max(...R.map(r => (r.path||[]).length ? t2x(r.path.at(-1)[0]) : CX0)) : CX1;
+  const order = [...bulls, ...bears]; const rankIn = new Map(); bulls.forEach((r, i) => rankIn.set(r.sym, i / Math.max(1, bulls.length - 1))); bears.forEach((r, i) => rankIn.set(r.sym, i / Math.max(1, bears.length - 1)));
+  R.forEach(r => {
+    const pts = (r.path||[]).length > 1 ? r.path.map(p => [t2x(p[0]), y(p[1])]) : [[CX0, Z], [nowX, y(r.move)]];
+    let d = `M${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L")}`;
+    const [ex, ey] = pts.at(-1), col = r.side > 0 ? "var(--bull)" : r.side < 0 ? "var(--bear)" : "var(--neutral)";
+    if (r.side === 0){ d += ` C${ex+60},${ey} ${TUx0-20},${Z} ${TUx1},${Z}`; }
+    else { const tb = r.side > 0 ? tuB : tuS, ty = tb[0] + 6 + (rankIn.get(r.sym) || 0) * (tb[1] - tb[0] - 12);
+      d += ` C${(ex + TUx0) / 2},${ey} ${(ex + TUx0) / 2},${ty} ${TUx0},${ty} L${TUx1},${ty}`;
+      const t = tiled.get(r.sym); if (t){ const [tx, tyy] = tilePos(t.i, t.sd); d += ` C${TUx1 + 40},${ty} ${tx - 40},${tyy + TH/2} ${tx},${tyy + TH/2}`; } }
+    const big = tiled.has(r.sym) && tiled.get(r.sym).i < 3;
+    lines.push(`<path class="fsym fln" data-sym="${esc(r.sym)}" data-sec="${esc(r.sector)}" d="${d}" fill="none" stroke="${col}" stroke-width="${big?1.8:1}" opacity="${big?0.9:0.38}"><title>${esc(r.sym)} ${r.move>0?"+":""}${r.move}% · ${BU[r.bu][0]}</title></path>`);
+  });
+  const nf = (D.index||{}).NIFTY;
+  if (nf){ const pts = (nf.path||[]).length > 1 ? nf.path.map(p => [t2x(p[0]), y(p[1])]) : [[CX0, Z], [nowX, y(nf.move)]];
+    lines.push(`<path d="M${pts.map(p => p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L")}" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="2 3"/>`);
+    const [lx, ly] = pts.at(-1); lines.push(`<text x="${lx - 6}" y="${ly - 6}" font-size="11.5" font-weight="700" text-anchor="end" fill="var(--ink)">NIFTY fut ${nf.move>0?"+":""}${fmt(nf.move,2)}%</text>`); }
+  g += lines.join("");
+  // sector ladder (left), leader at the top
+  const secs = D.sectors || [], sh = Math.min(34, (H - 30) / Math.max(1, secs.length));
+  secs.forEach((s, i) => { const yy = 10 + i * sh, col = s.median > 0 ? "var(--bull)" : s.median < 0 ? "var(--bear)" : "var(--muted)", n = Math.max(1, s.n), on = FNO.f === s.sector;
+    g += `<g class="fsec" data-sec="${esc(s.sector)}" style="cursor:pointer" onclick="FNO.f=FNO.f===this.dataset.sec?'all':this.dataset.sec;fnoRender()">
+      <rect x="4" y="${yy}" width="196" height="${sh-5}" rx="5" fill="var(--surface)" stroke="${on?"var(--accent)":"var(--line)"}" stroke-width="${on?2:1}"/>
+      <text x="11" y="${yy + sh*0.46}" font-size="11.5" fill="var(--ink)">${esc(s.sector.length > 18 ? s.sector.slice(0, 17) + "…" : s.sector)}</text>
+      <text x="194" y="${yy + sh*0.46}" font-size="11.5" font-weight="700" text-anchor="end" fill="${col}">${s.median>0?"+":""}${fmt(s.median,2)}%</text>
+      <rect x="11" y="${yy + sh - 12}" width="${s.up / n * 182}" height="3" fill="var(--bull)"/><rect x="${11 + s.up / n * 182}" y="${yy + sh - 12}" width="${(n - s.up - s.down) / n * 182}" height="3" fill="var(--neutral)" opacity="0.5"/><rect x="${11 + (n - s.down) / n * 182}" y="${yy + sh - 12}" width="${s.down / n * 182}" height="3" fill="var(--bear)"/>
+      <title>${esc(s.sector)}: ${s.n} names · ${s.up} up · ${s.down} down · mostly ${BU[s.bu][0].toLowerCase()} - click to filter</title></g>`; });
+  // tiles
+  tiled.forEach(({r, i, sd}) => { const [tx, ty] = tilePos(i, sd), col = sd > 0 ? "var(--bull)" : "var(--bear)", fl = FNO.prev[r.sym] != null && Math.abs(FNO.prev[r.sym] - r.move) >= 0.05;
+    const L = (r.ladder||[]).slice(-5).reverse(), lm = Math.max(1, ...L.flatMap(z => [z[1], z[2]]));
+    g += `<g class="fsym ftile${fl?" fflash":""}" data-sym="${esc(r.sym)}" data-sec="${esc(r.sector)}" style="cursor:pointer" onclick="fnoPop('${esc(r.sym)}')">
+      <rect x="${tx}" y="${ty}" width="${TW}" height="${TH}" rx="7" fill="${sd>0?"var(--bull-soft)":"var(--bear-soft)"}" stroke="${col}" stroke-opacity="0.45"/>
+      <circle cx="${tx+15}" cy="${ty+17}" r="9" fill="var(--surface)" stroke="var(--line)"/><text x="${tx+15}" y="${ty+20.5}" font-size="8.5" font-weight="700" text-anchor="middle" fill="var(--muted)">${esc(fnoAb(r.sym))}</text>
+      <text x="${tx+30}" y="${ty+21}" font-size="13.5" font-weight="700" fill="var(--ink)">${esc(r.sym.length > 10 ? r.sym.slice(0, 9) + "…" : r.sym)}</text>
+      <text x="${tx+9}" y="${ty+45}" font-size="15" font-weight="700" fill="${col}">${r.move>0?"+":""}${fmt(r.move,2)}%</text>
+      ${(() => { const b = BU[r.bu]; return `<circle cx="${tx+88}" cy="${ty+40}" r="4" ${b[2]?`fill="${b[1]}"`:`fill="none" stroke="${b[1]}" stroke-width="1.6"`}><title>${b[0]}</title></circle>`; })()}
+      ${L.map((z, k) => `<line x1="${tx+TW-30}" x2="${tx+TW-30 - z[2]/lm*20}" y1="${ty+28+k*5}" y2="${ty+28+k*5}" stroke="var(--bull)" stroke-width="2"/><line x1="${tx+TW-30}" x2="${tx+TW-30 + z[1]/lm*20}" y1="${ty+28+k*5}" y2="${ty+28+k*5}" stroke="var(--bear)" stroke-width="2"/>`).join("")}
+      <text x="${tx+TW-8}" y="${ty+16}" font-size="10" text-anchor="end" fill="var(--muted)">${"●".repeat(r.conviction)}${"○".repeat(5-r.conviction)}</text>
+      <title>${esc(r.name||r.sym)} · ${r.move>0?"+":""}${r.move}% · ${BU[r.bu][0]} · conviction ${r.conviction}/5 · click for detail</title></g>`; });
+  const more = (sd, list) => list.length > COLS*ROWS ? `<text x="${TX}" y="${sd>0 ? Z - 8 : H - 4}" font-size="11" fill="var(--muted)">+${list.length - COLS*ROWS} more ${sd>0?"up":"down"} - see the lists below</text>` : "";
+  g += more(1, bulls) + more(-1, bears);
+  return `<svg id="fnoSvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:8px">${g}</svg>`;
 }
+function fnoWire(){
+  const sv = document.getElementById("fnoSvg"); if (!sv) return;
+  const on = (attr, val) => { sv.classList.add("fdim"); sv.querySelectorAll(`[data-${attr}="${CSS.escape(val)}"]`).forEach(n => n.classList.add("fhl")); };
+  const off = () => { sv.classList.remove("fdim"); sv.querySelectorAll(".fhl").forEach(n => n.classList.remove("fhl")); };
+  sv.querySelectorAll(".fsym").forEach(n => { n.addEventListener("mouseenter", () => on("sym", n.dataset.sym)); n.addEventListener("mouseleave", off);
+    if (n.classList.contains("fln")) n.addEventListener("click", () => fnoPop(n.dataset.sym)); });
+  sv.querySelectorAll(".fsec").forEach(n => { n.addEventListener("mouseenter", () => on("sec", n.dataset.sec)); n.addEventListener("mouseleave", off); });
+}
+// ---------------------------------------------------------------- tall tile (option OI by strike) and big card
+function fnoLadder(r, W, Hh){
+  const live = (FNO.det[r.sym] || {}).d, ch = live && (live.chain||[]).length ? live.chain.map(z => [z[0], z[1], z[2]]) : (r.ladder||[]);
+  if (!ch.length) return `<p class="small muted">No option data.</p>`;
+  const rows = [...ch].sort((a,b) => b[0] - a[0]), mx = Math.max(1, ...rows.flatMap(z => [z[1], z[2]])), rh = Math.max(8, Math.min(16, (Hh - 10) / rows.length)), mid = W / 2;
+  const px = live && live.spot ? live.spot : r.fut; let g = "", py = null;
+  rows.forEach((z, i) => { const yy = 4 + i * rh;
+    g += `<rect x="${mid - z[2]/mx*(mid-4)}" y="${yy}" width="${z[2]/mx*(mid-4)}" height="${rh-3}" fill="var(--bull)" opacity="0.75"><title>${ldPx(z[0])} put OI ${fxK(z[2])}</title></rect>
+          <rect x="${mid}" y="${yy}" width="${z[1]/mx*(mid-4)}" height="${rh-3}" fill="var(--bear)" opacity="0.75"><title>${ldPx(z[0])} call OI ${fxK(z[1])}</title></rect>`;
+    if (py == null && px != null && z[0] <= px) py = yy - 1; });
+  if (py != null) g += `<line x1="0" x2="${W}" y1="${py}" y2="${py}" stroke="var(--ink)" stroke-dasharray="3 2"/><rect x="${W-62}" y="${py-9}" width="62" height="17" rx="3" fill="var(--ink)"/><text x="${W-31}" y="${py+3.5}" font-size="10.5" font-weight="700" text-anchor="middle" fill="var(--surface)">${ldPx(px)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${4 + rows.length * rh}" style="width:100%;height:auto">${g}</svg>`;
+}
+function fnoTall(r){
+  if (!r) return "";
+  const live = (FNO.det[r.sym] || {}).d, col = r.side > 0 ? "var(--bull)" : "var(--bear)";
+  return `<div class="fno-tall" id="fnoTall_${esc(r.sym)}" style="border-color:${col}" onclick="fnoPop('${esc(r.sym)}')">
+    <div style="display:flex;gap:6px;align-items:center"><span class="fno-ab">${esc(fnoAb(r.sym))}</span><b>${esc(r.sym)}</b></div>
+    <div style="color:${col};font-weight:700;font-size:16px">${r.move>0?"+":""}${fmt(r.move,2)}% <span style="font-size:11px">${"●".repeat(r.conviction)}${"○".repeat(5-r.conviction)}</span></div>
+    <div class="small" style="color:${col}">${BU[r.bu][0]}</div>
+    ${fnoLadder(r, 150, 210)}
+    <div class="small faint">${live && (live.chain||[]).length ? `live chain ${esc(live.chain_at||"")} · ${esc(live.chain_expiry||"")}` : `last session · ${esc(r.opt_expiry||"")}`}</div></div>`;
+}
+function fnoMini(r, W, Hh){
+  const p = (r.path||[]).length > 1 ? r.path : [["09:15", 0], ["15:30", r.move]], fp = r.fut_prev || (r.fut / (1 + r.move/100));
+  const vals = p.map(z => fp * (1 + z[1]/100)), lv = [r.support, r.resistance].filter(v => v != null);
+  const lo = Math.min(...vals, ...lv) * 0.998, hi = Math.max(...vals, ...lv) * 1.002, y = v => 6 + (hi - v) / (hi - lo) * (Hh - 12), x = i => 4 + i / Math.max(1, p.length - 1) * (W - 60);
+  let g = "";
+  if (r.resistance != null) g += `<line x1="0" x2="${W-56}" y1="${y(r.resistance)}" y2="${y(r.resistance)}" stroke="var(--bear)" stroke-dasharray="4 3"/><text x="${W-2}" y="${y(r.resistance)+4}" font-size="10" text-anchor="end" fill="var(--bear)">R1 ${ldPx(r.resistance)}</text>`;
+  if (r.support != null) g += `<line x1="0" x2="${W-56}" y1="${y(r.support)}" y2="${y(r.support)}" stroke="var(--bull)" stroke-dasharray="4 3"/><text x="${W-2}" y="${y(r.support)+4}" font-size="10" text-anchor="end" fill="var(--bull)">S1 ${ldPx(r.support)}</text>`;
+  g += `<polyline fill="none" stroke="${r.move>=0?"var(--bull)":"var(--bear)"}" stroke-width="1.6" points="${vals.map((v,i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/><circle cx="${x(vals.length-1)}" cy="${y(vals.at(-1))}" r="3" fill="var(--ink)"/>`;
+  return `<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:auto">${g}</svg>`;
+}
+function fnoRing(n, col){ const C = 2 * Math.PI * 15, f = n / 5; return `<svg viewBox="0 0 40 40" width="38" height="38"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--line)" stroke-width="3.5"/><circle cx="20" cy="20" r="15" fill="none" stroke="${col}" stroke-width="3.5" stroke-dasharray="${(C*f).toFixed(1)} ${C}" transform="rotate(-90 20 20)" stroke-linecap="round"/><text x="20" y="24" font-size="11" font-weight="700" text-anchor="middle" fill="var(--ink)">${n}/5</text></svg>`; }
+function fnoBig(r){
+  const col = r.side > 0 ? "var(--bull)" : "var(--bear)", ch = r.fut_prev ? r.fut - r.fut_prev : null;
+  return `<div class="fno-big" style="border-color:${col}" onclick="fnoPop('${esc(r.sym)}')">
+    <div style="display:flex;gap:8px;align-items:center"><span class="fno-ab">${esc(fnoAb(r.sym))}</span><b style="font-size:16px">${esc(r.sym)}</b><span class="small muted">${esc(r.sector)}</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:10px;align-items:center;margin-top:6px">
+      <div><div style="display:flex;gap:8px;align-items:center"><span class="pill" style="background:${col};color:#fff;font-weight:700">${r.side>0?"BULLISH":"BEARISH"}</span>${fnoRing(r.conviction, col)}</div>
+        <div style="font-size:30px;font-weight:800;color:${col};line-height:1.2">${r.move>0?"+":""}${fmt(r.move,2)}%</div>
+        <div class="small" style="color:${col}">₹${ldPx(r.fut)} ${ch==null?"":`${ch>0?"+":""}${fmt(ch,2)}`}</div></div>
+      <div>${fnoMini(r, 260, 120)}</div></div>
+    <div class="fno-lv"><div><span class="small muted">SUPPORT</span><b>${r.support==null?"–":ldPx(r.support)}</b></div><div><span class="small muted">ZONE</span><b>${r.zone==null?"–":ldPx(r.zone)}</b></div><div style="text-align:right"><span class="small muted">RESISTANCE</span><b>${r.resistance==null?"–":ldPx(r.resistance)}</b></div></div></div>`;
+}
+// ---------------------------------------------------------------- detail popup
+function fnoList(sym){ const R = FNO.D.rows, r = R.find(z => z.sym === sym); if (!r) return [];
+  const sd = r.side || (r.move >= 0 ? 1 : -1); return R.filter(z => (z.side || (z.move >= 0 ? 1 : -1)) === sd).sort((a,b) => sd * (b.move - a.move)); }
+function fnoPop(sym){
+  FNO.open = sym; const r = (FNO.D.rows||[]).find(z => z.sym === sym) || (Object.values(FNO.D.index||{})).find(z => z.sym === sym); if (!r) return;
+  const det = (FNO.det[sym] || {}).d; if (!det) fnoDetail(sym);
+  const L = fnoList(sym), k = L.findIndex(z => z.sym === sym), col = r.move >= 0 ? "var(--bull)" : "var(--bear)";
+  let ov = document.getElementById("fnoPop"); if (!ov){ ov = document.createElement("div"); ov.id = "fnoPop"; document.body.appendChild(ov);
+    ov.addEventListener("click", e => { if (e.target === ov) fnoClose(); }); }
+  const nav = d => { const z = L[k + d]; return z ? `fnoPop('${esc(z.sym)}')` : ""; };
+  const lv = (a, b, c) => `<div><div class="small muted">${a}</div><div style="font-weight:700">${b}</div>${c?`<div class="small muted">${c}</div>`:""}</div>`;
+  ov.innerHTML = `<div class="fno-pop" role="dialog" aria-label="${esc(sym)} detail">
+    <div class="spread"><div style="display:flex;gap:10px;align-items:center"><span class="fno-ab" style="width:38px;height:38px;font-size:13px">${esc(fnoAb(sym))}</span>
+      <div><div style="font-size:20px;font-weight:800">${esc(sym)}</div><div class="small muted">${esc(r.name||"")} · ${esc(r.sector||"")}</div></div></div>
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn-s" ${k>0?`onclick="${nav(-1)}"`:"disabled"} aria-label="Previous">‹</button><span class="small">${k+1}/${L.length}</span>
+      <button class="btn-s" ${k<L.length-1?`onclick="${nav(1)}"`:"disabled"} aria-label="Next">›</button><button class="btn-s" onclick="fnoClose()" aria-label="Close">✕</button></div></div>
+    <div style="margin:6px 0 4px;font-size:22px;font-weight:800">₹${ldPx(r.fut)} <span style="color:${col}">${r.move>0?"+":""}${fmt(r.move,2)}%${r.fut_prev?` ${r.fut-r.fut_prev>0?"+":""}${fmt(r.fut-r.fut_prev,2)}`:""}</span> <span class="small muted">futures</span></div>
+    ${fnoCandles(r, det)}
+    <div class="fno-grid">${lv("Rank", r.rank ? `#${r.rank} <span class="small muted">of ${r.of} ${r.side>0?"up":"down"}</span>` : "–")}${lv("Build-up", `<span style="color:${BU[r.bu][1]}">${BU[r.bu][0]}</span>`)}${lv("Conviction", `${"●".repeat(r.conviction||0)}${"○".repeat(5-(r.conviction||0))} ${r.conviction||0} of 5`)}
+      ${lv("Open Interest", `${fnoPct(r.oi_chg,1)} ${r.oi_cr?`<span class="small muted">₹${fmt(r.oi_cr,0)} Cr</span>`:""}`)}${lv("Support", `<span class="pos">S1 ${r.support==null?"–":ldPx(r.support)}</span>${r.support2?` · S2 ${ldPx(r.support2)}`:""}`)}${lv("Resistance", `<span class="neg">R1 ${r.resistance==null?"–":ldPx(r.resistance)}</span>${r.resistance2?` · R2 ${ldPx(r.resistance2)}`:""}`)}
+      ${lv("OI Zone", r.zone==null?"–":ldPx(r.zone), "strike where most OI was added")}${lv("Last 15 min", r.w&&r.w["15m"]?`${fnoDot(r.w["15m"].bu)}${fnoPct(r.w["15m"].move)}`:"–")}${lv("Last hour", r.w&&r.w["60m"]?`${fnoDot(r.w["60m"].bu)}${fnoPct(r.w["60m"].move)}`:"–")}</div>
+    <h3 style="margin:12px 0 6px">Why It Ranks Here</h3>
+    <div class="fno-why">${(r.checks||[]).map(c => `<div><span class="fno-ck ${c.pass?"ok":"no"}">${c.pass?"✓":"✕"}</span><div><b>${esc(c.label)}</b><div class="small muted">${esc(c.note||"")}</div></div></div>`).join("")}</div>
+    ${det && (det.chain||[]).length ? `<h3 style="margin:12px 0 6px">Live Option OI <span class="small muted">${esc(det.chain_expiry||"")} · ${esc(det.chain_at||"")} · puts left, calls right</span></h3>${fnoLadder(r, 520, 220)}` : ""}
+    <p class="small faint" style="margin:10px 0 0">PCR ${r.pcr==null?"–":fmt(r.pcr,2)} · levels from the ${esc(r.opt_expiry||"")} expiry (last session's open interest)${det && det.err ? ` · ${esc(det.err)}` : ""} · ← → to step, Esc to close. Context only.</p></div>`;
+  ov.hidden = false; document.body.style.overflow = "hidden";
+}
+function fnoClose(){ FNO.open = null; const ov = document.getElementById("fnoPop"); if (ov){ ov.hidden = true; ov.innerHTML = ""; } document.body.style.overflow = ""; }
+document.addEventListener("keydown", e => { if (!FNO.open) return;
+  if (e.key === "Escape") fnoClose();
+  else if (e.key === "ArrowRight" || e.key === "ArrowLeft"){ const L = fnoList(FNO.open), k = L.findIndex(z => z.sym === FNO.open), z = L[k + (e.key === "ArrowRight" ? 1 : -1)]; if (z){ e.preventDefault(); fnoPop(z.sym); } } });
+function fnoCandles(r, det){
+  const W = 640, Hh = 260, c = det && (det.candles||[]).length ? det.candles : null;
+  if (!c) return `<div class="small muted" style="padding:30px 0;text-align:center">${det ? "No 5-minute candles for this session." : "Loading 5-minute candles…"}</div>`;
+  const lv = [["R2", r.resistance2, "var(--bear)"], ["R1", r.resistance, "var(--bear)"], ["Prev", r.fut_prev, "var(--muted)"], ["S1", r.support, "var(--bull)"], ["S2", r.support2, "var(--bull)"]].filter(z => z[1] != null);
+  const ps = c.flatMap(z => [z[2], z[3]]), near = lv.filter(z => z[1] >= Math.min(...ps) * 0.985 && z[1] <= Math.max(...ps) * 1.015);
+  const lo = Math.min(...ps, ...near.map(z => z[1])) * 0.999, hi = Math.max(...ps, ...near.map(z => z[1])) * 1.001;
+  const y = v => 8 + (hi - v) / (hi - lo) * (Hh - 30), cw = (W - 80) / Math.max(1, c.length), x = i => 6 + i * cw + cw/2;
+  let g = "";
+  if (r.zone != null && r.zone >= lo && r.zone <= hi) g += `<rect x="0" y="${y(r.zone*1.0015)}" width="${W-74}" height="${Math.max(3, y(r.zone*0.9985)-y(r.zone*1.0015))}" fill="var(--accent)" opacity="0.12"><title>OI zone ${ldPx(r.zone)}</title></rect>`;
+  near.forEach(([n, v, col]) => g += `<line x1="0" x2="${W-74}" y1="${y(v)}" y2="${y(v)}" stroke="${col}" stroke-dasharray="5 4"/><text x="${W-2}" y="${y(v)+4}" font-size="11" text-anchor="end" fill="${col}">${n} ${ldPx(v)}</text>`);
+  c.forEach((z, i) => { const up = z[4] >= z[1], col = up ? "var(--bull)" : "var(--bear)";
+    g += `<line x1="${x(i)}" x2="${x(i)}" y1="${y(z[2])}" y2="${y(z[3])}" stroke="${col}"/><rect x="${x(i)-cw*0.32}" y="${y(Math.max(z[1],z[4]))}" width="${cw*0.64}" height="${Math.max(1.2, Math.abs(y(z[1])-y(z[4])))}" fill="${col}"><title>${z[0]} O ${ldPx(z[1])} H ${ldPx(z[2])} L ${ldPx(z[3])} C ${ldPx(z[4])} · OI ${fxK(z[5])}</title></rect>`; });
+  [0, Math.floor(c.length/2), c.length-1].forEach(i => g += `<text x="${x(i)}" y="${Hh-6}" font-size="10.5" text-anchor="middle" fill="var(--muted)">${c[i][0]}</text>`);
+  return `<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:auto">${g}</svg>`;
+}
+// ---------------------------------------------------------------- lists
 function fnoTable(rows, title, col, full){
   const head = title ? `<h3 style="margin:0 0 6px;color:${col}">${esc(title)}</h3>` : "";
   if (!rows.length) return head + `<p class="small muted">None.</p>`;
-  const conv = r => `<span title="${r.checks.map(c => (c.pass?"✓ ":"✗ ") + c.label).join("\n")}">${"●".repeat(r.conviction)}<span class="faint">${"○".repeat(5 - r.conviction)}</span></span>`;
+  const conv = r => `<span title="${r.checks.map(c => (c.pass?"✓ ":"✗ ") + c.label + " - " + (c.note||"")).join("\n")}">${"●".repeat(r.conviction)}<span class="faint">${"○".repeat(5 - r.conviction)}</span></span>`;
   const w = (r, k) => r.w && r.w[k] ? `${fnoDot(r.w[k].bu)}${fnoPct(r.w[k].move, 2)}` : `<span class="faint">–</span>`;
   return head + `<div style="overflow-x:auto"><table class="ld-tbl small"><thead><tr><th>Name</th><th>Move</th><th>OI</th><th>Build-up</th>${full?"<th>Last 15m</th><th>Last 1h</th><th>Sector</th>":""}<th>Conviction</th><th>Support</th><th>Resistance</th><th>OI Zone</th></tr></thead><tbody>${
-    rows.map(r => `<tr><td><b>${esc(r.sym)}</b></td><td class="num">${fnoPct(r.move)}</td><td class="num">${fnoPct(r.oi_chg,1)}</td><td>${fnoDot(r.bu)}${BU[r.bu][0]}</td>${full?`<td>${w(r,"15m")}</td><td>${w(r,"60m")}</td><td class="small">${esc(r.sector)}</td>`:""}<td>${conv(r)}</td><td class="num">${r.support==null?"–":ldPx(r.support)}</td><td class="num">${r.resistance==null?"–":ldPx(r.resistance)}</td><td class="num">${r.zone==null?"–":ldPx(r.zone)}</td></tr>`).join("")
+    rows.map(r => `<tr style="cursor:pointer" onclick="fnoPop('${esc(r.sym)}')"><td><b>${esc(r.sym)}</b></td><td class="num">${fnoPct(r.move)}</td><td class="num">${fnoPct(r.oi_chg,1)}</td><td>${fnoDot(r.bu)}${BU[r.bu][0]}</td>${full?`<td>${w(r,"15m")}</td><td>${w(r,"60m")}</td><td class="small">${esc(r.sector)}</td>`:""}<td>${conv(r)}</td><td class="num">${r.support==null?"–":ldPx(r.support)}</td><td class="num">${r.resistance==null?"–":ldPx(r.resistance)}</td><td class="num">${r.zone==null?"–":ldPx(r.zone)}</td></tr>`).join("")
   }</tbody></table></div>`;
 }
 

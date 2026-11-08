@@ -74,6 +74,20 @@ def universe():
     return out
 
 
+def names_map():
+    m = S["cache"].get("names")
+    if m is None:
+        m = {}
+        try:
+            for r in csv.DictReader(open(N500, newline="", encoding="utf-8", errors="ignore")):
+                m[r["Symbol"].strip()] = r["Company Name"].strip()
+        except Exception:
+            pass
+        m.update({"NIFTY": "Nifty 50", "BANKNIFTY": "Nifty Bank", "FINNIFTY": "Nifty Financial Services", "MIDCPNIFTY": "Nifty Midcap Select", "NIFTYNXT50": "Nifty Next 50"})
+        S["cache"]["names"] = m
+    return m
+
+
 def sectors():
     m = S["cache"].get("sectors")
     if m is None:
@@ -152,9 +166,16 @@ def eod():
         g = g[g.XpryDt == g.XpryDt.min()]
         px = out[sym]["fut_close"]
         ce, pe = g[g.OptnTp == "CE"], g[g.OptnTp == "PE"]
-        sup = pe[pe.StrkPric <= px * 1.005].sort_values("OpnIntrst").tail(1)
-        res = ce[ce.StrkPric >= px * 0.995].sort_values("OpnIntrst").tail(1)
+        sup = pe[pe.StrkPric <= px * 1.005].sort_values("OpnIntrst").tail(2).iloc[::-1]
+        res = ce[ce.StrkPric >= px * 0.995].sort_values("OpnIntrst").tail(2).iloc[::-1]
         z = g.groupby("StrkPric").ChngInOpnIntrst.sum()
+        lad = g.pivot_table(index="StrkPric", columns="OptnTp", values="OpnIntrst", aggfunc="sum").fillna(0)
+        if len(lad):
+            k = int(np.searchsorted(lad.index.values, px)); lad = lad.iloc[max(0, k - 7):k + 7]
+        out[sym].update(support2=float(sup.StrkPric.iloc[1]) if len(sup) > 1 else None, resistance2=float(res.StrkPric.iloc[1]) if len(res) > 1 else None,
+                        ladder=[[float(k_), float(v.get("CE", 0)), float(v.get("PE", 0))] for k_, v in lad.iterrows()],
+                        put_add_cr=round(float(pe.ChngInOpnIntrst.sum()) * px / 1e7, 2), call_add_cr=round(float(ce.ChngInOpnIntrst.sum()) * px / 1e7, 2),
+                        opt_expiry=str(g.XpryDt.iloc[0])[:10])
         out[sym].update(support=float(sup.StrkPric.iloc[0]) if len(sup) else None, resistance=float(res.StrkPric.iloc[0]) if len(res) else None,
                         zone=float(z.idxmax()) if len(z) and z.max() > 0 else None,
                         lean=float(pe.ChngInOpnIntrst.sum() - ce.ChngInOpnIntrst.sum()),
@@ -248,7 +269,7 @@ def _latest_snap():
 def board(univ="all"):
     E = eod(); R = E.get("rows") or {}
     sp = _latest_snap(); live = sp is not None and os.path.basename(sp)[5:15] == _today()
-    sec = sectors(); n50 = nifty50() if univ == "nifty50" else None
+    sec = sectors(); NM = names_map(); n50 = nifty50() if univ == "nifty50" else None
     names = {}
     if live:
         s = pd.read_csv(sp); last = s.groupby("sym").tail(1).set_index("sym")
@@ -272,14 +293,14 @@ def board(univ="all"):
             ps = pd.concat([ps.iloc[::5], ps.iloc[-1:]]) if len(ps) else ps
             ps = ps[~ps.index.duplicated(keep="last")]
             pth = [[mm, round((v / r.fut_prev - 1) * 100, 2)] for mm, v in ps.items()] if r.fut_prev else []
-            names[sym] = {"move": mv, "oi_chg": oic, "spot_move": spm, "fut": r.fut, "w": w, "path": pth}
+            names[sym] = {"move": mv, "oi_chg": oic, "spot_move": spm, "fut": r.fut, "fut_prev": r.fut_prev, "oi": r.oi, "w": w, "path": pth}
         at = f"{os.path.basename(sp)[5:15]} {m_now}"
         src = "live" if datetime.now().weekday() < 5 and datetime.now().strftime("%H:%M") <= "15:35" else "session snapshots (market closed)"
     else:
         for sym, e in R.items():
             mv = (e["fut_close"] / e["fut_prev"] - 1) * 100 if e.get("fut_prev") else None
             oic = (e["oi"] / e["oi_prev"] - 1) * 100 if e.get("oi_prev") else None
-            names[sym] = {"move": mv, "oi_chg": oic, "spot_move": None, "fut": e.get("fut_close"), "w": {}, "path": []}
+            names[sym] = {"move": mv, "oi_chg": oic, "spot_move": None, "fut": e.get("fut_close"), "fut_prev": e.get("fut_prev"), "oi": e.get("oi"), "w": {}, "path": []}
         at = E.get("day"); src = "last session (NSE end of day)"
     U = S.get("uni")[1] if S.get("uni") else {}
     rows = []
@@ -293,7 +314,10 @@ def board(univ="all"):
         rows.append({"sym": sym, "kind": kind, "sector": "Index" if kind == "index" else sec.get(sym, "Other"), "move": round(n["move"], 2),
                      "oi_chg": None if n["oi_chg"] is None else round(n["oi_chg"], 2), "bu": _bu(n["move"], n["oi_chg"]),
                      "spot_move": None if n["spot_move"] is None else round(n["spot_move"], 2), "fut": n["fut"], "w": n["w"], "path": n["path"],
-                     "support": e.get("support"), "resistance": e.get("resistance"), "zone": e.get("zone"), "pcr": e.get("pcr"), "lean": e.get("lean")})
+                     "support": e.get("support"), "resistance": e.get("resistance"), "zone": e.get("zone"), "pcr": e.get("pcr"), "lean": e.get("lean"),
+                     "support2": e.get("support2"), "resistance2": e.get("resistance2"), "ladder": e.get("ladder") or [], "put_add_cr": e.get("put_add_cr"),
+                     "call_add_cr": e.get("call_add_cr"), "opt_expiry": e.get("opt_expiry"), "name": NM.get(sym, sym), "fut_prev": n.get("fut_prev"),
+                     "oi_cr": round(n["oi"] * n["fut"] / 1e7, 1) if n.get("oi") and n.get("fut") else None})
     if not rows:
         return {"at": at, "source": src, "rows": [], "err": S.get("err")}
     D = pd.DataFrame(rows)
@@ -304,14 +328,25 @@ def board(univ="all"):
         r["side"] = side
         sm = smed.get(r["sector"]) if r["kind"] == "stock" else None
         h = (r["w"].get("60m") or {}).get("move")
-        chk = [("fresh", "New positions opened with the move", side != 0 and r["bu"] == ("LONG_BUILD" if side > 0 else "SHORT_BUILD")),
-               ("spot", "The stock itself agrees", side != 0 and r["spot_move"] is not None and r["spot_move"] * side >= 0.2),
-               ("hour", "The last hour agrees", side != 0 and h is not None and h * side > 0),
-               ("writers", "Option writers lean the same way", side != 0 and r["lean"] is not None and r["lean"] * side > 0),
-               ("sector", "The sector agrees", side != 0 and sm is not None and sm * side > 0)]
-        r["checks"] = [{"id": a, "label": b, "pass": bool(c)} for a, b, c in chk]
+        f2 = lambda v, d=2: "n/a" if v is None else f"{v:+.{d}f}%"
+        way = "up" if side > 0 else "down"
+        chk = [("fresh", "New positions opened with the move", side != 0 and r["bu"] == ("LONG_BUILD" if side > 0 else "SHORT_BUILD"),
+                f"open interest {f2(r['oi_chg'])} with the price {way}" if side else "no clear move"),
+               ("spot", "The stock itself moved the same way", side != 0 and r["spot_move"] is not None and r["spot_move"] * side >= 0.2,
+                f"spot {f2(r['spot_move'])} since the previous close" if r["spot_move"] is not None else "needs live data"),
+               ("hour", "The last hour agrees", side != 0 and h is not None and h * side > 0,
+                f"last hour {f2(h)}" if h is not None else "needs an hour of live data"),
+               ("writers", "Option writers lean the same way", side != 0 and r["lean"] is not None and r["lean"] * side > 0,
+                f"puts {r['put_add_cr']:+.2f} Cr and calls {r['call_add_cr']:+.2f} Cr of OI added last session" if r.get("put_add_cr") is not None else "no option data"),
+               ("sector", "Its sector leans the same way", side != 0 and sm is not None and sm * side > 0,
+                f"{r['sector']} median {f2(sm)}" if sm is not None else "index")]
+        r["checks"] = [{"id": a, "label": b, "pass": bool(c), "note": d} for a, b, c, d in chk]
         r["conviction"] = sum(1 for c in chk if c[2])
     st = [r for r in rows if r["kind"] == "stock"]
+    for sd in (1, -1):
+        grp = sorted([r for r in st if r["side"] == sd], key=lambda r: -sd * r["move"])
+        for i, r in enumerate(grp):
+            r["rank"], r["of"] = i + 1, len(grp)
     cnt = lambda k: sum(1 for r in st if r["bu"] == k)
     br = {"names": len(st), "up": sum(1 for r in st if r["side"] > 0), "flat": sum(1 for r in st if r["side"] == 0), "down": sum(1 for r in st if r["side"] < 0),
           "LB": cnt("LONG_BUILD"), "SC": cnt("SHORT_COVER"), "SB": cnt("SHORT_BUILD"), "LU": cnt("LONG_UNWIND"), "NEUTRAL": cnt("NEUTRAL")}
@@ -336,10 +371,56 @@ def board(univ="all"):
                     "Context only - descriptive, not a tested signal."}
 
 
+_CHAIN_T = [0.0]
+
+
+def detail(sym):
+    """One name: today's (or the last session's) 5-min futures candles and its live option chain (nearest expiry). Cached 2 min."""
+    sym = sym.upper(); c = S["cache"].get(("detail", sym))
+    if c and time.time() - c[0] < 120:
+        return c[1]
+    import dhan_live as DL
+    d = universe().get(sym) or {}; out = {"sym": sym, "candles": [], "chain": [], "err": None}
+    if not d.get("futs"):
+        return {**out, "err": "unknown symbol"}
+    sp = _latest_snap(); day = date.fromisoformat(os.path.basename(sp)[5:15]) if sp else date.today()
+    try:
+        bars = DL.intraday("NSE_FNO", d["futs"][0][1], "FUTIDX" if d["kind"] == "index" else "FUTSTK", day, day, 5, oi=True)
+        out["candles"] = [[b["ts"].strftime("%H:%M"), b["open"], b["high"], b["low"], b["close"], b["oi"]] for b in bars]
+        out["day"] = str(day)
+    except Exception as e:
+        out["err"] = f"candles: {str(e)[:100]}"
+    try:
+        seg = "IDX_I" if d["kind"] == "index" else "NSE_EQ"
+        uid = DL.ids_index(INDEX_SPOT[sym]) if d["kind"] == "index" else DL.ids_equity(sym)
+        wait = 3.1 - (time.time() - _CHAIN_T[0])
+        if wait > 0:
+            time.sleep(wait)
+        exps = sorted(DL._post("/optionchain/expirylist", {"UnderlyingScrip": int(uid), "UnderlyingSeg": seg}) or [])
+        exps = [x for x in exps if x >= _today()]
+        time.sleep(3.1)
+        ch = DL._post("/optionchain", {"UnderlyingScrip": int(uid), "UnderlyingSeg": seg, "Expiry": exps[0]}); _CHAIN_T[0] = time.time()
+        und = ch.get("last_price"); rows = []
+        for k, v in (ch.get("oc") or {}).items():
+            ce, pe = v.get("ce") or {}, v.get("pe") or {}
+            rows.append([float(k), float(ce.get("oi") or 0), float(pe.get("oi") or 0), float(ce.get("oi") or 0) - float(ce.get("previous_oi") or 0),
+                         float(pe.get("oi") or 0) - float(pe.get("previous_oi") or 0)])
+        rows.sort()
+        if rows and und:
+            ks = [r_[0] for r_ in rows]; i = int(np.searchsorted(ks, und)); rows = rows[max(0, i - 7):i + 7]
+        out.update(chain=rows, chain_expiry=exps[0], spot=und, chain_at=datetime.now().strftime("%H:%M"))
+    except Exception as e:
+        out["err"] = (out["err"] or "") + f" chain: {str(e)[:100]}"
+    S["cache"][("detail", sym)] = (time.time(), out)
+    return out
+
+
 def api(q=None):
     q = q or {}
     if q.get("snap") == "1":                               # manual snapshot (testing / outside the schedule)
         return {"started": tick(force=True)}
+    if q.get("detail"):
+        return detail(q["detail"])
     if q.get("raw"):                                        # one name's raw Dhan quote rows (checking)
         import dhan_live as DL
         d = universe().get(q["raw"].upper()) or {}
