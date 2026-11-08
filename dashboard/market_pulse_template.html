@@ -2046,7 +2046,8 @@ function fnoBoardSvg(D){
   // 2026-11-08 v2 (Nikhil: "not a complete tunnel, and the left side is not the same as the sample"): full-height sector ladder with a
   // bull / bear rail, a long tube per side that every line runs THROUGH (tight, parallel, framed by end rails), then fans out to the tiles.
   // v3 (Nikhil, sample image): axis at the far left, sector pills laid OVER the start of the chart, smooth replayed paths with dots, longer funnel.
-  const W = 1600, H = 900, Z = H / 2, PX = 74, LW = 190, CX0 = 64, CX1 = 740, TU0 = 830, TU1 = 975, TX = 1020, TW = 186, TH = 56, TG = 8, COLS = 3, ROWS = 6;
+  // v4 (Nikhil: "see lines clearly from 9:15 to 15:30 .. sector moved left .. drums reduce width"): ladder back beside the chart, wider plot, narrow tubes.
+  const W = 1600, H = 900, Z = H / 2, PX = 14, LW = 178, CX0 = 236, CX1 = 880, TU0 = 925, TU1 = 975, TX = 1020, TW = 186, TH = 56, TG = 8, COLS = 3, ROWS = 6;
   const P2 = v => v.toFixed(1), smooth = P => { if (P.length < 3) return "M" + P.map(p => P2(p[0]) + "," + P2(p[1])).join(" L");
     let d = `M${P2(P[0][0])},${P2(P[0][1])}`;
     for (let i = 0; i < P.length - 1; i++){ const p0 = P[i-1] || P[i], p1 = P[i], p2 = P[i+1], p3 = P[i+2] || p2;
@@ -2077,7 +2078,7 @@ function fnoBoardSvg(D){
     g += `<rect x="${TU0}" y="${t[0]-3}" width="${TU1-TU0}" height="${t[1]-t[0]+6}" rx="5" fill="${c}" opacity="0.07"/>
           <line x1="${TU0}" x2="${TU1}" y1="${t[0]-3}" y2="${t[0]-3}" stroke="${c}" opacity="0.5"/><line x1="${TU0}" x2="${TU1}" y1="${t[1]+3}" y2="${t[1]+3}" stroke="${c}" opacity="0.5"/>
           <rect x="${TU0-3}" y="${t[0]-5}" width="5" height="${t[1]-t[0]+10}" rx="1.5" fill="${c}" opacity="0.9"/><rect x="${TU1-2}" y="${t[0]-5}" width="5" height="${t[1]-t[0]+10}" rx="1.5" fill="${c}" opacity="0.9"/>
-          ${[1,2,3,4,5].map(k => `<line x1="${TU0 + k*(TU1-TU0)/6}" x2="${TU0 + k*(TU1-TU0)/6}" y1="${t[0]}" y2="${t[1]}" stroke="${c}" stroke-dasharray="1.5 3" opacity="0.55"/>`).join("")}`; });
+          ${[1,2,3].map(k => `<line x1="${TU0 + k*(TU1-TU0)/4}" x2="${TU0 + k*(TU1-TU0)/4}" y1="${t[0]}" y2="${t[1]}" stroke="${c}" stroke-dasharray="1.5 3" opacity="0.55"/>`).join("")}`; });
   // zero bar: carries on from the chart, through the gap between the halves, to the right edge (flat names end in it)
   g += `<line x1="${CX0}" x2="${W-4}" y1="${Z}" y2="${Z}" stroke="var(--muted)" stroke-width="5" opacity="0.22" stroke-linecap="round"/><line x1="${CX0}" x2="${W-4}" y1="${Z}" y2="${Z}" stroke="var(--muted)" stroke-width="1"/>
         <circle cx="${CX0}" cy="${Z}" r="4.5" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"/>`;
