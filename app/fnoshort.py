@@ -22,7 +22,12 @@ BUILDUP v2 (added 8 Nov beside v1, scripts/research/fno_flow_research5.py): the 
 within 1 % of its 60-session low, or it has closed below its most recent bullish order block (a down candle followed within 3 sessions by
 a close >= its high + 1.5 ATR, last 60 sessions). From Oct 2024 (when 60 sessions of history exist): v1 +0.43 % a trade (t 1.9, n 424),
 v2 +0.77 % (t 2.7, n 210, both halves, every year, Sharpe ~3.3, max DD ~-6 %); the skipped half made +0.10 %. Order-flow proxies from
-5-min bars (VWAP, last hour, volume delta) and a 09:30 confirmation entry did not help and are not used. v1 keeps running unchanged.
+5-min bars (VWAP, last hour, volume delta) and a 09:30 confirmation entry did not help and are not used.
+
+2026-11-08 later (Nikhil: "we will not use v1, retire that and then we use v2"): v1 RETIRED - only signals that pass the v2 check open trades;
+the others are kept in the signal list marked "skipped: v1 retired". Each signal also carries a small chart (last 40 closes of the most-held
+future, chained across rolls and anchored to the signal-day close) with the bullish order block below, the bearish order block (supply) above
+and the 60-day low, for the trade cards on the F&O Flow tab.
 """
 from __future__ import annotations
 
@@ -72,8 +77,8 @@ def signals_for(day: str) -> list:
     try:
         stc = _structure(day, [x["sym"] for x in out])
         for x in out:
-            late, why = stc.get(x["sym"], (False, "no history"))
-            x["v2"] = not late; x["v2_note"] = f"v2 skips: {why}" if late else ("v2 takes it" + (f" ({why})" if why else ""))
+            late, why, ch = stc.get(x["sym"], (False, "no history", None))
+            x["v2"] = not late; x["v2_note"] = f"v2 skips: {why}" if late else ("v2 takes it" + (f" ({why})" if why else "")); x["chart"] = ch
     except Exception as e:
         for x in out:
             x["v2"] = None; x["v2_note"] = f"v2 check failed: {str(e)[:60]}"
@@ -93,7 +98,7 @@ def _structure(day, syms):
         tr = np.maximum(H - L, np.maximum(np.abs(H - np.roll(C, 1)), np.abs(L - np.roll(C, 1)))); tr[0] = H[0] - L[0]
         A = pd.Series(tr).rolling(14, min_periods=5).mean().values; n = len(C); i = n - 1
         if n < 61 or g.day.iloc[-1] != day:
-            out[sym] = (False, "short history"); continue
+            out[sym] = (False, "short history", None); continue
         bull = []
         for k in range(n):
             for j in (k - 1, k - 2, k - 3):
@@ -102,7 +107,17 @@ def _structure(day, syms):
         bl = [b for b in bull if i - 60 <= b[0] < i - 1]
         low60 = C[i] <= L[-60:].min() * 1.01
         broken = bool(bl) and C[i] < bl[-1][1]
-        out[sym] = (low60 or broken, "at its 60-day low" if low60 else "closed below its last bullish order block" if broken else "")
+        bear = []
+        for k in range(n):
+            for j in (k - 1, k - 2, k - 3):
+                if j >= 0 and np.isfinite(A[j]) and C[j] > O[j] and C[k] <= L[j] - 1.5 * A[j] and all(b[0] != j for b in bear):
+                    bear.append((j, L[j], H[j]))
+        sup = [b for b in bear if i - 60 <= b[0] < i - 1 and b[1] > C[i]]
+        sc = float(g.close.iloc[-1]) / C[i]; r2 = lambda v: round(float(v) * sc, 2)
+        chart = {"days": [str(d) for d in g.day.values[-40:]], "c": [r2(v) for v in C[-40:]],
+                 "ob": [r2(bl[-1][1]), r2(bl[-1][2])] if bl else None, "ob_day": str(g.day.values[bl[-1][0]]) if bl else None,
+                 "supply": [r2(sup[-1][1]), r2(sup[-1][2])] if sup else None, "low60": r2(L[-60:].min())}
+        out[sym] = (low60 or broken, "at its 60-day low" if low60 else "closed below its last bullish order block" if broken else "", chart)
     return out
 
 
@@ -138,10 +153,12 @@ def _session(st):
     pend = [s for d, L in st["signals"].items() if d < today for s in L
             if not any(t["sym"] == s["sym"] and t["signal_day"] == d for t in st["trades"]) and not s.get("skipped")]
     for s in pend:
+        if not s.get("v2"):                                          # 2026-11-08: v1 retired - only v2 signals trade
+            s["skipped"] = "v1 retired - " + (s.get("v2_note") or "v2 check missing"); continue
         exp, sid, lot = _contract(s["sym"], today)
         if not sid:
             s["skipped"] = "no contract"; continue
-        st["trades"].append({"sym": s["sym"], "signal_day": s["day"], "sid": sid, "expiry": exp, "lot": lot, "status": "pending", "v2": s.get("v2"), "v2_note": s.get("v2_note"),
+        st["trades"].append({"sym": s["sym"], "signal_day": s["day"], "sid": sid, "expiry": exp, "lot": lot, "status": "pending", "v2": s.get("v2"), "v2_note": s.get("v2_note"), "chart": s.get("chart"), "signal_ret": s.get("ret"), "signal_oi": s.get("oi_chg"),
                              "why": f"{s['day']}: futures {s['ret']:+.2f}% with OI {s['oi_chg']:+.1f}% (fresh shorts), closed near the day's low"})
     live = [t for t in st["trades"] if t["status"] in ("pending", "open")]
     if not live:
@@ -168,6 +185,7 @@ def _session(st):
             _close(t, px, "stop 5 %"); continue
         if len(t["sessions"]) >= HOLD and hm >= "15:25":
             _close(t, float(lp), f"{HOLD} sessions"); continue
+        t.setdefault("path", {})[today] = lp
         t["now"] = lp; t["pnl_open_pct"] = round((t["entry"] - lp) / t["entry"] * 100 - COST, 2)
         t["pnl_open"] = round((t["entry"] - lp - t["entry"] * COST / 100) * (t["lot"] or 0))
 
@@ -209,7 +227,7 @@ def trades():
 def api():
     st = _load()
     last = sorted(st.get("signals", {}).items())[-1] if st.get("signals") else (None, [])
-    return {"last_signal_day": last[0], "signals": last[1], "open": [t for t in st.get("trades", []) if t["status"] in ("pending", "open")],
+    return {"version": "v2 (v1 retired 8 Nov)", "last_signal_day": last[0], "signals": last[1], "open": [t for t in st.get("trades", []) if t["status"] in ("pending", "open")],
             "closed": [t for t in st.get("trades", []) if t["status"] == "closed"][-30:], "err": S.get("err"), "at": st.get("at"),
-            "name": "BuildUp v1", "rule": "Short the stock future at the next open after a day with futures down >= 2 %, total OI up >= 10 % and a close in the lower half of "
+            "name": "BuildUp v2", "rule": "v2: skip if the stock is at its 60-day low or closed below its last bullish order block. Short the stock future at the next open after a day with futures down >= 2 %, total OI up >= 10 % and a close in the lower half of "
                     "the range (max 5 a day, biggest OI rises); stop 5 %; out at the close of the 5th session. Paper only."}

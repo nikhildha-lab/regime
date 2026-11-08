@@ -37,7 +37,7 @@ RULES = {
     "us_manual": {"label": "US paper trade (your form)", "edge": "your own US paper trade from the dashboard form - record only"},
     "svb": {"label": "Stock Volume Break v1 · target 2R (MIS 5x)", "edge": "new 9 Nov - backtest 81 days: 149 trades, +0.23 % a trade after costs, halves +0.21 / +0.25; picked from a grid - judge after 30-40"},
     "svb_tr": {"label": "Stock Volume Break v1 · 2-ATR trail (MIS 5x)", "edge": "new 9 Nov - same entries, trail 2 ATR after +1R, target 3R: backtest +0.19 % a trade, win 53 %"},
-    "fsb": {"label": "BuildUp v1 · short stock futures on fresh short build-up (1 lot)", "edge": "new 9 Nov - bhavcopy test Jul 2024-Nov 2026: 596 trades, +0.72 % a trade after costs (t 3.6), every year positive; judge after ~40"},
+    # "fsb" BuildUp v1 retired 8 Nov before its first trade (Nikhil: "we will not use v1, retire that and then we use v2")
     "fsb2": {"label": "BuildUp v2 · v1 minus 'late' shorts (at 60-day low / bullish order block broken)", "edge": "new 9 Nov - from Oct 2024: 210 trades, +0.77 % a trade after costs (t 2.7) vs v1 +0.43 % on the same period; judge after ~30"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
@@ -278,7 +278,7 @@ def _svb(hot):
 
 
 def _fsb(hot):
-    """2026-11-08: F&O Short Build-up v1 (app/fnoshort.py) - short stock futures, 1 lot, rupees after 0.06 %."""
+    """2026-11-08: BuildUp v2 (app/fnoshort.py; v1 retired) - short stock futures, 1 lot, rupees after 0.06 %."""
     out = []
     for x in hot("fnoshort").trades():
         t = {"rule": "fsb", "key": x["sym"], "side": "short", "opened": x.get("opened"), "entry": x.get("entry"), "stop": x.get("stop"), "target": None,
@@ -288,8 +288,7 @@ def _fsb(hot):
             t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"))
         elif x.get("pnl_open") is not None:
             t.update(pnl_open=x["pnl_open"], now=x.get("now"))
-        out.append(t)
-        if x.get("v2"):                                              # 2026-11-08: BuildUp v2 = the same trade when it passes the 'not late' filter
+        if x.get("v2"):                                              # 2026-11-08: only BuildUp v2 trades (v1 retired the same day)
             out.append(dict(t, rule="fsb2", why=(t["why"] + " · " + (x.get("v2_note") or "")).strip(" ·")))
     return out
 
