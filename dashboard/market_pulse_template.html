@@ -437,6 +437,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
     <button data-v="metals" aria-pressed="false">Metals</button>
     <button data-v="global" aria-pressed="false">Commodities</button>
     <button data-v="intraday" aria-pressed="false">Intraday desk</button>
+    <button data-v="fno" aria-pressed="false">F&amp;O Flow</button>
   </nav>
   <!-- 2026-10-31 (Nikhil): Intraday desk sub-tabs (Indian / US / Crypto) + one dropdown; every section below follows the choice -->
   <section class="card" id="idBar"></section>
@@ -561,6 +562,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <section class="card ptCard" data-keys="GOLD" data-title="Metals paper trades · Gold"></section>
   <div id="mliveDesk"></div>
 </div>
+<div class="view" id="viewFno" hidden><div id="fnoBoard"></div></div>
 <div class="view" id="viewLogbook" hidden>
   <section class="card ptCard" id="ptAll" data-keys="" data-title="All paper trades · every rule, every market"></section>
   <section class="card" id="ptCharts" style="margin-top:12px"></section>
@@ -1923,6 +1925,94 @@ async function bigwLoad(){
     + `<p class="small faint" style="margin:6px 0 0">${esc((R[0]||{}).rule||"")}. Futures prices. Context only, not a signal: on 9 days of Nifty data walls held 47% of the time vs 52% for ordinary levels, and the biggest usually broke. `
     + `Best read at about 09:30 (after the opening book settles), then every 15–30 min and just before any entry; a wall that keeps shrinking or gets pulled is weaker than one that is growing. Paper only, never orders.</p>`;
 }
+// 2026-11-08 (Nikhil: "create a new tab for this" - idea from github.com/MrChartist/order-flow, rebuilt on our data in app/fnoflow.py):
+// F&O Flow - every NSE F&O name read from its futures: move, open-interest build-up, conviction checks, sectors and breadth.
+const FNO = {u: (() => { try { return localStorage.getItem("mp.fno.u") || "all"; } catch(e){ return "all"; } })(), t: null, f: "all", q: ""};
+const BU = {LONG_BUILD:["Long build-up","var(--bull)",true], SHORT_COVER:["Short covering","var(--bull)",false], SHORT_BUILD:["Short build-up","var(--bear)",true],
+            LONG_UNWIND:["Long unwinding","var(--bear)",false], NEUTRAL:["Neutral","var(--neutral)",false]};
+function fnoDot(b){ const x = BU[b] || BU.NEUTRAL; return `<span title="${x[0]}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;${x[2]?`background:${x[1]}`:`border:2px solid ${x[1]};box-sizing:border-box`}"></span>`; }
+function fnoPct(v, d=2){ return v==null ? "–" : `<span style="color:${v>0?"var(--bull)":v<0?"var(--bear)":"var(--muted)"}">${v>0?"+":""}${fmt(v,d)}%</span>`; }
+function fnoStart(){ clearInterval(FNO.t); fnoLoad(); FNO.t = setInterval(() => { if (!document.hidden && window.CUR_TAB === "fno") fnoLoad(); }, 60000); }
+function fnoStop(){ clearInterval(FNO.t); }
+async function fnoLoad(){
+  const el = $("#fnoBoard"); if (!el) return;
+  if (!el.innerHTML) el.innerHTML = `<section class="card"><p class="small muted">Loading the F&amp;O board…</p></section>`;
+  let D; try { D = await fetch(`/api/livedesk/fnoflow?u=${FNO.u}`).then(r => r.json()); } catch(e){ return; }
+  FNO.D = D; fnoRender();
+}
+function fnoRender(){
+  const D = FNO.D, el = $("#fnoBoard"); if (!D || !el) return;
+  if (!(D.rows||[]).length){ el.innerHTML = `<section class="card"><h2>F&amp;O Flow</h2><p class="small muted">No data yet${D.err?` · ${esc(D.err)}`:""}.</p></section>`; return; }
+  const B = D.breadth || {}, rows = D.rows, live = D.source === "live", snaps = /snapshots/.test(D.source||"");
+  const sw = (k, l) => `<button class="${FNO.u===k?"on":""}" onclick="FNO.u='${k}';try{localStorage.setItem('mp.fno.u','${k}')}catch(e){};fnoLoad()">${l}</button>`;
+  const idx = ["NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY","NIFTYNXT50"].map(k => (D.index||{})[k]).filter(Boolean);
+  const NM = {NIFTY:"Nifty", BANKNIFTY:"Bank Nifty", FINNIFTY:"Fin Nifty", MIDCPNIFTY:"Midcap Select", NIFTYNXT50:"Nifty Next 50"};
+  const sc = B.score || 0, scCol = sc > 0.05 ? "var(--bull)" : sc < -0.05 ? "var(--bear)" : "var(--muted)";
+  // header: source, universe switch, breadth
+  let h = `<section class="card"><div class="spread"><h2 style="margin:0">F&amp;O Flow <span class="small muted">· every F&amp;O name read from its futures</span></h2>
+    <span class="fx-tf">${sw("all","All F&amp;O")}${sw("nifty50","Nifty 50")}</span></div>
+    <p class="small muted" style="margin:4px 0 10px">${live ? `Live · ${esc(D.at||"")} IST · refreshes every minute` : `Market closed · showing the ${esc(D.source)} · ${esc(D.at||"")}`}
+      · ${B.names} stocks: <b class="pos">${B.up} up</b> · ${B.flat} flat · <b class="neg">${B.down} down</b></p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:stretch">
+      <div class="mtile" style="min-width:170px"><div class="small muted">Breadth score</div><div style="font-size:24px;font-weight:700;color:${scCol}">${sc>0?"+":""}${fmt(sc*100,0)}</div>
+        <div class="small faint" title="(long build-up + short covering − short build-up − long unwinding) ÷ names, ×100">bulls minus bears, of 100</div></div>
+      ${[["LB","LONG_BUILD"],["SC","SHORT_COVER"],["SB","SHORT_BUILD"],["LU","LONG_UNWIND"],["NEUTRAL","NEUTRAL"]].map(([k,b]) => `<div class="mtile" style="min-width:120px"><div class="small muted">${fnoDot(b)}${BU[b][0]}</div><div style="font-size:20px;font-weight:700">${B[k]||0}</div></div>`).join("")}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${idx.map(r => `<span class="pill" title="${esc(BU[r.bu][0])} · OI ${r.oi_chg==null?"–":fmt(r.oi_chg,1)+"%"}">${fnoDot(r.bu)}<b>${NM[r.sym]||r.sym}</b> ${fnoPct(r.move)}</span>`).join("")}</div>
+    ${fnoStrip(rows)}</section>`;
+  // chart (live only): paths of the biggest movers + breadth score
+  if (live || snaps) h += `<section class="card"><div class="spread"><h3 style="margin:0">The Session</h3><span class="small muted">futures move from the previous close · 5 biggest each side · dotted = Nifty</span></div>${fnoChart(D)}</section>`;
+  // sectors
+  h += `<section class="card"><div class="spread"><h3 style="margin:0">Sectors</h3><span class="small muted">median futures move · up / down names · most common build-up</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${(D.sectors||[]).map(s => `<span class="pill" style="cursor:pointer;${FNO.f===s.sector?"outline:2px solid var(--accent)":""}" onclick="FNO.f=FNO.f==='${esc(s.sector)}'?'all':'${esc(s.sector)}';fnoRender()" title="${s.n} names · ${s.up} up · ${s.down} down">${fnoDot(s.bu)}${esc(s.sector)} ${fnoPct(s.median)} <span class="faint">${s.up}↑ ${s.down}↓</span></span>`).join("")}</div></section>`;
+  // bulls / bears
+  const pick = rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
+  const bull = pick.filter(r => r.side > 0).sort((a,b) => b.conviction - a.conviction || b.move - a.move).slice(0, 15);
+  const bear = pick.filter(r => r.side < 0).sort((a,b) => b.conviction - a.conviction || a.move - b.move).slice(0, 15);
+  h += `<div class="deskpair"><section class="card">${fnoTable(bull, "Bullish · strongest first", "var(--bull)")}</section><section class="card">${fnoTable(bear, "Bearish · strongest first", "var(--bear)")}</section></div>`;
+  // every name
+  const q = FNO.q.toUpperCase(), all = pick.filter(r => !q || r.sym.includes(q));
+  h += `<section class="card"><div class="spread"><h3 style="margin:0">Every Name ${FNO.f!=="all"?`· ${esc(FNO.f)} <a href="#" class="small" onclick="FNO.f='all';fnoRender();return false">(all sectors)</a>`:""}</h3>
+    <input placeholder="Find a symbol" value="${esc(FNO.q)}" oninput="FNO.q=this.value;clearTimeout(FNO.qt);FNO.qt=setTimeout(fnoRender,250)" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)"></div>
+    ${fnoTable(all, "", null, true)}
+    <p class="small faint" style="margin:8px 0 0">${esc(D.note||"")} Build-up: price and OI up = ${fnoDot("LONG_BUILD")}long build-up · price up, OI down = ${fnoDot("SHORT_COVER")}short covering · price down, OI up = ${fnoDot("SHORT_BUILD")}short build-up · price and OI down = ${fnoDot("LONG_UNWIND")}long unwinding (filled dot = new positions, hollow = positions closing). Conviction = how many of 5 checks hold: new positions with the move, the stock itself agrees, the last hour agrees, option writers added on the same side yesterday, the sector agrees. Support / resistance = yesterday's biggest put / call open interest; zone = where the most OI was added. Levels from the NSE bhavcopy of ${esc(D.eod_day||"")}.</p></section>`;
+  el.innerHTML = h;
+}
+function fnoStrip(rows){
+  const W = 1000, H = 46, mx = Math.max(2, ...rows.map(r => Math.abs(r.move))), x = v => W/2 + v/mx*(W/2 - 14);
+  let g = `<line x1="${W/2}" x2="${W/2}" y1="4" y2="${H-12}" stroke="var(--line)"/>`;
+  rows.forEach((r, i) => { const c = r.move > 0 ? "var(--bull)" : r.move < 0 ? "var(--bear)" : "var(--neutral)";
+    g += `<circle cx="${x(r.move).toFixed(1)}" cy="${10 + (i % 5) * 6}" r="3.2" fill="${c}" fill-opacity="0.75"><title>${esc(r.sym)} ${r.move>0?"+":""}${r.move}% · ${BU[r.bu][0]}</title></circle>`; });
+  g += `<text x="6" y="${H-2}" font-size="10" fill="var(--muted)">−${fmt(mx,1)}%</text><text x="${W-6}" y="${H-2}" font-size="10" text-anchor="end" fill="var(--muted)">+${fmt(mx,1)}%</text><text x="${W/2}" y="${H-2}" font-size="10" text-anchor="middle" fill="var(--muted)">0</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px">${g}</svg>`;
+}
+function fnoChart(D){
+  const rows = D.rows.filter(r => (r.path||[]).length > 1), top = [...rows].sort((a,b) => b.move - a.move);
+  const sel = [...top.slice(0,5), ...top.slice(-5)], nif = (D.index||{}).NIFTY;
+  const all = [...sel, ...(nif && (nif.path||[]).length > 1 ? [nif] : [])]; if (!all.length) return `<p class="small muted">Waiting for minute snapshots - the session chart fills in as the day goes on.</p>`;
+  const mins = [...new Set(all.flatMap(r => r.path.map(p => p[0])))].sort(); const W = 1000, H = 300, L = 40, Rr = 120;
+  const vals = all.flatMap(r => r.path.map(p => p[1])); const hi = Math.max(0.5, ...vals), lo = Math.min(-0.5, ...vals);
+  const x = m => L + mins.indexOf(m) / Math.max(1, mins.length - 1) * (W - L - Rr), y = v => 10 + (hi - v) / (hi - lo) * (H - 30);
+  let g = `<line x1="${L}" x2="${W-Rr}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/>`;
+  [hi, lo].forEach(v => g += `<text x="${L-4}" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${v>0?"+":""}${fmt(v,1)}%</text>`);
+  const labs = [];
+  all.forEach(r => { const isN = r === nif, c = isN ? "var(--ink)" : r.move >= 0 ? "var(--bull)" : "var(--bear)";
+    g += `<polyline fill="none" stroke="${c}" stroke-width="${isN?1.6:1.4}" ${isN?'stroke-dasharray="3 3"':""} opacity="0.85" points="${r.path.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ")}"><title>${esc(r.sym)} ${r.move>0?"+":""}${r.move}%</title></polyline>`;
+    labs.push({yy: y(r.path.at(-1)[1]), t: `${isN?"Nifty":r.sym} ${r.move>0?"+":""}${fmt(r.move,1)}%`, c}); });
+  labs.sort((a,b) => a.yy - b.yy); let last = -99; labs.forEach(l => { const yy = Math.max(l.yy, last + 12); last = yy; g += `<text x="${W-Rr+6}" y="${yy+4}" font-size="10.5" fill="${l.c}">${esc(l.t)}</text>`; });
+  [mins[0], mins[Math.floor(mins.length/2)], mins.at(-1)].forEach(m => g += `<text x="${x(m)}" y="${H-4}" font-size="10" text-anchor="middle" fill="var(--muted)">${m}</text>`);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${g}</svg>`;
+}
+function fnoTable(rows, title, col, full){
+  const head = title ? `<h3 style="margin:0 0 6px;color:${col}">${esc(title)}</h3>` : "";
+  if (!rows.length) return head + `<p class="small muted">None.</p>`;
+  const conv = r => `<span title="${r.checks.map(c => (c.pass?"✓ ":"✗ ") + c.label).join("\n")}">${"●".repeat(r.conviction)}<span class="faint">${"○".repeat(5 - r.conviction)}</span></span>`;
+  const w = (r, k) => r.w && r.w[k] ? `${fnoDot(r.w[k].bu)}${fnoPct(r.w[k].move, 2)}` : `<span class="faint">–</span>`;
+  return head + `<div style="overflow-x:auto"><table class="ld-tbl small"><thead><tr><th>Name</th><th>Move</th><th>OI</th><th>Build-up</th>${full?"<th>Last 15m</th><th>Last 1h</th><th>Sector</th>":""}<th>Conviction</th><th>Support</th><th>Resistance</th><th>OI Zone</th></tr></thead><tbody>${
+    rows.map(r => `<tr><td><b>${esc(r.sym)}</b></td><td class="num">${fnoPct(r.move)}</td><td class="num">${fnoPct(r.oi_chg,1)}</td><td>${fnoDot(r.bu)}${BU[r.bu][0]}</td>${full?`<td>${w(r,"15m")}</td><td>${w(r,"60m")}</td><td class="small">${esc(r.sector)}</td>`:""}<td>${conv(r)}</td><td class="num">${r.support==null?"–":ldPx(r.support)}</td><td class="num">${r.resistance==null?"–":ldPx(r.resistance)}</td><td class="num">${r.zone==null?"–":ldPx(r.zone)}</td></tr>`).join("")
+  }</tbody></table></div>`;
+}
+
 async function csLoad(){
   const el = $("#csCard"); if (!el) return;
   const isC = VIEW === "crypto";
@@ -2002,6 +2092,7 @@ function showView(v){
   ptStart(v); domStart(); setTimeout(() => { try { usPaperStart(v, TAB); } catch(e){} }, 0);   // 2026-11-07: US paper trades card
   if (v==="desk") setTimeout(() => { try { pairAlign(); } catch(e){} }, 60);
   $("#viewDesk").hidden = v!=="desk"; showLive(v); suStart(v); b4Start(v);
+  { const fv = $("#viewFno"); if (fv){ fv.hidden = v!=="fno"; if (v==="fno") fnoStart(); else fnoStop(); } }      // 2026-11-08: F&O Flow tab
   // 2026-10-24: every market tab = [tracker status] -> market chips + decision -> live cards / chart / today -> trade plan
   //             -> timeframes -> strategy recommendations (this tab's markets) -> regime history
   const isMkt = MKT_TABS.includes(v), hasM = isMkt && (TAB_MARKETS[v]||[]).some(k => M && M[k]);

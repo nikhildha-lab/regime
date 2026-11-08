@@ -490,6 +490,10 @@ def poll_once():
                 _hot("tradelog").tick(_hot, {})    # 2026-11-08: runs for every desk now (throttled to 5 min inside), so weekends / evenings update too
             except Exception as e:
                 _STATE["tradelog_error"] = str(e)[:160]
+            try:                                   # 2026-11-08 (Nikhil): F&O Flow minute snapshots (own hours / weekday check inside)
+                _hot("fnoflow").tick()
+            except Exception as e:
+                _STATE["fnoflow_error"] = str(e)[:160]
             try:                                   # 2026-11-08 (Nikhil): Stock Volume Break v1 paper rule (app/stockvb.py) - own hours / weekday check inside
                 _hot("stockvb").tick()
             except Exception as e:
@@ -904,6 +908,8 @@ def handle_get(path: str, q: dict):
         T = _hot("tabnews")
         r = T.run(force=True)
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
+    if path == "/api/livedesk/fnoflow":                # 2026-11-08 (Nikhil): F&O Flow tab - every F&O name from its futures (app/fnoflow.py)
+        return _hot("fnoflow").api(q)
     if path == "/api/livedesk/bigwalls":               # 2026-11-07 (Nikhil): big resting orders in the Nifty / Bank Nifty book (app/bigwalls.py)
         return _hot("bigwalls").api(q.get("sym") or "NIFTY")
     if path == "/api/livedesk/marketscore":            # 2026-11-07 (Nikhil): same score for Indian futures, metals, commodities (app/marketscore.py)
