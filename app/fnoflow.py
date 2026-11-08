@@ -548,7 +548,7 @@ def api(q=None):
     if q.get("bures"):                                      # 2026-11-08: BuildUp v1 research data job (app/buresearch.py)
         import importlib
         import buresearch as BR
-        if q.get("bures") == "start" and not BR.S.get("running"):
+        if q.get("bures") in ("start", "opts") and not BR.S.get("running"):
             BR = importlib.reload(BR)
         return BR.api(q)
     if q.get("rpstatus"):

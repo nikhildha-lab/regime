@@ -13,6 +13,7 @@ import threading
 import time
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -53,7 +54,51 @@ def _job():
         S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
 
 
+OPT = os.path.join(ROOT, "data_store", "research", "buildup_opts")
+HIST = os.path.join(ROOT, "data_store", "research", "fno_hist")
+
+
+def _opt_job():
+    """2026-11-08 (Nikhil: "we try call selling just for experimentation"): per-strike STOCK option prices for every session that a BuildUp
+    signal could still be open on (signal day .. +12 calendar days), only for those names, the 2 nearest expiries, strikes within 20 % of
+    the underlying. NSE F&O UDiFF bhavcopy, one download per session, saved as buildup_opts/opt_<day>.csv.gz."""
+    import updater as U
+    os.makedirs(OPT, exist_ok=True)
+    sig = pd.read_csv(SIG, usecols=["day", "sym"]); sig["d"] = pd.to_datetime(sig.day)
+    days = sorted(f[4:14] for f in os.listdir(HIST) if f.startswith("fut_") and f.endswith(".csv.gz"))
+    S.update(running=True, kind="options", total=len(days), done=0, saved=0, skipped=0, missing=0, err=None, started=time.strftime("%H:%M:%S"))
+    try:
+        for day in days:
+            S["done"] += 1; fp = os.path.join(OPT, f"opt_{day}.csv.gz")
+            dd = pd.Timestamp(day); syms = set(sig[(sig.d <= dd) & (sig.d >= dd - pd.Timedelta(days=12))].sym)
+            if not syms or os.path.exists(fp):
+                S["skipped"] += 1; continue
+            try:
+                raw = U.http_get(f"{U.NSE}/fo/BhavCopy_NSE_FO_0_0_0_{day.replace('-', '')}_F_0000.csv.zip", U.NSE_HEADERS)
+                df = U._unzip_csv(raw)
+            except U.NotFound:
+                S["missing"] += 1; continue
+            except Exception as ex:
+                S["err"] = f"{day}: {str(ex)[:90]}"; time.sleep(3); continue
+            o = df[(df.FinInstrmTp == "STO") & df.TckrSymb.isin(syms)].copy()
+            o["XpryDt"] = o.XpryDt.astype(str).str[:10]
+            ex2 = o.groupby("TckrSymb").XpryDt.transform(lambda x: x.isin(sorted(x.unique())[:2]))
+            o = o[ex2 & ((o.StrkPric / o.UndrlygPric - 1).abs() <= 0.20)]
+            col = lambda c: o[c].values if c in o.columns else np.nan
+            pd.DataFrame({"day": day, "sym": o.TckrSymb.values, "expiry": o.XpryDt.values, "strike": o.StrkPric.values, "cp": o.OptnTp.values,
+                          "open": col("OpnPric"), "high": col("HghPric"), "low": col("LwPric"), "close": col("ClsPric"), "settle": col("SttlmPric"),
+                          "vol": col("TtlTradgVol"), "oi": col("OpnIntrst"), "und": col("UndrlygPric")}).to_csv(fp, index=False, compression="gzip")
+            S["saved"] += 1; time.sleep(0.4)
+    except Exception as ex:
+        S["err"] = f"{type(ex).__name__}: {str(ex)[:120]}"
+    finally:
+        S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
+
+
 def api(q):
+    if q.get("bures") == "opts" and not S.get("running"):
+        threading.Thread(target=_opt_job, daemon=True, name="bures_opts").start()
+        time.sleep(0.2)
     if q.get("bures") == "start" and not S.get("running"):
         threading.Thread(target=_job, daemon=True, name="bures").start()
         time.sleep(0.2)
