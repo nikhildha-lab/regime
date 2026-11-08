@@ -537,6 +537,119 @@ def detail(sym):
     return out
 
 
+# ---------------------------------------------------------------- 2026-11-08: extra F&O sections (ideas from MrChartist's Option Hub / FII-DII repos)
+def _bs(S0, K, T, v, cp, r=0.065):
+    import math
+    if T <= 0 or v <= 0:
+        return max(0.0, (S0 - K) if cp == "CE" else (K - S0))
+    N = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))
+    d1 = (math.log(S0 / K) + (r + 0.5 * v * v) * T) / (v * math.sqrt(T)); d2 = d1 - v * math.sqrt(T)
+    return S0 * N(d1) - K * math.exp(-r * T) * N(d2) if cp == "CE" else K * math.exp(-r * T) * N(-d2) - S0 * N(-d1)
+
+
+def _iv(px, S0, K, T, cp):
+    lo, hi = 0.01, 3.0
+    if not px or px <= _bs(S0, K, T, lo, cp) or px >= _bs(S0, K, T, hi, cp):
+        return None
+    for _ in range(60):
+        m = (lo + hi) / 2
+        lo, hi = (m, hi) if _bs(S0, K, T, m, cp) < px else (lo, m)
+    return (lo + hi) / 2
+
+
+def _index_vol(day):
+    """NIFTY / BANKNIFTY per expiry (nearest 3 + the monthly): ATM straddle = the market's expected move to expiry, ATM IV, call / put walls
+    (largest OI above / below spot), PCR and max pain - from the session's NSE bhavcopy."""
+    b = _bhav(date.fromisoformat(day)); out = {}
+    for ix in ("NIFTY", "BANKNIFTY"):
+        o = b[(b.TckrSymb == ix) & (b.FinInstrmTp == "IDO")].copy()
+        if not len(o):
+            continue
+        o["XpryDt"] = o.XpryDt.astype(str).str[:10]; und = float(o.UndrlygPric.dropna().iloc[0])
+        exps = sorted(o.XpryDt.unique()); mon = [e for e in exps if e[:7] == exps[0][:7]][-1]
+        pick = list(dict.fromkeys(exps[:3] + [mon]))
+        rows = []
+        for e in pick:
+            g = o[o.XpryDt == e]; ce = g[g.OptnTp == "CE"].set_index("StrkPric"); pe = g[g.OptnTp == "PE"].set_index("StrkPric")
+            ks = sorted(set(ce.index) & set(pe.index))
+            if not ks:
+                continue
+            k = min(ks, key=lambda z: abs(z - und)); T = max(0.5, (date.fromisoformat(e) - date.fromisoformat(day)).days + 0.25) / 365
+            stc = float(ce.ClsPric[k] + pe.ClsPric[k]); v = _iv(float(ce.ClsPric[k]), und, k, T, "CE")
+            up = ce[ce.index > und].OpnIntrst; dn = pe[pe.index < und].OpnIntrst
+            pain = min(ks, key=lambda x: float(((x - ce.index[ce.index < x]) * ce.OpnIntrst[ce.index < x]).sum() + ((pe.index[pe.index > x] - x) * pe.OpnIntrst[pe.index > x]).sum()))
+            rows.append({"expiry": e, "monthly": e == mon, "dte": (date.fromisoformat(e) - date.fromisoformat(day)).days, "atm": k, "straddle": round(stc, 1),
+                         "move_pct": round(stc / und * 100, 2), "lo": round(und - stc, 1), "hi": round(und + stc, 1), "iv": round(v * 100, 1) if v else None,
+                         "call_wall": float(up.idxmax()) if len(up) else None, "put_wall": float(dn.idxmax()) if len(dn) else None,
+                         "pcr": round(float(pe.OpnIntrst.sum() / max(1, ce.OpnIntrst.sum())), 2), "max_pain": float(pain)})
+        out[ix] = {"und": und, "expiries": rows}
+    return out
+
+
+def _participants():
+    """Participant-wise OI (NSE fao_participant_oi, kept by updater.py): index-futures long share per participant, FII stock futures and
+    index options, last 30 sessions + where today's FII index-futures long share sits in its history since 2023."""
+    p = os.path.join(ROOT, "data_store", "market_data", "nse_participant_oi_2023_2026.csv")
+    d = pd.read_csv(p); d = d[d.client_type.isin(["FII", "DII", "Pro", "Client"])].sort_values("date")
+    d["idx_long_pct"] = d.fut_idx_long / (d.fut_idx_long + d.fut_idx_short) * 100
+    d["stk_long_pct"] = d.fut_stk_long / (d.fut_stk_long + d.fut_stk_short) * 100
+    d["idx_net"] = d.fut_idx_long - d.fut_idx_short
+    d["call_net"] = d.opt_idx_call_long - d.opt_idx_call_short; d["put_net"] = d.opt_idx_put_long - d.opt_idx_put_short
+    days = sorted(d.date.unique())[-30:]; last = days[-1]
+    f = d[d.client_type == "FII"].set_index("date")
+    pctl = round(float((f.idx_long_pct <= f.idx_long_pct[last]).mean() * 100), 0)
+    now = {r.client_type: {"idx_long_pct": round(r.idx_long_pct, 1), "idx_net": int(r.idx_net), "stk_long_pct": round(r.stk_long_pct, 1),
+                           "call_net": int(r.call_net), "put_net": int(r.put_net)} for r in d[d.date == last].itertuples()}
+    prev = d[d.date == days[-2]].set_index("client_type").idx_net.to_dict() if len(days) > 1 else {}
+    for k in now:
+        now[k]["idx_net_chg"] = int(now[k]["idx_net"] - prev.get(k, now[k]["idx_net"]))
+    hist = {k: [[x, round(v, 1)] for x, v in g.set_index("date").idx_long_pct.items() if x in days] for k, g in d.groupby("client_type")}
+    return {"day": last, "now": now, "fii_idx_long_pctile": pctl, "fii_since": str(f.index.min()), "hist": hist}
+
+
+def _unusual(day, n=15):
+    """Stocks whose option volume today is far above their own last 20 sessions (aggregate CE + PE volume, nearest expiry, fno_hist)."""
+    fs = sorted(f for f in os.listdir(HIST) if f.startswith("opt_") and f.endswith(".csv.gz") and f[4:14] <= day)[-21:]
+    O = pd.concat([pd.read_csv(os.path.join(HIST, f), usecols=["day", "sym", "ce_vol", "pe_vol", "ce_chg", "pe_chg"]) for f in fs])
+    O["vol"] = O.ce_vol + O.pe_vol; t = O[O.day == fs[-1][4:14]].set_index("sym"); base = O[O.day < fs[-1][4:14]].groupby("sym").vol.mean()
+    t = t.join(base.rename("avg")); t = t[(t.avg > 0) & (t.vol >= 1000)]; t["x"] = t.vol / t.avg
+    t = t.sort_values("x", ascending=False).head(n)
+    return [{"sym": s_, "x": round(r.x, 1), "vol": int(r.vol), "avg": int(r.avg), "pc_vol": round(r.pe_vol / max(1, r.ce_vol), 2),
+             "ce_chg": int(r.ce_chg), "pe_chg": int(r.pe_chg)} for s_, r in t.iterrows()]
+
+
+def _rollover(day, n=10):
+    """Futures rollover (share of OI in later months) and basis of the near month, per stock, from the session's futures file."""
+    f = pd.read_csv(os.path.join(HIST, f"fut_{day}.csv.gz")); f = f[f.kind.isin(["STF", "IDF"]) & (f.expiry >= day)]
+    out = []
+    for sym, g in f.groupby("sym"):
+        g = g.sort_values("expiry"); tot = g.oi.sum()
+        if tot <= 0 or len(g) < 2:
+            continue
+        near = g.iloc[0]; dte = (date.fromisoformat(near.expiry) - date.fromisoformat(day)).days
+        basis = (near.close / near.und - 1) * 100 if near.und else None
+        out.append({"sym": sym, "kind": "index" if near.kind == "IDF" else "stock", "near": near.expiry, "dte": dte, "roll": round((tot - near.oi) / tot * 100, 1),
+                    "basis": None if basis is None else round(basis, 2), "basis_ann": None if basis is None or dte <= 0 else round(basis * 365 / dte, 1)})
+    st = [r for r in out if r["kind"] == "stock"]
+    return {"dte": st[0]["dte"] if st else None, "near": st[0]["near"] if st else None, "index": [r for r in out if r["kind"] == "index"],
+            "high": sorted(st, key=lambda r: -r["roll"])[:n], "low": sorted(st, key=lambda r: r["roll"])[:n],
+            "median": round(float(np.median([r["roll"] for r in st])), 1) if st else None}
+
+
+def extras():
+    c = S["cache"].get("extras")
+    if c and time.time() - c[0] < 600:
+        return c[1]
+    day = eod().get("day"); res = {"day": day, "err": {}}
+    for k, fn in (("vol", lambda: _index_vol(day)), ("participants", _participants), ("unusual", lambda: _unusual(day)), ("rollover", lambda: _rollover(day))):
+        try:
+            res[k] = fn()
+        except Exception as e:
+            res["err"][k] = f"{type(e).__name__}: {str(e)[:120]}"
+    S["cache"]["extras"] = (time.time(), res)
+    return res
+
+
 def api(q=None):
     q = q or {}
     if q.get("snap") == "1":                               # manual snapshot (testing / outside the schedule)
@@ -548,9 +661,11 @@ def api(q=None):
     if q.get("bures"):                                      # 2026-11-08: BuildUp v1 research data job (app/buresearch.py)
         import importlib
         import buresearch as BR
-        if q.get("bures") in ("start", "opts") and not BR.S.get("running"):
+        if q.get("bures") in ("start", "opts", "nifty_monthly") and not BR.S.get("running"):
             BR = importlib.reload(BR)
         return BR.api(q)
+    if q.get("extras"):                                     # 2026-11-08: participants / index volatility / unusual activity / rollover sections
+        return extras()
     if q.get("rpstatus"):
         return S.get("rp") or {}
     if q.get("bfstatus"):

@@ -95,7 +95,64 @@ def _opt_job():
         S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
 
 
+NM = os.path.join(ROOT, "data_store", "research", "nifty_monthly")
+
+
+def _nifty_monthly_job():
+    """2026-11-08 (Nikhil: monthly Supertrend short-strangle test on NIFTY, last 5 years): NIFTY daily from Dhan (2014 ->) plus the NSE F&O
+    bhavcopy (NIFTY options + futures only) for the first and last trading day of every month from Nov 2021. Old bhavcopy format before
+    8 Jul 2024, UDiFF after. Saved under data_store/research/nifty_monthly/."""
+    import dhan_live as DL
+    import updater as U
+    os.makedirs(NM, exist_ok=True)
+    S.update(running=True, kind="nifty_monthly", done=0, saved=0, missing=0, err=None, started=time.strftime("%H:%M:%S"))
+    try:
+        sid = DL.ids_index("nifty")
+        bars = DL.daily("IDX_I", sid, "INDEX", date(2014, 1, 1), date.today())
+        d = pd.DataFrame(bars); d["day"] = d.ts.map(lambda t: t.strftime("%Y-%m-%d"))
+        d[["day", "open", "high", "low", "close"]].to_csv(os.path.join(NM, "nifty_daily.csv"), index=False)
+        d = d[d.day >= "2021-11-01"]; d["m"] = d.day.str[:7]
+        need = sorted(set(d.groupby("m").day.min()) | set(d.groupby("m").day.max()))
+        S["total"] = len(need)
+        for day in need:
+            S["done"] += 1; fp = os.path.join(NM, f"bhav_{day}.csv.gz")
+            if os.path.exists(fp):
+                continue
+            dt = date.fromisoformat(day)
+            try:
+                if dt >= date(2024, 7, 8):
+                    df = U._unzip_csv(U.http_get(f"{U.NSE}/fo/BhavCopy_NSE_FO_0_0_0_{dt:%Y%m%d}_F_0000.csv.zip", U.NSE_HEADERS))
+                    df = df[(df.TckrSymb == "NIFTY") & df.FinInstrmTp.isin(["IDO", "IDF"])]
+                    out = pd.DataFrame({"day": day, "kind": df.FinInstrmTp.map({"IDO": "OPT", "IDF": "FUT"}).values, "expiry": df.XpryDt.astype(str).str[:10].values,
+                                        "strike": df.StrkPric.values, "cp": df.OptnTp.values, "open": df.OpnPric.values, "high": df.HghPric.values, "low": df.LwPric.values,
+                                        "close": df.ClsPric.values, "settle": df.SttlmPric.values if "SttlmPric" in df else np.nan, "vol": df.TtlTradgVol.values,
+                                        "oi": df.OpnIntrst.values, "und": df.UndrlygPric.values})
+                else:
+                    mon = dt.strftime("%b").upper()
+                    df = U._unzip_csv(U.http_get(f"{U.NSE}/historical/DERIVATIVES/{dt:%Y}/{mon}/fo{dt:%d}{mon}{dt:%Y}bhav.csv.zip", U.NSE_HEADERS))
+                    df.columns = [c.strip() for c in df.columns]
+                    df = df[(df.SYMBOL.str.strip() == "NIFTY") & df.INSTRUMENT.str.strip().isin(["OPTIDX", "FUTIDX"])]
+                    out = pd.DataFrame({"day": day, "kind": df.INSTRUMENT.str.strip().map({"OPTIDX": "OPT", "FUTIDX": "FUT"}).values,
+                                        "expiry": pd.to_datetime(df.EXPIRY_DT.str.strip(), format="%d-%b-%Y").dt.strftime("%Y-%m-%d").values,
+                                        "strike": df.STRIKE_PR.values, "cp": df.OPTION_TYP.str.strip().values, "open": df.OPEN.values, "high": df.HIGH.values,
+                                        "low": df.LOW.values, "close": df.CLOSE.values, "settle": df.SETTLE_PR.values, "vol": df.CONTRACTS.values,
+                                        "oi": df.OPEN_INT.values, "und": np.nan})
+                out.to_csv(fp, index=False, compression="gzip"); S["saved"] += 1
+            except U.NotFound:
+                S["missing"] += 1
+            except Exception as ex:
+                S["err"] = f"{day}: {type(ex).__name__} {str(ex)[:90]}"; time.sleep(2)
+            time.sleep(0.5)
+    except Exception as ex:
+        S["err"] = f"{type(ex).__name__}: {str(ex)[:120]}"
+    finally:
+        S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
+
+
 def api(q):
+    if q.get("bures") == "nifty_monthly" and not S.get("running"):
+        threading.Thread(target=_nifty_monthly_job, daemon=True, name="bures_nm").start()
+        time.sleep(0.2)
     if q.get("bures") == "opts" and not S.get("running"):
         threading.Thread(target=_opt_job, daemon=True, name="bures_opts").start()
         time.sleep(0.2)

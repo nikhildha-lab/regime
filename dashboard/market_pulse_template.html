@@ -1974,6 +1974,7 @@ async function fnoLoad(){
   if (!el.innerHTML) el.innerHTML = `<section class="card"><p class="small muted">Loading the F&amp;O board…</p></section>`;
   let D; try { D = await fetch(`/api/livedesk/fnoflow?u=${FNO.u}`).then(r => r.json()); } catch(e){ return; }
   try { FNO.bu = await fetch("/api/livedesk/fnoshort").then(r => r.json()); } catch(e){}      // 2026-11-08: BuildUp v2 trade cards
+  try { FNO.ex = await fetch("/api/livedesk/fnoflow?extras=1").then(r => r.json()); } catch(e){}   // 2026-11-08: expected move / participants / unusual / rollover
   FNO.D = D; fnoRender();
   fnoStrongest().slice(0, 4).forEach(r => fnoDetail(r.sym, true));       // live option chains for the strongest names (cached 2 min on the server)
 }
@@ -2014,6 +2015,7 @@ function fnoRender(){
   h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3><span class="small muted">conviction 4 or 5 of 5 · up to 6 each side · option OI by strike: puts left, calls right · live chain when available</span></div>
     ${S.length ? `<div class="fno-strong">${S.map(r => `<div class="fno-pair">${fnoTall(r)}${fnoBig(r)}</div>`).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No name has 4 or more of the 5 checks right now.</p>`}</section>`;
   h += fnoBuSection();
+  h += fnoExtras();
   // lists
   const pick = D.rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
   const bull = pick.filter(r => r.side > 0).sort((a,b) => b.conviction - a.conviction || b.move - a.move).slice(0, 15);
@@ -2237,6 +2239,68 @@ function fnoBuSection(){
                  ...S.map(s => fnoBuCard(s.v2 === false ? {...s, skipped: s.skipped || s.v2_note} : s, null))];
   return `<section class="card"><div class="spread"><h3 style="margin:0">BuildUp v2 · Paper Trades</h3><span class="small muted">short stock futures after fresh short build-up · skips stocks already at their 60-day low or below their last bullish order block · stop 5 % · out at the 5th close · paper only</span></div>
     ${cards.length ? `<div class="fno-strong" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr))">${cards.map(c => `<div>${c}</div>`).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No signal yet - the scan runs after 19:05 on the day's NSE bhavcopy${B.last_signal_day?` (last scan: ${esc(B.last_signal_day)})`:""}.</p>`}</section>`;
+}
+// ---------------------------------------------------------------- 2026-11-08 extra sections (ideas from MrChartist's Option Hub + FII/DII repos; our own NSE data)
+const fnoN = v => v == null ? "–" : Math.abs(v) >= 1e5 ? `${fmt(v/1e5,2)} L` : fmt(v, 0);
+function fnoRangeSvg(r, und, W){
+  const pts = [r.lo, r.hi, und, r.call_wall, r.put_wall, r.max_pain].filter(v => v != null), lo = Math.min(...pts), hi = Math.max(...pts), pad = (hi - lo) * 0.06 || 1;
+  const x = v => 8 + (v - lo + pad) / (hi - lo + 2 * pad) * (W - 16), H = 46;
+  let g = `<line x1="8" x2="${W-8}" y1="24" y2="24" stroke="var(--line)" stroke-width="2"/>
+    <rect x="${x(r.lo)}" y="17" width="${Math.max(2, x(r.hi) - x(r.lo))}" height="14" rx="4" fill="var(--accent)" opacity="0.18"/>`;
+  const mk = (v, col, lab, up) => { if (v == null) return; g += `<line x1="${x(v)}" x2="${x(v)}" y1="13" y2="35" stroke="${col}" stroke-width="2"/><text x="${x(v)}" y="${up ? 10 : 45}" font-size="9.5" text-anchor="middle" fill="${col}">${lab}</text>`; };
+  mk(r.put_wall, "var(--bull)", `put wall ${fmt(r.put_wall,0)}`, false); mk(r.call_wall, "var(--bear)", `call wall ${fmt(r.call_wall,0)}`, false);
+  mk(r.max_pain, "var(--muted)", `max pain ${fmt(r.max_pain,0)}`, true);
+  g += `<circle cx="${x(und)}" cy="24" r="5" fill="var(--ink)"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="expected range, walls and max pain">${g}</svg>`;
+}
+function fnoVolCard(E){
+  const V = E.vol || {}; if (!Object.keys(V).length) return "";
+  return `<section class="card"><div class="spread"><h3 style="margin:0">Expected Move &amp; Option Walls</h3><span class="small muted">ATM straddle = the move the options market prices to each expiry · walls = biggest OI · NSE bhavcopy ${esc(E.day||"")}</span></div>
+    ${Object.entries(V).map(([ix, v]) => `<div style="margin-top:10px"><b>${ix}</b> <span class="muted small">${fmt(v.und,2)}</span>
+      ${(v.expiries||[]).map(r => `<div style="display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;border-top:1px solid var(--line);padding:4px 0">
+        <div class="small"><b>${esc(r.expiry)}</b>${r.monthly?` <span class="pill" style="font-size:10px">monthly</span>`:""}<br><span class="muted">${r.dte} days · IV ${r.iv??"–"}%</span><br>±${fmt(r.straddle,0)} pts (${fmt(r.move_pct,2)}%) · PCR ${r.pcr}</div>
+        <div>${fnoRangeSvg(r, v.und, 520)}<div class="small muted" style="text-align:center">expected range ${fmt(r.lo,0)} – ${fmt(r.hi,0)}</div></div></div>`).join("")}</div>`).join("")}</section>`;
+}
+function fnoPartCard(E){
+  const P = E.participants; if (!P || !P.now) return "";
+  const who = ["FII", "Pro", "DII", "Client"].filter(k => P.now[k]);
+  const bar = k => { const n = P.now[k], L = n.idx_long_pct; return `<div style="display:grid;grid-template-columns:52px 1fr 150px;gap:8px;align-items:center;margin:5px 0">
+      <b>${k}</b><div style="display:flex;height:16px;border-radius:4px;overflow:hidden" title="index futures: ${fmt(L,1)}% long"><div style="width:${L}%;background:var(--bull)"></div><div style="flex:1;background:var(--bear)"></div></div>
+      <span class="small">${fmt(L,1)}% long · net ${n.idx_net>0?"+":""}${fnoN(n.idx_net)} <span class="${n.idx_net_chg>=0?"pos":"neg"}">(${n.idx_net_chg>0?"+":""}${fnoN(n.idx_net_chg)})</span></span></div>`; };
+  const h = (P.hist || {}).FII || [], W = 520, Hh = 90;
+  let sp = "";
+  if (h.length > 1){ const vs = h.map(z => z[1]), lo = Math.min(...vs) - 2, hi = Math.max(...vs) + 2, x = i => 6 + i / (h.length - 1) * (W - 50), y = v => 6 + (hi - v) / (hi - lo) * (Hh - 18);
+    sp = `<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:auto" role="img" aria-label="FII index futures long share, last 30 sessions">
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${vs.map((v,i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/><circle cx="${x(vs.length-1)}" cy="${y(vs.at(-1))}" r="3.5" fill="var(--accent)"/>
+      <text x="${W-2}" y="${y(vs.at(-1))+4}" font-size="11" text-anchor="end" fill="var(--accent)">${fmt(vs.at(-1),1)}%</text>
+      <text x="6" y="${Hh-2}" font-size="10" fill="var(--muted)">${esc(h[0][0])}</text><text x="${W-50}" y="${Hh-2}" font-size="10" text-anchor="end" fill="var(--muted)">${esc(h.at(-1)[0])}</text></svg>`; }
+  const f = P.now.FII || {};
+  return `<section class="card"><div class="spread"><h3 style="margin:0">Who Holds Index Futures</h3><span class="small muted">NSE participant-wise OI · ${esc(P.day)} · contracts</span></div>
+    ${who.map(bar).join("")}
+    <div class="small" style="margin-top:6px">FII index-futures long share is at the <b>${P.fii_idx_long_pctile}th percentile</b> of its history since ${esc(P.fii_since)} · FII stock futures ${fmt(f.stk_long_pct,1)}% long · FII index calls net ${fnoN(f.call_net)}, puts net ${fnoN(f.put_net)}</div>
+    <div class="small muted" style="margin-top:8px">FII index-futures long share, last 30 sessions</div>${sp}
+    <p class="small faint" style="margin:4px 0 0">Context only - not a tested signal yet.</p></section>`;
+}
+function fnoUnusualCard(E){
+  const U = E.unusual || []; if (!U.length) return "";
+  const R = (FNO.D && FNO.D.rows) || [], mx = Math.max(...U.map(u => u.x));
+  return `<section class="card"><div class="spread"><h3 style="margin:0">Unusual Option Volume</h3><span class="small muted">stock options traded vs their own last 20 sessions · nearest expiry</span></div>
+    <table class="small" style="width:100%;border-collapse:collapse;margin-top:6px"><thead><tr class="muted" style="text-align:left"><th>Stock</th><th>vs normal</th><th>Move</th><th>Put / call volume</th><th>OI added (calls · puts)</th></tr></thead><tbody>
+    ${U.map(u => { const r = R.find(z => z.sym === u.sym); return `<tr style="border-top:1px solid var(--line);cursor:${r?"pointer":"default"}" ${r?`onclick="fnoPop('${esc(u.sym)}')"`:""}>
+      <td><b>${esc(u.sym)}</b></td><td><div style="display:flex;gap:6px;align-items:center"><div style="width:${Math.max(4, u.x/mx*90)}px;height:8px;border-radius:3px;background:var(--accent)"></div>${fmt(u.x,1)}×</div></td>
+      <td>${r ? fnoPct(r.move) : "–"}</td><td>${fmt(u.pc_vol,2)}</td><td>${fnoN(u.ce_chg)} · ${fnoN(u.pe_chg)}</td></tr>`; }).join("")}</tbody></table></section>`;
+}
+function fnoRollCard(E){
+  const R = E.rollover; if (!R || !R.high) return "";
+  const row = r => `<tr style="border-top:1px solid var(--line)"><td><b>${esc(r.sym)}</b></td><td><div style="display:flex;gap:6px;align-items:center"><div style="width:${Math.max(3, r.roll*0.9)}px;height:8px;border-radius:3px;background:var(--accent)"></div>${fmt(r.roll,1)}%</div></td><td>${r.basis==null?"–":`${r.basis>0?"+":""}${fmt(r.basis,2)}%`}</td></tr>`;
+  const tb = (L, t) => `<div><div class="small muted">${t}</div><table class="small" style="width:100%;border-collapse:collapse"><tbody>${L.map(row).join("")}</tbody></table></div>`;
+  return `<section class="card"><div class="spread"><h3 style="margin:0">Futures Rollover</h3><span class="small muted">share of open interest already in later months · near expiry ${esc(R.near||"")} (${R.dte} days) · median stock ${R.median}%</span></div>
+    <div class="small" style="margin:6px 0">${(R.index||[]).filter(r => ["NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY"].includes(r.sym)).map(r => `<b>${esc(r.sym)}</b> ${fmt(r.roll,1)}% · basis ${r.basis>0?"+":""}${fmt(r.basis,2)}%`).join(" &nbsp; ")}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px">${tb(R.high, "Rolled the most")}${tb(R.low, "Rolled the least")}</div></section>`;
+}
+function fnoExtras(){
+  const E = FNO.ex; if (!E) return "";
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:12px">${fnoVolCard(E)}${fnoPartCard(E)}${fnoUnusualCard(E)}${fnoRollCard(E)}</div>`;
 }
 // ---------------------------------------------------------------- detail popup
 function fnoList(sym){ const R = FNO.D.rows, r = R.find(z => z.sym === sym); if (!r) return [];
