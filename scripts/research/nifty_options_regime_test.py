@@ -36,6 +36,11 @@ if not os.path.exists(CHAIN):
     CHAIN = os.path.join(os.environ.get("HOME", ""), "mnt", "Documents", "MASTER_BACKTESTER", "data", "options", "chain_NIFTY.csv")
 SPOT = os.path.join(ROOT, "data_store", "research", "nifty_monthly", "nifty_daily.csv")
 R, LOT, FIX = 0.065, 65, 25 / 65
+import sys
+IDX = (sys.argv[1] if len(sys.argv) > 1 else "NIFTY").upper()          # 2026-11-08: also SENSEX (BSE weekly options, lot 20)
+if IDX == "SENSEX":
+    CHAIN = CHAIN.replace("chain_NIFTY.csv", "chain_SENSEX.csv"); LOT, FIX = 20, 25 / 20
+    SPOT = CHAIN.replace(os.path.join("options", "chain_SENSEX.csv"), "SENSEX_deep_spot.csv")
 
 
 def bs(S, K, T, v, call):
@@ -67,7 +72,7 @@ if __name__ == "__main__":
     C = pd.read_csv(CHAIN, usecols=["date", "expiry", "strike", "type", "close", "volume", "oi"],
                     dtype={"date": "category", "expiry": "category", "type": "category", "strike": "float32", "close": "float32", "volume": "float64", "oi": "float64"})
     C["date"] = C.date.astype(str); C["expiry"] = C.expiry.astype(str); C["type"] = C.type.astype(str)
-    S = pd.read_csv(SPOT).set_index("day").sort_index()
+    S = pd.read_csv(SPOT).rename(columns={"date": "day"}); S["day"] = S.day.astype(str).str[:10]; S = S.drop_duplicates("day").set_index("day").sort_index()
     spot = S.close; rv20 = np.log(spot).diff().rolling(20).std() * np.sqrt(252)
     days = sorted(set(C.date) & set(spot.index)); di = {d: i for i, d in enumerate(days)}
     C = C[C.date.isin(days)].copy(); C["S"] = C.date.map(spot); C["T"] = (pd.to_datetime(C.expiry) - pd.to_datetime(C.date)).dt.days.clip(lower=0) + 0.25
@@ -155,4 +160,4 @@ if __name__ == "__main__":
         show(T_[T_["skew"] > skm], "skew above train median", nm); show(T_[T_["skew"] <= skm], "skew below", nm)
         show(T_[(T_.ivhv > ivm) & (T_.gex > 0)], "IV/HV high AND positive gamma", nm)
         print()
-    T_.to_csv(os.path.join(ROOT, "data_store", "research", "nifty_options_regime_trades.csv"), index=False)
+    T_.to_csv(os.path.join(ROOT, "data_store", "research", f"{IDX.lower()}_options_regime_trades.csv"), index=False)
