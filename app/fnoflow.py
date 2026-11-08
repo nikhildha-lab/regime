@@ -661,9 +661,16 @@ def api(q=None):
     if q.get("bures"):                                      # 2026-11-08: BuildUp v1 research data job (app/buresearch.py)
         import importlib
         import buresearch as BR
-        if q.get("bures") in ("start", "opts", "nifty_monthly") and not BR.S.get("running"):
+        if q.get("bures") in ("start", "opts", "nifty_monthly", "iv_hist") and not BR.S.get("running"):
             BR = importlib.reload(BR)
         return BR.api(q)
+    if q.get("lab"):                                        # 2026-11-08: Options Lab (app/optlab.py), reloaded when the file changes
+        import importlib
+        import optlab as OL
+        mt = os.path.getmtime(OL.__file__)
+        if S.get("ol_mt") != mt:
+            OL = importlib.reload(OL); S["ol_mt"] = mt
+        return OL.api(q)
     if q.get("extras"):                                     # 2026-11-08: participants / index volatility / unusual activity / rollover sections
         return extras()
     if q.get("rpstatus"):

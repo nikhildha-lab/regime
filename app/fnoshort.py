@@ -152,9 +152,16 @@ def _session(st):
     today = datetime.now().strftime("%Y-%m-%d"); hm = datetime.now().strftime("%H:%M")
     pend = [s for d, L in st["signals"].items() if d < today for s in L
             if not any(t["sym"] == s["sym"] and t["signal_day"] == d for t in st["trades"]) and not s.get("skipped")]
+    try:                                                             # 2026-11-08: NSE F&O ban list - no new positions allowed in those names
+        import optlab as OL
+        banned = set((OL.ban() or {}).get("syms") or [])
+    except Exception:
+        banned = set()
     for s in pend:
         if not s.get("v2"):                                          # 2026-11-08: v1 retired - only v2 signals trade
             s["skipped"] = "v1 retired - " + (s.get("v2_note") or "v2 check missing"); continue
+        if s["sym"] in banned:
+            s["skipped"] = "in the NSE F&O ban list on the entry day"; continue
         exp, sid, lot = _contract(s["sym"], today)
         if not sid:
             s["skipped"] = "no contract"; continue

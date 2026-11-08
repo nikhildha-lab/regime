@@ -432,6 +432,65 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 .fno-tall,.fno-big{border:1.5px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);cursor:pointer}
 .fno-big .fno-lv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 .fno-big .fno-lv b{display:block;font-size:15px}
+/* 2026-11-08 Options Lab (F&O tab sections) */
+.lab-nav{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 4px;padding:5px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);position:sticky;top:6px;z-index:5}
+.lab-nav button{border:0;background:transparent;color:var(--muted);font-weight:600;padding:7px 14px;border-radius:10px;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
+.lab-nav button:hover{color:var(--ink);background:var(--surface)}
+.lab-nav button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08),0 4px 14px -6px var(--accent)}
+.lab-ban{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.lab-chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;background:var(--neutral-soft);color:var(--muted);border:1px solid var(--line)}
+.lab-chip.on{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.lab-chip.bull{background:var(--bull-soft);color:var(--bull);border-color:transparent}
+.lab-chip.bear{background:var(--bear-soft);color:var(--bear);border-color:transparent}
+.lab-pick{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.lab-pick button{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:5px 12px;border-radius:999px;cursor:pointer;font-weight:600}
+.lab-pick button.on{background:var(--accent);color:var(--surface);border-color:var(--accent)}
+.lab-pick input{padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);width:170px}
+.lab-card{border-radius:16px;background:linear-gradient(180deg,var(--surface),var(--surface-2));box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px -18px rgba(0,0,0,.25)}
+.lab-anim .lab-card,.lab-anim .lab-hero{animation:labIn .45s ease both}
+.lab-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:14px}
+.lab-hero{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:center;border-radius:18px;background:radial-gradient(120% 140% at 0% 0%,var(--accent-soft),var(--surface) 55%)}
+.lab-gauge{display:flex;flex-direction:column;align-items:center}
+.lab-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.lab-kpis-row{border-radius:16px}
+.lab-kpi{padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);transition:transform .2s}
+.lab-kpi:hover{transform:translateY(-2px)}
+.lab-kpi-v{font-family:var(--display);font-size:22px;font-weight:800;line-height:1.2;margin:2px 0}
+.lab-needle{transform-origin:50% 76.6%}
+.lab-anim .lab-needle{animation:labNeedle .9s cubic-bezier(.2,1.4,.4,1) both}
+.lab-pulse{animation:labPulse 1.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.lab-bub{transition:fill-opacity .2s}
+.lab-bub:hover{fill-opacity:.8}
+.lab-heat{display:flex;flex-direction:column;gap:3px;margin-top:8px}
+.lab-heat-h{display:grid;grid-template-columns:1fr 70px 1fr;text-align:center}
+.lab-heat-r{display:grid;grid-template-columns:1fr 70px 1fr;gap:6px;align-items:center}
+.lab-heat-r b{text-align:center;font-size:12px}
+.lab-heat-r.atm{background:var(--accent-soft);border-radius:8px}
+.lab-heat-c{position:relative;height:18px;border-radius:5px;background:var(--surface-2);overflow:hidden;display:flex}
+.lab-heat-c.l{justify-content:flex-end}
+.lab-heat-c div{height:100%;border-radius:5px;transition:width .5s}
+.lab-heat-c span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:var(--ink)}
+.lab-tape{max-height:470px;overflow:auto}
+.lab-tape table{width:100%;border-collapse:collapse}
+.lab-tape th{position:sticky;top:0;background:var(--surface);text-align:left;padding:4px 6px}
+.lab-tape td{padding:5px 6px;border-top:1px solid var(--line)}
+.lab-tape tr.lab-new td{animation:labFlash 1.6s ease}
+.lab-regime{display:grid;grid-template-columns:1.1fr 1.6fr;gap:16px;align-items:center;border-radius:18px}
+.lab-regime.pos{background:radial-gradient(120% 160% at 0% 0%,var(--bull-soft),var(--surface) 60%)}
+.lab-regime.neg{background:radial-gradient(120% 160% at 0% 0%,var(--bear-soft),var(--surface) 60%)}
+.lab-regime-t{font-family:var(--display);font-size:24px;font-weight:800;margin:4px 0}
+.lab-regime.pos .lab-regime-t{color:var(--bull)} .lab-regime.neg .lab-regime-t{color:var(--bear)}
+.lab-cal-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px;margin-top:10px}
+.lab-cal{display:grid;grid-template-columns:repeat(15,1fr);gap:4px;margin-top:4px}
+.lab-cal-d{aspect-ratio:1;border-radius:4px;transition:transform .15s}
+.lab-cal-d:hover{transform:scale(1.25)}
+@keyframes labIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes labPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.9)}}
+@keyframes labNeedle{from{transform:rotate(-90deg)}to{transform:none}}
+@keyframes labFlash{from{background:var(--accent-soft)}to{background:transparent}}
+@media (prefers-reduced-motion: reduce){.lab-card,.lab-hero,.lab-needle,.lab-pulse,.lab-tape tr.lab-new td{animation:none}}
+@media (max-width:760px){.lab-hero,.lab-regime{grid-template-columns:1fr}.lab-nav{overflow-x:auto;flex-wrap:nowrap}.lab-nav button{white-space:nowrap}.lab-cal{grid-template-columns:repeat(9,1fr)}}
+
 .fno-ab{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);font-size:10px;font-weight:700;color:var(--muted);background:var(--surface-2)}
 #fnoPop{position:fixed;inset:0;background:rgba(10,16,22,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}
 #fnoPop[hidden]{display:none}
@@ -1994,14 +2053,16 @@ function fnoStrongest(){
 function fnoRender(){
   const D = FNO.D, el = $("#fnoBoard"); if (!D || !el) return;
   if (!(D.rows||[]).length){ el.innerHTML = `<section class="card"><h2>F&amp;O Flow</h2><p class="small muted">No data yet${D.err?` · ${esc(D.err)}`:""}.</p></section>`; return; }
-  const B = D.breadth || {}, live = D.source === "live";
+  const B = D.breadth || {}, live = D.source === "live", board = FNO.sec === "board";
   const sw = (k, l) => `<button class="${FNO.u===k?"on":""}" onclick="FNO.u='${k}';try{localStorage.setItem('mp.fno.u','${k}')}catch(e){};fnoLoad()">${l}</button>`;
   const secs = D.sectors || [], lead = secs[0], lag = secs.at(-1);
   const sc = B.score || 0, scCol = sc > 0.05 ? "var(--bull)" : sc < -0.05 ? "var(--bear)" : "var(--muted)";
+  // 2026-11-08 (Options Lab): one header card with the section bar; the board itself only on "Board"
   let h = `<section class="card fno-card"><div class="spread"><div><h2 style="margin:0">F&amp;O Flow</h2>
       <div class="small muted">${live ? `Live · ${esc(D.at||"")} IST · every minute` : `Market closed · ${esc(D.source)} · ${esc(D.at||"")}`}</div></div>
-    <span class="fx-tf">${sw("nifty50","Nifty 50")}${sw("all","All F&amp;O")}</span></div>
-    <div class="fno-top">
+    ${board ? `<span class="fx-tf">${sw("nifty50","Nifty 50")}${sw("all","All F&amp;O")}</span>` : ""}</div>
+    ${labNav()}${labBan()}
+    ${board ? `<div class="fno-top">
       <div>${fnoHist(D)}</div>
       <div class="fno-sum"><div><b class="pos">${B.up} up</b> · ${B.flat} flat · <b class="neg">${B.down} down</b> <span class="muted">of ${B.names}</span></div>
         <div><span class="pos">▲ Bullish ${B.up}</span> &nbsp; <span class="neg">▼ Bearish ${B.down}</span> &nbsp; <span title="(long build-up + short covering − short build-up − long unwinding) ÷ names" style="color:${scCol}">Breadth ${sc>0?"+":""}${fmt(sc*100,0)}</span></div>
@@ -2009,13 +2070,18 @@ function fnoRender(){
         <div class="small">${[["LONG_BUILD","LB"],["SHORT_COVER","SC"],["SHORT_BUILD","SB"],["LONG_UNWIND","LU"]].map(([b,k]) => `${fnoDot(b)}${BU[b][0]} <b>${B[k]||0}</b>`).join(" &nbsp; ")}</div></div>
     </div>
     <div id="fnoSvgWrap">${fnoBoardSvg(D)}</div>
-    <p class="small faint fno-phone-note">The full board needs a wider screen - the lists below show the same names.</p></section>`;
+    <p class="small faint fno-phone-note">The full board needs a wider screen - the lists below show the same names.</p>` : ""}</section>`;
+  if (!board){
+    if (FNO.lastSec !== FNO.sec) FNO.animUntil = Date.now() + 3000;                         // fade-in only just after the section changes, not on every refresh
+    el.classList.toggle("lab-anim", Date.now() < (FNO.animUntil || 0)); FNO.lastSec = FNO.sec;
+    el.innerHTML = h + labSection();
+    return;
+  }
+  FNO.lastSec = FNO.sec;
   // strongest names: tall tile (option OI by strike) + big card
   const S = fnoStrongest();
   h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3><span class="small muted">conviction 4 or 5 of 5 · up to 6 each side · option OI by strike: puts left, calls right · live chain when available</span></div>
     ${S.length ? `<div class="fno-strong">${S.map(r => `<div class="fno-pair">${fnoTall(r)}${fnoBig(r)}</div>`).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No name has 4 or more of the 5 checks right now.</p>`}</section>`;
-  h += fnoBuSection();
-  h += fnoExtras();
   // lists
   const pick = D.rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
   const bull = pick.filter(r => r.side > 0).sort((a,b) => b.conviction - a.conviction || b.move - a.move).slice(0, 15);
@@ -2253,13 +2319,14 @@ function fnoRangeSvg(r, und, W){
   g += `<circle cx="${x(und)}" cy="24" r="5" fill="var(--ink)"/>`;
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="expected range, walls and max pain">${g}</svg>`;
 }
-function fnoVolCard(E){
+function fnoVolCard(E, W){
+  W = W || 520;
   const V = E.vol || {}; if (!Object.keys(V).length) return "";
   return `<section class="card"><div class="spread"><h3 style="margin:0">Expected Move &amp; Option Walls</h3><span class="small muted">ATM straddle = the move the options market prices to each expiry · walls = biggest OI · NSE bhavcopy ${esc(E.day||"")}</span></div>
     ${Object.entries(V).map(([ix, v]) => `<div style="margin-top:10px"><b>${ix}</b> <span class="muted small">${fmt(v.und,2)}</span>
       ${(v.expiries||[]).map(r => `<div style="display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;border-top:1px solid var(--line);padding:4px 0">
         <div class="small"><b>${esc(r.expiry)}</b>${r.monthly?` <span class="pill" style="font-size:10px">monthly</span>`:""}<br><span class="muted">${r.dte} days · IV ${r.iv??"–"}%</span><br>±${fmt(r.straddle,0)} pts (${fmt(r.move_pct,2)}%) · PCR ${r.pcr}</div>
-        <div>${fnoRangeSvg(r, v.und, 520)}<div class="small muted" style="text-align:center">expected range ${fmt(r.lo,0)} – ${fmt(r.hi,0)}</div></div></div>`).join("")}</div>`).join("")}</section>`;
+        <div>${fnoRangeSvg(r, v.und, W)}<div class="small muted" style="text-align:center">expected range ${fmt(r.lo,0)} – ${fmt(r.hi,0)}</div></div></div>`).join("")}</div>`).join("")}</section>`;
 }
 function fnoPartCard(E){
   const P = E.participants; if (!P || !P.now) return "";
@@ -2301,6 +2368,276 @@ function fnoRollCard(E){
 function fnoExtras(){
   const E = FNO.ex; if (!E) return "";
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:12px">${fnoVolCard(E)}${fnoPartCard(E)}${fnoUnusualCard(E)}${fnoRollCard(E)}</div>`;
+}
+// ---------------------------------------------------------------- OPTIONS LAB (2026-11-08, Nikhil: "plan very fancy premium visuals") - sections of the F&O tab
+// Data: /api/livedesk/fnoflow?lab=vol|ivmap|flow|gex|inst|ban (app/optlab.py). Context only, not tested signals.
+const LAB_SECS = [["board","Board"],["buildup","BuildUp"],["vol","Volatility"],["flow","Flow"],["gamma","Gamma"],["inst","Institutions"],["roll","Rollover"]];
+FNO.sec = (() => { try { return localStorage.getItem("mp.fno.sec") || "board"; } catch(e){ return "board"; } })();
+FNO.lab = {}; FNO.vsym = "NIFTY"; FNO.fsym = "NIFTY"; FNO.gsym = "NIFTY";
+function labSet(k){ FNO.sec = k; try { localStorage.setItem("mp.fno.sec", k); } catch(e){} fnoRender(); const el = document.getElementById("fnoBoard"); if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 70, behavior: "smooth"}); }
+function labGet(kind, sym){
+  const key = kind + "|" + (sym || ""), c = FNO.lab[key], ttl = (kind === "flow" || kind === "gex") ? 60000 : 600000;
+  if (c && (c.busy || Date.now() - c.at < ttl)) return c.d;
+  FNO.lab[key] = {at: Date.now(), d: c ? c.d : null, busy: true};
+  fetch(`/api/livedesk/fnoflow?lab=${kind}${sym ? `&sym=${encodeURIComponent(sym)}` : ""}`).then(r => r.json()).then(d => {
+    FNO.lab[key] = {at: Date.now(), d}; if (window.CUR_TAB === "fno" || document.getElementById("fnoBoard")) fnoRender(); }).catch(() => { FNO.lab[key] = {at: Date.now(), d: c ? c.d : null}; });
+  return c ? c.d : null;
+}
+function labNav(){
+  return `<nav class="lab-nav" aria-label="F&amp;O sections">${LAB_SECS.map(([k, l]) => `<button class="${FNO.sec===k?"on":""}" onclick="labSet('${k}')">${l}</button>`).join("")}</nav>`;
+}
+function labBan(){
+  const B = labGet("ban"); if (!B || B.err || !(B.syms||[]).length) return B && !B.err ? `<div class="lab-ban"><span class="small muted">F&amp;O ban${B.for?` for ${esc(B.for)}`:""}:</span> <span class="small">none</span></div>` : "";
+  return `<div class="lab-ban"><span class="small muted">In F&amp;O ban${B.for?` for ${esc(B.for)}`:""} (no new positions):</span> ${B.syms.map(s => `<span class="lab-chip">${esc(s)}</span>`).join("")}</div>`;
+}
+const labSm = P => { const f = v => v.toFixed(1); if (P.length < 3) return "M" + P.map(p => f(p[0]) + "," + f(p[1])).join(" L");
+  let d = `M${f(P[0][0])},${f(P[0][1])}`; for (let i = 0; i < P.length - 1; i++){ const a = P[i-1] || P[i], b = P[i], c = P[i+1], e = P[i+2] || c;
+    d += ` C${f(b[0]+(c[0]-a[0])/6)},${f(b[1]+(c[1]-a[1])/6)} ${f(c[0]-(e[0]-b[0])/6)},${f(c[1]-(e[1]-b[1])/6)} ${f(c[0])},${f(c[1])}`; } return d; };
+const labCr = v => v == null ? "–" : `${v>0?"+":""}${Math.abs(v) >= 1000 ? fmt(v/1000, 1) + "k" : fmt(v, Math.abs(v) < 10 ? 1 : 0)}`;
+const labRs = v => { if (v == null) return "–"; let r = Math.round(v); if (Object.is(r, -0)) r = 0; return `${r > 0 ? "+" : r < 0 ? "−" : ""}₹${fmt(Math.abs(r), 0)} Cr`; };
+function labKpi(label, value, sub, col){ return `<div class="lab-kpi"><div class="small muted">${label}</div><div class="lab-kpi-v" style="${col?`color:${col}`:""}">${value}</div>${sub?`<div class="small muted">${sub}</div>`:""}</div>`; }
+function labCard(title, sub, body, cls){ return `<section class="card lab-card ${cls||""}"><div class="spread"><h3 style="margin:0">${title}</h3>${sub?`<span class="small muted">${sub}</span>`:""}</div>${body}</section>`; }
+function labPick(cur, fn, list, withSearch){
+  const R = (FNO.D && FNO.D.rows) || [];
+  return `<div class="lab-pick">${list.map(s => `<button class="${cur===s?"on":""}" onclick="${fn}='${s}';fnoRender()">${s}</button>`).join("")}
+    ${withSearch ? `<input list="labSyms" placeholder="Any F&amp;O stock" onchange="const v=this.value.trim().toUpperCase();if(v){${fn}=v;fnoRender()}" aria-label="Pick a stock">
+    <datalist id="labSyms">${R.map(r => `<option value="${esc(r.sym)}">`).join("")}</datalist>${!list.includes(cur) ? `<span class="lab-chip on">${esc(cur)}</span>` : ""}` : ""}</div>`;
+}
+// ---- volatility
+function labGauge(rank, W){
+  const r = 74, cx = W / 2, cy = 92, a = v => Math.PI * (1 - v / 100), P = v => [cx + r * Math.cos(a(v)), cy - r * Math.sin(a(v))];
+  const arc = (v0, v1) => { const [x0, y0] = P(v0), [x1, y1] = P(v1); return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)}`; };
+  const v = rank == null ? null : Math.max(0, Math.min(100, rank)), [nx, ny] = v == null ? [cx, cy - r] : P(v), col = v == null ? "var(--muted)" : v < 30 ? "var(--bull)" : v < 70 ? "var(--wait)" : "var(--bear)";
+  return `<svg viewBox="0 0 ${W} 120" style="width:100%;max-width:260px;height:auto" role="img" aria-label="IV rank ${v ?? "n/a"} of 100">
+    <defs><linearGradient id="labGg" x1="0" x2="1"><stop offset="0" stop-color="var(--bull)"/><stop offset="0.5" stop-color="var(--wait)"/><stop offset="1" stop-color="var(--bear)"/></linearGradient>
+    <filter id="labGlow"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    <path d="${arc(0, 100)}" fill="none" stroke="var(--line)" stroke-width="14" stroke-linecap="round"/>
+    <path d="${arc(0, 100)}" fill="none" stroke="url(#labGg)" stroke-width="14" stroke-linecap="round" opacity="0.9"/>
+    ${v == null ? "" : `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="${col}" stroke-width="3.5" stroke-linecap="round" filter="url(#labGlow)" class="lab-needle"/>`}
+    <circle cx="${cx}" cy="${cy}" r="7" fill="var(--surface)" stroke="${col}" stroke-width="3"/>
+    <text x="${cx}" y="${cy + 26}" font-size="22" font-weight="800" text-anchor="middle" fill="${col}">${v == null ? "–" : fmt(v, 0)}</text>
+    <text x="${cx - r}" y="${cy + 16}" font-size="10" text-anchor="middle" fill="var(--muted)">cheap</text><text x="${cx + r}" y="${cy + 16}" font-size="10" text-anchor="middle" fill="var(--muted)">expensive</text></svg>`;
+}
+function labIvHist(V, W, H){
+  const P = (V.hist||[]).filter(z => z[1] != null); if (P.length < 3) return `<p class="small muted">Not enough history yet.</p>`;
+  const vs = P.map(z => z[1]), lo = Math.min(...vs) * 0.92, hi = Math.max(...vs) * 1.06, x = i => 34 + i / (P.length - 1) * (W - 44), y = v => 8 + (hi - v) / (hi - lo) * (H - 28);
+  const pts = P.map((z, i) => [x(i), y(z[1])]), line = labSm(pts), area = `${line} L${x(P.length-1).toFixed(1)},${H-20} L${x(0)},${H-20} Z`;
+  const ticks = [lo, (lo+hi)/2, hi].map(v => `<text x="30" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${fmt(v,0)}%</text><line x1="34" x2="${W-10}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="2 4"/>`).join("");
+  const lab = [0, Math.floor(P.length/2), P.length-1].map(i => `<text x="${x(i)}" y="${H-5}" font-size="10" text-anchor="${i===0?"start":i===P.length-1?"end":"middle"}" fill="var(--muted)">${esc(P[i][0])}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="ATM IV history">
+    <defs><linearGradient id="labIvA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    ${ticks}<path d="${area}" fill="url(#labIvA)"/><path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>
+    <circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="5" fill="var(--accent)" class="lab-pulse"/><circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="3" fill="var(--surface)"/>${lab}</svg>`;
+}
+function labTerm(V, W, H){
+  const T = V.term || []; if (T.length < 2) return `<p class="small muted">Term structure needs 2+ expiries.</p>`;
+  const vs = T.map(z => z.iv), lo = Math.min(...vs) * 0.9, hi = Math.max(...vs) * 1.08, mx = Math.max(...T.map(z => z.dte));
+  const x = d => 30 + Math.sqrt(d / mx) * (W - 50), y = v => 10 + (hi - v) / (hi - lo) * (H - 34), pts = T.map(z => [x(z.dte), y(z.iv)]);
+  const inv = T[0].iv > T[1].iv;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="IV by expiry">
+    <path d="${labSm(pts)}" fill="none" stroke="${inv ? "var(--bear)" : "var(--accent)"}" stroke-width="2.4"/>
+    ${T.map((z, i) => `<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="4.5" fill="var(--surface)" stroke="${inv ? "var(--bear)" : "var(--accent)"}" stroke-width="2"><title>${esc(z.expiry)}: ${z.iv}% (${z.dte} days)</title></circle>
+      <text x="${pts[i][0]}" y="${pts[i][1] - 9}" font-size="10" text-anchor="middle" fill="var(--ink)">${fmt(z.iv,1)}</text><text x="${pts[i][0]}" y="${H-6}" font-size="9.5" text-anchor="middle" fill="var(--muted)">${z.dte}d</text>`).join("")}
+    </svg><div class="small" style="margin-top:2px">${inv ? `<span class="lab-chip bear">Inverted</span> near-term options cost more than later ones - the market is pricing a near-term event or fear.` : `<span class="lab-chip">Normal</span> later expiries cost more per year than the nearest - calm.`}</div>`;
+}
+function labSmile(V, W, H){
+  const S = (V.smile || []).filter(s => s.pts.length > 3); if (!S.length) return `<p class="small muted">No smile data.</p>`;
+  const all = S.flatMap(s => s.pts), ks = all.map(p => p[0]), vs = all.map(p => p[1]);
+  const k0 = Math.min(...ks), k1 = Math.max(...ks), lo = Math.min(...vs) * 0.92, hi = Math.min(Math.max(...vs) * 1.05, Math.min(...vs) * 4);
+  const x = k => 34 + (k - k0) / (k1 - k0) * (W - 44), y = v => 8 + (hi - Math.min(v, hi)) / (hi - lo) * (H - 30), cols = ["var(--accent)", "var(--wait)", "#8B6FD6"];
+  const sx = x(V.und);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="IV smile by strike">
+    <rect x="34" y="6" width="${Math.max(0, sx - 34)}" height="${H-30}" fill="var(--bear)" opacity="0.05"/><rect x="${sx}" y="6" width="${Math.max(0, W - 10 - sx)}" height="${H-30}" fill="var(--bull)" opacity="0.05"/>
+    <text x="40" y="18" font-size="10" fill="var(--bear)">puts (downside)</text><text x="${W-14}" y="18" font-size="10" text-anchor="end" fill="var(--bull)">calls (upside)</text>
+    ${[lo, (lo+hi)/2, hi].map(v => `<text x="30" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${fmt(v,0)}%</text>`).join("")}
+    ${S.map((s, i) => `<path d="${labSm(s.pts.map(p => [x(p[0]), y(p[1])]))}" fill="none" stroke="${cols[i]}" stroke-width="${i === 0 ? 2.6 : 1.8}" opacity="${i === 0 ? 1 : 0.85}"/>`).join("")}
+    <line x1="${sx}" x2="${sx}" y1="6" y2="${H-24}" stroke="var(--ink)" stroke-dasharray="3 3"/><text x="${sx}" y="${H-12}" font-size="10" text-anchor="middle" fill="var(--ink)">spot ${fmt(V.und,0)}</text>
+    <text x="34" y="${H-2}" font-size="9.5" fill="var(--muted)">${fmt(k0,0)}</text><text x="${W-10}" y="${H-2}" font-size="9.5" text-anchor="end" fill="var(--muted)">${fmt(k1,0)}</text></svg>
+    <div class="small">${S.map((s, i) => `<span style="color:${cols[i]}">━</span> ${esc(s.expiry)} (${s.dte}d)`).join(" &nbsp; ")}</div>`;
+}
+function labCone(V, W, H){
+  const C = V.cone || []; if (!C.length) return `<p class="small muted">Not enough price history.</p>`;
+  const hi = Math.max(...C.map(c => c.max), V.iv || 0) * 1.08, lo = 0, x = i => 50 + i / (C.length - 1) * (W - 90), y = v => 10 + (hi - v) / (hi - lo) * (H - 34);
+  const band = (a, b, op) => `<path d="${labSm(C.map((c, i) => [x(i), y(c[a])]))} L${C.map((c, i) => `${x(i).toFixed(1)},${y(c[b]).toFixed(1)}`).reverse().join(" L")} Z" fill="var(--accent)" opacity="${op}"/>`;
+  const ivy = V.iv != null ? y(V.iv) : null;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="volatility cone">
+    ${[0, hi/2, hi].map(v => `<text x="44" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${fmt(v,0)}%</text><line x1="50" x2="${W-40}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="2 4"/>`).join("")}
+    ${band("min", "max", 0.12)}${band("p25", "p75", 0.22)}<path d="${labSm(C.map((c, i) => [x(i), y(c.med)]))}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="5 3"/>
+    <path d="${labSm(C.map((c, i) => [x(i), y(c.now)]))}" fill="none" stroke="var(--ink)" stroke-width="2"/>
+    ${C.map((c, i) => `<circle cx="${x(i)}" cy="${y(c.now)}" r="4" fill="var(--ink)"><title>${c.n}-day realised now ${c.now}% (median ${c.med}%)</title></circle><text x="${x(i)}" y="${H-8}" font-size="10" text-anchor="middle" fill="var(--muted)">${c.n} days</text>`).join("")}
+    ${ivy == null ? "" : `<line x1="50" x2="${W-40}" y1="${ivy}" y2="${ivy}" stroke="var(--bear)" stroke-width="2" stroke-dasharray="6 4"/><text x="${W-2}" y="${ivy+4}" font-size="10.5" text-anchor="end" fill="var(--bear)">IV ${fmt(V.iv,1)}%</text>`}</svg>
+    <div class="small muted"><span style="color:var(--accent)">▮</span> range of realised moves (light: all, dark: middle half) · <b style="color:var(--ink)">●</b> realised now · <span style="color:var(--bear)">- -</span> implied (what options price)</div>`;
+}
+function labIvMap(M, W, H){
+  const R = (M && M.rows || []).filter(r => r.rank != null && r.iv_hv != null); if (!R.length) return `<p class="small muted">Building the IV history - the map appears when it has a few months of data.</p>`;
+  const rows = (FNO.D && FNO.D.rows) || [], mv = s => (rows.find(z => z.sym === s) || {}), oi = s => mv(s).oi_cr || 1;
+  const ymax = 2.2, x = v => 40 + v / 100 * (W - 60), y = v => 12 + (ymax - Math.min(v, ymax)) / ymax * (H - 40), om = Math.max(...R.map(r => oi(r.sym)));
+  const sorted = [...R].sort((a, b) => oi(b.sym) - oi(a.sym));
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="IV rank against IV over realised volatility">
+    <rect x="${x(50)}" y="12" width="${x(100)-x(50)}" height="${y(1)-12}" fill="var(--bear)" opacity="0.05"/><rect x="40" y="${y(1)}" width="${x(50)-40}" height="${H-28-y(1)}" fill="var(--bull)" opacity="0.05"/>
+    <text x="${x(98)}" y="26" font-size="10.5" text-anchor="end" fill="var(--bear)">options expensive: high rank and above actual moves</text>
+    <text x="${x(2)}" y="${H-34}" font-size="10.5" fill="var(--bull)">options cheap: low rank and below actual moves</text>
+    <line x1="40" x2="${W-20}" y1="${y(1)}" y2="${y(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/><line x1="${x(50)}" x2="${x(50)}" y1="12" y2="${H-28}" stroke="var(--muted)" stroke-dasharray="4 4"/>
+    ${[0, 25, 50, 75, 100].map(v => `<text x="${x(v)}" y="${H-12}" font-size="10" text-anchor="middle" fill="var(--muted)">${v}</text>`).join("")}<text x="${(W)/2}" y="${H-1}" font-size="10" text-anchor="middle" fill="var(--muted)">IV rank (0 = lowest of the year, 100 = highest)</text>
+    ${[0.5, 1, 1.5, 2].map(v => `<text x="34" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${v}×</text>`).join("")}
+    ${sorted.map(r => { const m = mv(r.sym).move, c = m == null ? "var(--neutral)" : m > 0 ? "var(--bull)" : m < 0 ? "var(--bear)" : "var(--neutral)", rr = 3 + 13 * Math.sqrt(oi(r.sym) / om);
+      return `<circle class="lab-bub" cx="${x(r.rank).toFixed(1)}" cy="${y(r.iv_hv).toFixed(1)}" r="${rr.toFixed(1)}" fill="${c}" fill-opacity="0.35" stroke="${c}" stroke-width="1.2" style="cursor:pointer" onclick="FNO.vsym='${esc(r.sym)}';fnoRender()"><title>${esc(r.sym)} · IV ${r.iv}% · rank ${r.rank} · IV/realised ${r.iv_hv}× · move ${m==null?"–":fmt(m,2)+"%"}</title></circle>
+        ${rr > 9 ? `<text x="${x(r.rank).toFixed(1)}" y="${(y(r.iv_hv)+3).toFixed(1)}" font-size="9" text-anchor="middle" fill="var(--ink)" pointer-events="none">${esc(r.sym.slice(0, 8))}</text>` : ""}`; }).join("")}</svg>`;
+}
+function labVol(){
+  const s = FNO.vsym, V = labGet("vol", s), M = labGet("ivmap");
+  let h = labPick(s, "FNO.vsym", ["NIFTY", "BANKNIFTY", "FINNIFTY"], true);
+  if (!V) return h + labCard("Volatility", "", `<p class="small muted">Loading ${esc(s)}…</p>`);
+  if (V.err) return h + labCard("Volatility", "", `<p class="small muted">${esc(V.err)}</p>`);
+  const ivc = V.iv_hv == null ? null : V.iv_hv > 1.15 ? "var(--bear)" : V.iv_hv < 0.85 ? "var(--bull)" : "var(--ink)";
+  h += `<div class="lab-hero card"><div class="lab-gauge"><div class="small muted" style="text-align:center">IV rank · ${esc(s)}</div>${labGauge(V.rank, 220)}<div class="small muted" style="text-align:center">year range ${V.lo}% – ${V.hi}% · ${V.days} sessions</div></div>
+    <div class="lab-kpis">${labKpi("Implied vol (ATM)", V.iv == null ? "–" : `${fmt(V.iv,1)}%`, `expiry ${esc(V.near_exp||"")}`)}${labKpi("IV percentile", V.pctile == null ? "–" : `${V.pctile}`, "% of the last year below today")}
+      ${labKpi("IV vs actual moves", V.iv_hv == null ? "–" : `${fmt(V.iv_hv,2)}×`, `20-day realised ${V.hv20 ?? "–"}%`, ivc)}${labKpi("Put skew", V.skew == null ? "–" : `${V.skew>0?"+":""}${fmt(V.skew,1)}`, "IV of 5% OTM put minus call (vol pts)")}
+      ${labKpi("Straddle", V.straddle == null ? "–" : `±${fmt(V.straddle,0)}`, `≈ ±${V.straddle && V.und ? fmt(V.straddle / V.und * 100, 2) : "–"}% to expiry`)}${labKpi("Next expiry IV", V.iv_next == null ? "–" : `${fmt(V.iv_next,1)}%`, "")}</div></div>`;
+  h += `<div class="lab-grid2">${labCard("Implied Volatility · 1 Year", `ATM IV, nearest expiry with 5+ days · ${esc(V.day)}`, labIvHist(V, 620, 230))}${labCard("Term Structure", "ATM IV by expiry", labTerm(V, 520, 210))}</div>`;
+  h += `<div class="lab-grid2">${labCard("Volatility Smile", "IV by strike, next 3 expiries · OTM side of each strike", labSmile(V, 620, 250))}${labCard("Volatility Cone", "how much it actually moved vs what options price", labCone(V, 520, 250))}</div>`;
+  h += labCard("IV Map · Every F&amp;O Stock", `bubble size = futures OI · colour = today's move · click a bubble · ${M && M.day ? esc(M.day) : ""}`, labIvMap(M, 1200, 420));
+  h += fnoVolCard(FNO.ex || {}, 1150);
+  return h;
+}
+// ---- flow
+function labTide(F, W, H){
+  const T = F.tide || []; if (T.length < 3) return `<p class="small muted">Needs a few snapshots.</p>`;
+  const vs = T.flatMap(z => [z[1], z[2], z[3]]), lo = Math.min(0, ...vs) * 1.1, hi = Math.max(0, ...vs) * 1.1, px = T.map(z => z[5]), plo = Math.min(...px), phi = Math.max(...px);
+  const x = i => 44 + i / (T.length - 1) * (W - 90), y = v => 10 + (hi - v) / ((hi - lo) || 1) * (H - 36), yp = v => 10 + (phi - v) / ((phi - plo) || 1) * (H - 36);
+  const area = (k, col, id) => { const P = T.map((z, i) => [x(i), y(z[k])]); return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity="0.45"/><stop offset="1" stop-color="${col}" stop-opacity="0.04"/></linearGradient></defs>
+    <path d="${labSm(P)} L${x(T.length-1)},${y(0)} L${x(0)},${y(0)} Z" fill="url(#${id})"/><path d="${labSm(P)}" fill="none" stroke="${col}" stroke-width="1.6"/>`; };
+  const net = T.map((z, i) => [x(i), y(z[3])]), lab = [0, Math.floor(T.length/2), T.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="premium tide">
+    ${[lo, 0, hi].map(v => `<text x="40" y="${y(v)+4}" font-size="10" text-anchor="end" fill="var(--muted)">${labCr(v)}</text><line x1="44" x2="${W-46}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${v===0?"":"stroke-dasharray='2 4'"}/>`).join("")}
+    ${area(1, "var(--bull)", "labTc")}${area(2, "var(--bear)", "labTp")}
+    <path d="${labSm(T.map((z, i) => [x(i), yp(z[5])]))}" fill="none" stroke="var(--muted)" stroke-width="1" opacity="0.7" stroke-dasharray="1 2"/>
+    <path d="${labSm(net)}" fill="none" stroke="var(--accent)" stroke-width="2.8"/><circle cx="${net.at(-1)[0]}" cy="${net.at(-1)[1]}" r="4.5" fill="var(--accent)" class="lab-pulse"/>
+    <text x="${W-2}" y="${net.at(-1)[1]+4}" font-size="11" font-weight="700" text-anchor="end" fill="var(--accent)">net ${labCr(T.at(-1)[3])}</text>
+    <text x="${W-2}" y="${yp(T.at(-1)[5])+4}" font-size="10" text-anchor="end" fill="var(--muted)">${fmt(T.at(-1)[5],0)}</text>
+    ${lab.map(i => `<text x="${x(i)}" y="${H-6}" font-size="10" text-anchor="middle" fill="var(--muted)">${esc(T[i][0])}</text>`).join("")}</svg>
+    <div class="small muted"><span style="color:var(--bull)">▮</span> call premium bought minus sold · <span style="color:var(--bear)">▮</span> put premium bought minus sold · <span style="color:var(--accent)">━</span> net (calls − puts, rising = bullish money) · dotted = index · ₹ Cr</div>`;
+}
+function labHedge(F, W, H){
+  const T = F.tide || []; if (T.length < 3) return "";
+  const vs = T.map(z => z[4]), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs), x = i => 44 + i / (T.length - 1) * (W - 54), y = v => 8 + (hi - v) / ((hi - lo) || 1) * (H - 26);
+  const P = T.map((z, i) => [x(i), y(z[4])]), last = vs.at(-1), col = last >= 0 ? "var(--bull)" : "var(--bear)";
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="hedge pressure">
+    <line x1="44" x2="${W-10}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/><path d="${labSm(P)} L${x(T.length-1)},${y(0)} L44,${y(0)} Z" fill="${col}" opacity="0.15"/>
+    <path d="${labSm(P)}" fill="none" stroke="${col}" stroke-width="2"/><text x="40" y="${y(hi)+8}" font-size="10" text-anchor="end" fill="var(--muted)">${labCr(hi)}</text><text x="40" y="${y(lo)}" font-size="10" text-anchor="end" fill="var(--muted)">${labCr(lo)}</text></svg>
+    <div class="small muted">Delta of the option positions opened today, in ₹ Cr of index exposure: writers would need to <b style="color:${col}">${last >= 0 ? "buy" : "sell"}</b> about this much to be fully hedged (${labCr(last)} Cr). A model, not real trades - writers hedge only part of it, so read the direction and slope, not the size.</div>`;
+}
+function labHeat(F){
+  const Hm = F.heat || []; if (!Hm.length) return "";
+  const ks = [...new Set(Hm.map(z => z.strike))].sort((a, b) => b - a), near = ks.filter(k => Math.abs(k / F.spot - 1) < 0.025), mx = Math.max(1, ...Hm.map(z => Math.abs(z.net)));
+  const g = (k, cp) => Hm.find(z => z.strike === k && z.cp === cp) || {net: 0, opened: 0};
+  const cell = (z, side) => { const w = Math.abs(z.net) / mx * 100, col = z.net >= 0 ? "var(--bull)" : "var(--bear)";
+    return `<div class="lab-heat-c ${side}"><div style="width:${w.toFixed(1)}%;background:${col};opacity:${(0.25 + 0.75 * w / 100).toFixed(2)}"></div><span>${z.net ? labCr(z.net / 100) : ""}</span></div>`; };
+  const atm = near.reduce((a, k) => Math.abs(k - F.spot) < Math.abs(a - F.spot) ? k : a, near[0]);
+  return `<div class="lab-heat"><div class="lab-heat-h small muted"><span>PUTS · net bought ₹ Cr</span><span>strike</span><span>CALLS · net bought ₹ Cr</span></div>
+    ${near.map(k => `<div class="lab-heat-r ${k === atm ? "atm" : ""}">${cell(g(k, "PE"), "l")}<b>${fmt(k,0)}</b>${cell(g(k, "CE"), "r")}</div>`).join("")}</div>
+    <div class="small muted">Green = more premium bought than sold at that strike today (buyers in charge), red = sold. ATM row highlighted.</div>`;
+}
+function labTape(F){
+  const T = F.tape || []; if (!T.length) return `<p class="small muted">No big prints.</p>`;
+  const mx = Math.max(...T.map(z => z.prem));
+  return `<div class="lab-tape"><table class="small"><thead><tr class="muted"><th>Time</th><th>Strike</th><th>Side</th><th>Lots</th><th>Price</th><th>Premium</th><th>Type</th></tr></thead><tbody>
+    ${T.map((z, i) => `<tr class="${i < 3 ? "lab-new" : ""}"><td>${esc(z.ts)}</td><td><b>${fmt(z.strike,0)} ${esc(z.cp)}</b></td>
+      <td><span class="lab-chip ${z.side==="buy"?"bull":z.side==="sell"?"bear":""}">${z.side==="buy"?"BOUGHT":z.side==="sell"?"SOLD":"MID"}</span></td><td>${fmt(z.lots,0)}</td><td>${fmt(z.px,2)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><div style="width:${(z.prem/mx*70).toFixed(0)}px;height:7px;border-radius:3px;background:${z.cp==="CE"?"var(--bull)":"var(--bear)"};opacity:.7"></div>₹${fmt(z.prem/100,1)} Cr</div></td>
+      <td><span class="lab-chip ${z.tag==="opening"?"on":""}">${esc(z.tag)}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+function labFlow(){
+  const s = FNO.fsym, F = labGet("flow", s);
+  let h = labPick(s, "FNO.fsym", ["NIFTY", "BANKNIFTY"], false);
+  if (!F) return h + labCard("Options Flow", "", `<p class="small muted">Loading…</p>`);
+  if (F.err) return h + labCard("Options Flow", "", `<p class="small muted">${esc(F.err)}</p>`) + fnoUnusualCard(FNO.ex || {});
+  const t = F.totals || {}, net = (t.call_buy - t.call_sell) - (t.put_buy - t.put_sell);
+  h += `<div class="lab-kpis lab-kpis-row card">${labKpi("Calls bought", `₹${fmt(t.call_buy,0)} Cr`, "", "var(--bull)")}${labKpi("Calls sold", `₹${fmt(t.call_sell,0)} Cr`, "")}
+    ${labKpi("Puts bought", `₹${fmt(t.put_buy,0)} Cr`, "", "var(--bear)")}${labKpi("Puts sold", `₹${fmt(t.put_sell,0)} Cr`, "")}
+    ${labKpi("Net premium tide", labRs(net), net >= 0 ? "money leaning bullish" : "money leaning bearish", net >= 0 ? "var(--bull)" : "var(--bear)")}
+    ${labKpi("Session", esc(F.day), `${F.snapshots} snapshots · last ${esc(F.at)} · expiry ${esc(F.expiry)}`)}</div>`;
+  h += labCard("Premium Tide", `${esc(s)} · nearest expiry · side by price tick between 3-minute snapshots`, labTide(F, 1200, 300));
+  h += `<div class="lab-grid2">${labCard("Strike Heat Ladder", "within 2.5% of spot", labHeat(F))}${labCard("Big Prints", "largest premium between snapshots", labTape(F))}</div>`;
+  h += labCard("Hedge Pressure", "model: new OI × delta × lot × spot", labHedge(F, 1200, 160));
+  h += fnoUnusualCard(FNO.ex || {});
+  return h;
+}
+// ---- gamma
+function labGexProfile(G, W){
+  const R = G.rows || []; if (!R.length) return "";
+  const rh = 15, H = R.length * rh + 30, mx = Math.max(...R.map(z => Math.max(z.call, z.put))), mid = W / 2, sc = v => v / mx * (mid - 70);
+  const ys = k => 14 + (R.length - 1 - R.findIndex(z => z.strike === k)) * rh, near = (v) => R.reduce((a, z) => Math.abs(z.strike - v) < Math.abs(a.strike - v) ? z : a, R[0]).strike;
+  let g = `<text x="${mid - 8}" y="10" font-size="10" text-anchor="end" fill="var(--bear)">put gamma ←</text><text x="${mid + 8}" y="10" font-size="10" fill="var(--bull)">→ call gamma</text>`;
+  R.forEach(z => { const y0 = ys(z.strike); g += `<rect x="${(mid - sc(z.put)).toFixed(1)}" y="${y0 + 2}" width="${sc(z.put).toFixed(1)}" height="${rh - 4}" rx="3" fill="var(--bear)" opacity="${z.strike === G.put_wall ? 0.95 : 0.55}"><title>${z.strike} puts ₹${z.put} Cr / 1%</title></rect>
+    <rect x="${mid}" y="${y0 + 2}" width="${sc(z.call).toFixed(1)}" height="${rh - 4}" rx="3" fill="var(--bull)" opacity="${z.strike === G.call_wall ? 0.95 : 0.55}"><title>${z.strike} calls ₹${z.call} Cr / 1%</title></rect>
+    <text x="4" y="${y0 + rh - 4}" font-size="10" fill="var(--muted)">${fmt(z.strike,0)}</text>`; });
+  const line = (v, col, lab, dash) => { if (v == null) return; const y0 = ys(near(v)) + rh / 2; g += `<line x1="40" x2="${W-4}" y1="${y0}" y2="${y0}" stroke="${col}" stroke-width="1.6" stroke-dasharray="${dash}"/><text x="${W-4}" y="${y0 - 3}" font-size="10.5" font-weight="700" text-anchor="end" fill="${col}">${lab}</text>`; };
+  line(G.spot, "var(--ink)", `spot ${fmt(G.spot,0)}`, ""); line(G.flip, "var(--wait)", `gamma flip ${fmt(G.flip,0)}`, "6 4");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="gamma exposure by strike">${g}</svg>`;
+}
+function labGexCurve(G, W, H){
+  const C = G.curve || []; if (C.length < 3) return "";
+  const xs = C.map(c => c[0]), vs = C.map(c => c[1]), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs), x = v => 50 + (v - xs[0]) / (xs.at(-1) - xs[0]) * (W - 60), y = v => 10 + (hi - v) / ((hi - lo) || 1) * (H - 34);
+  const P = C.map(c => [x(c[0]), y(c[1])]);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="dealer gamma against price">
+    <defs><clipPath id="labGup"><rect x="0" y="0" width="${W}" height="${y(0)}"/></clipPath><clipPath id="labGdn"><rect x="0" y="${y(0)}" width="${W}" height="${H}"/></clipPath></defs>
+    <path d="${labSm(P)} L${x(xs.at(-1))},${y(0)} L${x(xs[0])},${y(0)} Z" fill="var(--bull)" opacity="0.2" clip-path="url(#labGup)"/><path d="${labSm(P)} L${x(xs.at(-1))},${y(0)} L${x(xs[0])},${y(0)} Z" fill="var(--bear)" opacity="0.2" clip-path="url(#labGdn)"/>
+    <line x1="50" x2="${W-10}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)"/><path d="${labSm(P)}" fill="none" stroke="var(--accent)" stroke-width="2.4"/>
+    <line x1="${x(G.spot)}" x2="${x(G.spot)}" y1="8" y2="${H-22}" stroke="var(--ink)" stroke-dasharray="3 3"/><text x="${x(G.spot)}" y="${H-8}" font-size="10" text-anchor="middle" fill="var(--ink)">spot ${fmt(G.spot,0)}</text>
+    ${G.flip ? `<circle cx="${x(G.flip)}" cy="${y(0)}" r="5" fill="var(--wait)"/><text x="${x(G.flip)}" y="${y(0) - 9}" font-size="10" text-anchor="middle" fill="var(--wait)">flip ${fmt(G.flip,0)}</text>` : ""}
+    <text x="46" y="${y(hi)+8}" font-size="10" text-anchor="end" fill="var(--muted)">${labCr(hi)}</text><text x="46" y="${y(lo)}" font-size="10" text-anchor="end" fill="var(--muted)">${labCr(lo)}</text></svg>
+    <div class="small muted">Dealer-model total gamma if the index moved to each price (₹ Cr per 1% move). Above zero: hedging dampens moves; below zero: hedging adds to them.</div>`;
+}
+function labGamma(){
+  const s = FNO.gsym, G = labGet("gex", s);
+  let h = labPick(s, "FNO.gsym", ["NIFTY", "BANKNIFTY"], false);
+  if (!G) return h + labCard("Gamma Exposure", "", `<p class="small muted">Loading…</p>`);
+  if (G.err) return h + labCard("Gamma Exposure", "", `<p class="small muted">${esc(G.err)}</p>`);
+  const pos = G.regime === "positive";
+  h += `<div class="lab-regime card ${pos ? "pos" : "neg"}"><div><div class="small muted">Gamma regime · ${esc(s)} · ${esc(G.day)} ${esc(G.at)} · expiry ${esc(G.expiry)}</div>
+      <div class="lab-regime-t">${pos ? "Positive gamma · expect ranges" : "Negative gamma · expect bigger moves"}</div>
+      <div class="small">${pos ? "Option dealers' hedging tends to sell rallies and buy dips (dealer model)." : "Option dealers' hedging tends to chase the move (dealer model)."}</div></div>
+    <div class="lab-kpis">${labKpi("Spot", fmt(G.spot,1), "")}${labKpi("Gamma flip", G.flip == null ? "none in ±4%" : fmt(G.flip,0), G.flip ? `${fmt((G.flip/G.spot-1)*100,2)}% from spot` : "", "var(--wait)")}
+      ${labKpi("Call wall", fmt(G.call_wall,0), "most call gamma", "var(--bull)")}${labKpi("Put wall", fmt(G.put_wall,0), "most put gamma", "var(--bear)")}
+      ${labKpi("Dealer total", `₹${labCr(G.dealer_total)} Cr`, "per 1% move")}</div></div>`;
+  h += `<div class="lab-grid2">${labCard("Gamma by Strike", "₹ Cr per 1% move · within 5% of spot", labGexProfile(G, 620))}${labCard("Gamma vs Price", "where hedging flips from calming to amplifying", labGexCurve(G, 560, 300))}</div>`;
+  h += `<p class="small faint">India seller view (writers short every option): total ₹${labCr(G.seller_total)} Cr. The dealer model is a US convention - treat the regime as context, not a signal.</p>`;
+  return h;
+}
+// ---- institutions
+function labInst(){
+  const I = labGet("inst");
+  if (!I) return labCard("Institutions", "", `<p class="small muted">Loading…</p>`);
+  if (I.err) return labCard("Institutions", "", `<p class="small muted">${esc(I.err)}</p>`) + fnoPartCard(FNO.ex || {});
+  const C = I.cash || [], L = C.at(-1) || {}, mx = Math.max(1, ...C.flatMap(z => [Math.abs(z.fii), Math.abs(z.dii)]));
+  const tone = v => { const a = Math.min(1, Math.abs(v) / mx), c = v >= 0 ? "60,194,124" : "239,98,90"; return `rgba(${c},${(0.15 + 0.85 * a).toFixed(2)})`; };
+  const heat = k => `<div class="lab-cal">${C.map(z => `<div class="lab-cal-d" style="background:${tone(z[k])}" title="${esc(z.day)} ${k.toUpperCase()} ${z[k] >= 0 ? "+" : ""}${fmt(z[k],0)} Cr"></div>`).join("")}</div>`;
+  const W = 1200, H = 220, bw = (W - 60) / Math.max(1, C.length), y0 = H / 2, sc = v => v / mx * (H / 2 - 18);
+  const bars = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="FII and DII net cash flow, daily">
+    <line x1="40" x2="${W-10}" y1="${y0}" y2="${y0}" stroke="var(--line)"/>
+    ${C.map((z, i) => `<rect x="${(44 + i * bw).toFixed(1)}" y="${(z.fii >= 0 ? y0 - sc(z.fii) : y0).toFixed(1)}" width="${(bw * 0.42).toFixed(1)}" height="${Math.abs(sc(z.fii)).toFixed(1)}" rx="2" fill="${z.fii >= 0 ? "var(--bull)" : "var(--bear)"}" opacity="0.85"><title>${esc(z.day)} FII ${fmt(z.fii,0)} Cr</title></rect>
+      <rect x="${(44 + i * bw + bw * 0.46).toFixed(1)}" y="${(z.dii >= 0 ? y0 - sc(z.dii) : y0).toFixed(1)}" width="${(bw * 0.42).toFixed(1)}" height="${Math.abs(sc(z.dii)).toFixed(1)}" rx="2" fill="var(--accent)" opacity="0.6"><title>${esc(z.day)} DII ${fmt(z.dii,0)} Cr</title></rect>`).join("")}
+    <text x="36" y="18" font-size="10" text-anchor="end" fill="var(--muted)">+${labCr(mx)}</text><text x="36" y="${H-8}" font-size="10" text-anchor="end" fill="var(--muted)">−${labCr(mx).replace("+","")}</text>
+    <text x="44" y="${H-2}" font-size="10" fill="var(--muted)">${esc((C[0]||{}).day||"")}</text><text x="${W-10}" y="${H-2}" font-size="10" text-anchor="end" fill="var(--muted)">${esc(L.day||"")}</text></svg>`;
+  const st = I.streak || {}, sc2 = st.side === "selling" ? "var(--bear)" : "var(--bull)";
+  let h = `<div class="lab-kpis lab-kpis-row card">${labKpi(`FII · ${esc(L.day||"")}`, labRs(L.fii), "cash market net", L.fii >= 0 ? "var(--bull)" : "var(--bear)")}
+    ${labKpi("DII", labRs(L.dii), "", L.dii >= 0 ? "var(--bull)" : "var(--bear)")}
+    ${labKpi("FII streak", `${st.days} day${st.days===1?"":"s"}`, st.side, sc2)}${labKpi("Month to date", `FII ${labCr(I.mtd_fii)} · DII ${labCr(I.mtd_dii)}`, "₹ Cr")}
+    ${labKpi("DII absorption (10 days)", I.absorb10 == null ? "–" : `${I.absorb10}%`, "DII buying ÷ FII selling")}</div>`;
+  if ((I.flags||[]).length) h += `<div class="lab-ban">${I.flags.map(f => `<span class="lab-chip bear">${esc(f)}</span>`).join("")}</div>`;
+  h += labCard("FII &amp; DII Cash, Daily", `bars: FII (green / red) and DII (teal) · saved from ${esc(I.since)}`, bars + `<div class="lab-cal-wrap"><div><div class="small muted">FII heatmap</div>${heat("fii")}</div><div><div class="small muted">DII heatmap</div>${heat("dii")}</div></div>`);
+  h += fnoPartCard(FNO.ex || {});
+  return h;
+}
+function labSection(){
+  if (FNO.sec === "buildup") return fnoBuSection();
+  if (FNO.sec === "vol") return labVol();
+  if (FNO.sec === "flow") return labFlow();
+  if (FNO.sec === "gamma") return labGamma();
+  if (FNO.sec === "inst") return labInst();
+  if (FNO.sec === "roll") return fnoRollCard(FNO.ex || {}) || labCard("Rollover", "", `<p class="small muted">Loading…</p>`);
+  return "";
 }
 // ---------------------------------------------------------------- detail popup
 function fnoList(sym){ const R = FNO.D.rows, r = R.find(z => z.sym === sym); if (!r) return [];

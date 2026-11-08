@@ -149,7 +149,67 @@ def _nifty_monthly_job():
         S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
 
 
+IVH = os.path.join(ROOT, "data_store", "research", "iv_hist")
+
+
+def iv_day(df, day):
+    """One UDiFF bhavcopy -> per underlying (stocks + indices): ATM IV of the nearest expiry with >= 5 days left and of the one after,
+    the ATM straddle, and a simple skew (IV of the put ~5 % below spot minus the call ~5 % above). Black-Scholes on spot, r = 6.5 %."""
+    import fnoflow as FF
+    o = df[df.FinInstrmTp.isin(["STO", "IDO"])].copy(); o["XpryDt"] = o.XpryDt.astype(str).str[:10]
+    d0 = date.fromisoformat(day); rows = []
+    for sym, g in o.groupby("TckrSymb"):
+        und = g.UndrlygPric.dropna()
+        if not len(und):
+            continue
+        S0 = float(und.iloc[0]); exps = [e for e in sorted(g.XpryDt.unique()) if (date.fromisoformat(e) - d0).days >= 5][:2]
+        r = {"day": day, "sym": sym, "und": S0}
+        for tag, e in zip(("near", "next"), exps):
+            x = g[g.XpryDt == e]; ce = x[x.OptnTp == "CE"].set_index("StrkPric").ClsPric; pe = x[x.OptnTp == "PE"].set_index("StrkPric").ClsPric
+            ks = sorted(set(ce.index) & set(pe.index))
+            if not ks:
+                continue
+            k = min(ks, key=lambda z: abs(z - S0)); T = ((date.fromisoformat(e) - d0).days + 0.25) / 365
+            v1, v2 = FF._iv(float(ce[k]), S0, k, T, "CE"), FF._iv(float(pe[k]), S0, k, T, "PE")
+            vs = [v for v in (v1, v2) if v]
+            r[f"{tag}_exp"] = e; r[f"{tag}_iv"] = round(sum(vs) / len(vs) * 100, 2) if vs else None; r[f"{tag}_straddle"] = round(float(ce[k] + pe[k]), 2)
+            if tag == "near":
+                kp = min(ks, key=lambda z: abs(z - S0 * 0.95)); kc = min(ks, key=lambda z: abs(z - S0 * 1.05))
+                ip, ic = FF._iv(float(pe[kp]), S0, kp, T, "PE"), FF._iv(float(ce[kc]), S0, kc, T, "CE")
+                r["skew"] = round((ip - ic) * 100, 2) if ip and ic else None
+        rows.append(r)
+    return pd.DataFrame(rows)
+
+
+def _iv_job():
+    """2026-11-08 (Options Lab): IV history for every F&O name, one bhavcopy per session since 8 Jul 2024 -> iv_hist/iv_<day>.csv.gz."""
+    import updater as U
+    os.makedirs(IVH, exist_ok=True)
+    days = sorted(f[4:14] for f in os.listdir(HIST) if f.startswith("fut_") and f.endswith(".csv.gz"))
+    S.update(running=True, kind="iv_hist", total=len(days), done=0, saved=0, missing=0, err=None, started=time.strftime("%H:%M:%S"))
+    try:
+        for day in days:
+            S["done"] += 1; fp = os.path.join(IVH, f"iv_{day}.csv.gz")
+            if os.path.exists(fp):
+                continue
+            try:
+                df = U._unzip_csv(U.http_get(f"{U.NSE}/fo/BhavCopy_NSE_FO_0_0_0_{day.replace('-', '')}_F_0000.csv.zip", U.NSE_HEADERS))
+                iv_day(df, day).to_csv(fp, index=False, compression="gzip"); S["saved"] += 1
+            except U.NotFound:
+                S["missing"] += 1
+            except Exception as ex:
+                S["err"] = f"{day}: {type(ex).__name__} {str(ex)[:90]}"; time.sleep(2)
+            time.sleep(0.3)
+    except Exception as ex:
+        S["err"] = f"{type(ex).__name__}: {str(ex)[:120]}"
+    finally:
+        S["running"] = False; S["ended"] = time.strftime("%H:%M:%S")
+
+
 def api(q):
+    if q.get("bures") == "iv_hist" and not S.get("running"):
+        threading.Thread(target=_iv_job, daemon=True, name="bures_iv").start()
+        time.sleep(0.2)
     if q.get("bures") == "nifty_monthly" and not S.get("running"):
         threading.Thread(target=_nifty_monthly_job, daemon=True, name="bures_nm").start()
         time.sleep(0.2)
