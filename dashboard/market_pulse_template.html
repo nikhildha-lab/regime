@@ -2023,7 +2023,7 @@ async function lbLoad(){
 function lbRender(){
   const el = $("#lbCard"); if (!el) return; const D = LBRD.D[LBRD.k];
   const tabs = ["NIFTY","BANKNIFTY"].map(k => `<button class="chip" aria-pressed="${k===LBRD.k}" onclick="lbPick('${k}')">${k==="NIFTY"?"Nifty":"Bank Nifty"}</button>`).join(" ");
-  const head = `<div class="spread"><h2>Level Board <span class="small muted">levels · OI · big walls · resting orders · action</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
+  const head = `<div class="spread"><h2>Level Board <span class="small muted">futures prices · levels · OI · big walls · resting orders · DOM · action</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
   if (!D){ el.innerHTML = head + `<p class="small muted">Loading…</p>`; return; }
   if (D.err){ el.innerHTML = head + `<p class="small muted">${esc(D.err)}</p>`; return; }
   const P = D.price, dp = 0, px = v => fmt(v, dp);
@@ -2033,12 +2033,12 @@ function lbRender(){
     const k = r.kind === "block" ? `${r.strength[0].toUpperCase()+r.strength.slice(1)} block` : r.kind === "ref" ? "Reference" : r.kind === "dom" ? "DOM level" : "Wall only";
     return `<b style="color:${STC[r.strength]||"var(--ink)"}">${k}${r.star?" ★":""}</b><br><span class="small faint">${s}${r.tags.length?" · "+r.tags.map(esc).join(" "):""}</span>`; };
   const lvl = r => { const one = Math.abs(r.hi - r.lo) < 25 && r.kind !== "block";
-    return `<b>${one ? px((r.lo + r.hi) / 2) : px(r.lo) + "–" + px(r.hi)}</b><br><span class="small faint" title="futures price">fut ${one ? px((r.fut_lo + r.fut_hi) / 2) : px(r.fut_lo) + "–" + px(r.fut_hi)}</span>`; };
+    return `<b>${one ? px((r.lo + r.hi) / 2) : px(r.lo) + "–" + px(r.hi)}</b><br><span class="small faint" title="the same level in index (spot) points, using the live basis">spot ${one ? px((r.spot_lo + r.spot_hi) / 2) : px(r.spot_lo) + "–" + px(r.spot_hi)}</span>`; };
   const dist = r => r.side === "inside" ? `<span style="color:#E8A33C"><b>in zone</b></span>` : `<b>${r.dist>0?"+":""}${fmt(r.dist,0)}</b><br><span class="small faint">${r.dist_pct>0?"+":""}${fmt(r.dist_pct,2)}%</span>`;
   const oi = r => { const o = r.oi; if (!o) return `<span class="faint">${r.kind === "block" && r.strength !== "weak" ? "–" : "not tracked"}</span>`;
     const c = o.tone === "hold" ? "var(--bull)" : o.tone === "break" ? "var(--bear)" : "var(--muted)";
     const rd = String(o.read||"").split(" - ")[0];
-    return `<b>${o.type === "call" ? "CE" : "PE"} ${fxK(o.oi)}</b> <span class="small" style="color:${(o.pct30||0)>=0?"var(--bull)":"var(--bear)"}">${(o.pct30||0)>0?"+":""}${fmt(o.pct30,1)}% 30m</span><br><span class="small" style="color:${c}" title="${esc(o.read||"")}">${esc(SC(rd))}</span>`; };
+    return `<b>${o.type === "call" ? "CE" : "PE"} ${fxK(o.oi)}</b>${o.strikes ? ` <span class="small faint">@${o.strikes[0]}–${o.strikes[o.strikes.length-1]}</span>` : ""} <span class="small" style="color:${(o.pct30||0)>=0?"var(--bull)":"var(--bear)"}">${(o.pct30||0)>0?"+":""}${fmt(o.pct30,1)}% 30m</span><br><span class="small" style="color:${c}" title="${esc(o.read||"")}">${esc(SC(rd))}</span>`; };
   const TR = {growing:"↑ growing", shrinking:"↓ shrinking", steady:"steady"};
   const wall = r => { const w = r.wall; if (!w) return `<span class="faint">none</span>`;
     return `<b style="color:${w.side==="sell"?"var(--bear)":"var(--bull)"}">${w.side==="sell"?"Sell":"Buy"} ${fmt(w.x,1)}×</b><br><span class="small faint">fut ${px(w.fut)} · ${TR[w.trend]||""} · ${w.age >= 60 ? "60+" : w.age} min</span>`; };
@@ -2063,13 +2063,13 @@ function lbRender(){
   const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${book(r)}</td><td>${holdC(r)}</td><td>${brkC(r)}</td><td style="min-width:230px">${act(r)}</td></tr>`;
   const R = D.rows.filter(r => r.side === "R"), I = D.rows.filter(r => r.side === "inside"), S = D.rows.filter(r => r.side === "S");
   const X = D.dom || {}, sg = (v, d) => v == null ? "–" : `<b style="color:${v>0?"var(--bull)":v<0?"var(--bear)":"var(--muted)"}">${v>0?"+":""}${fmt(v,d)}</b>`;
-  const prow = `<tr><td colspan="9" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Price now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}</span>`
+  const prow = `<tr><td colspan="9" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Futures now ${px(P)}</b> <span class="small muted">· spot ${D.spot != null ? px(D.spot) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}</span>`
     + `<span class="small" style="margin-left:14px">Book lean ${sg(X.lean,2)} <span class="faint">(hold ±${X.imb_hold ?? "–"}, break ±${X.imb_break ?? "–"})</span> · 60-s delta ${X.delta60 == null ? "–" : sg(X.delta60,0) + "%"} <span class="faint">(break ±${X.delta_break ?? "–"}%)</span>${X.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(X.gate)}</span>` : ""}${X.err ? ` · <span class="faint">${esc(X.err)}</span>` : ""}</span>${X.basis_warn ? `<br><span class="small" style="color:#E8A33C">⚠ ${esc(X.basis_warn)}</span>` : ""}</td></tr>`;
   const empty = t => `<tr><td colspan="9" class="small faint">${t}</td></tr>`;
   el.innerHTML = head + `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Resting Orders</th><th title="DOM HOLD: fresh touch · held · book lean · absorption">DOM Hold</th><th title="DOM BREAK: through · 30 s beyond · book lean · delta">DOM Break</th><th>Action</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + `</tbody></table></div>`
     + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
-    + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). Levels are index prices (futures below each). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
+    + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). <b>Every price is the near-month futures price</b> (levels from the futures-only Level Map; the spot figure under each level is for reference). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
     + `Big wall = ≥4× normal size for 70% of the last 15 min. Action = level strength + option writers + big wall + resting orders on the level's side, a fixed rule that is <b>untested</b>: an indication, never an order. Walls can be pulled any second. DOM Hold / Break dots = the DOM Index engine's entry conditions at that level right now (filled = met, ring = not yet, grey = n/a; hover for names); the engine trades when all four are met.</p>`;
 }
 async function bigwLoad(){

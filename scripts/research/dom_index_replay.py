@@ -51,8 +51,24 @@ def _sec(day, k):
     return out
 
 
+def rebuilt_levels_fut(day):
+    """2026-11-09 v3: futures-native levels (levelmap.build_fut as of the previous session) - what the live engine now uses."""
+    out = {}
+    prev = (pd.Timestamp(day) - pd.offsets.Day(1)).strftime("%Y-%m-%d")
+    for k in D.INDEX:
+        z = []
+        try:
+            for b in LM.build_fut(k, 10, asof=prev).get("blocks") or []:
+                if b.get("strength") in ("medium", "strong"):
+                    z.append((b["lo"], b["hi"], f"{b['strength']} block {b['lo']:.0f}-{b['hi']:.0f}"))
+        except Exception as e:
+            print("levelmap_fut", k, day, e)
+        out[k] = {"zones": D._merge(z), "prices": "futures", "basis": None, "rebuilt": True}
+    return out
+
+
 def rebuilt_levels(day, rows):
-    """Index levels from data known before the open (see the module note)."""
+    """Index levels from data known before the open (see the module note). v1/v2 style (spot blocks + OI walls moved by a basis)."""
     prev = None
     o = None
     p = os.path.join(OCD, f"{day}.csv.gz")
@@ -103,11 +119,18 @@ def replay(day, lv, rows):
 
 def main():
     os.makedirs(OUTD, exist_ok=True)
+    tag = "_fut" if D.LEVELS == "fut" else ""
     allt, lvsrc = [], {}
     for day in days():
         rows = sorted(_sec(day, "NIFTY") + _sec(day, "BANKNIFTY"), key=lambda r: r[1])
         p = os.path.join(D.OUT, f"levels_{day}.json")
-        if os.path.exists(p):
+        if D.LEVELS == "fut":                               # 2026-11-09 v3: same futures-native levels for every day
+            L = json.load(open(p)) if os.path.exists(p) else {}
+            if all(isinstance(L.get(k), dict) and L[k].get("prices") == "futures" for k in D.INDEX):
+                lv = {k: L[k] for k in D.INDEX}; src = "live file (futures)"
+            else:
+                lv = rebuilt_levels_fut(day); src = "rebuilt (futures)"
+        elif os.path.exists(p):
             L = json.load(open(p)); lv = {k: L[k] for k in D.INDEX if k in L}; src = "live file"
         else:
             lv = rebuilt_levels(day, rows); src = "rebuilt"
@@ -118,7 +141,7 @@ def main():
         allt += tr
         print(day, src, f"{len(rows) // 2:>6} s", "trades", len(tr), "Rs", sum(x.get("pnl", 0) for x in tr if x["status"] == "closed"))
     d = pd.DataFrame([x for x in allt if x["status"] == "closed"])
-    d.to_csv(os.path.join(OUTD, "trades.csv"), index=False)
+    d.to_csv(os.path.join(OUTD, f"trades{tag}.csv"), index=False)
     d = D.plan_ix_fill([{**x, "plan_ix": None} for x in d.to_dict("records")]) if False else d
     def s(x):
         return pd.Series({"n": len(x), "win%": round(100 * (x.pnl > 0).mean()) if len(x) else 0, "avgR_gross": round(x.r_gross.mean(), 2),
@@ -145,7 +168,7 @@ def main():
     pl = pd.DataFrame(pl)
     print("PLAN (first 3 a day, -2R)", s(pl).to_dict())
     c = d.sort_values("opened").pnl.cumsum(); print("max drawdown Rs", int((c - c.cummax()).min()))
-    json.dump(lvsrc, open(os.path.join(OUTD, "levels_source.json"), "w"), indent=1)
+    json.dump(lvsrc, open(os.path.join(OUTD, f"levels_source{tag}.json"), "w"), indent=1)
 
 
 if __name__ == "__main__":

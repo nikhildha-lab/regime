@@ -196,3 +196,99 @@ def get(key: str = "NIFTY", days: int = 10) -> dict:
         v = c[1] if c else {"key": key, "error": str(e)[:200], "blocks": []}
     _C[(key, days)] = (time.time(), v)
     return v
+
+def build_fut(key: str = "NIFTY", days: int = 10, asof: str | None = None) -> dict:
+    """2026-11-09 (Nikhil: "be careful, all prices need to be futures prices"): the same level map built ONLY from the near-month
+    FUTURES 1-min bars (nifty_futures_1m_upstox.csv) - no spot, no basis, no option strikes. For the DOM Index engine, which trades
+    the futures mid. Items: this / last week and month high-low (alerts), previous day high / low / close, 10-day and 5-day volume
+    profile (POC, VAH, VAL, nodes), 30-min swings, last session VWAP + IB. Strength by score only (strong >= 8, medium >= 5).
+    asof = 'YYYY-MM-DD': the map as it looked at that session's close. Near-month roll: each day uses its most-traded contract."""
+    f = _fut(key)
+    f = f[f.d <= asof] if asof else f[f.d < time.strftime("%Y-%m-%d")]      # never today's own bars: the map is for the next session
+    sess = sorted(f.d.unique())
+    if len(sess) < 3:
+        return {"key": key, "error": "not enough futures sessions", "blocks": [], "levels": []}
+    f = f.copy(); f["basis"] = 0.0
+    d = f.groupby("d").agg(high=("high", "max"), low=("low", "min"), close=("close", "last"))
+    d.index = pd.to_datetime(d.index)
+    last_day = d.index[-1]; px = float(d.close.iloc[-1])
+    items, ref = [], []
+    wk = d.index.to_period("W"); mo = d.index.to_period("M")
+    nxt = last_day + pd.offsets.BDay(1)
+    cw, cm = nxt.to_period("W"), nxt.to_period("M")
+    for lab, mask in (("this week", wk == cw), ("last week", wk == cw - 1), ("this month", mo == cm), ("last month", mo == cm - 1)):
+        z = d[mask]
+        if len(z):
+            items += [(float(z.high.max()), 3.0, f"{lab} high", "alert"), (float(z.low.min()), 3.0, f"{lab} low", "alert")]
+    items += [(float(d.high.iloc[-1]), 2.0, "prev day high", "price"), (float(d.low.iloc[-1]), 2.0, "prev day low", "price"),
+              (float(d.close.iloc[-1]), 1.0, "prev day close", "price")]
+    ref = [("PDH", "previous day high (futures)", float(d.high.iloc[-1])), ("PDL", "previous day low (futures)", float(d.low.iloc[-1]))]
+    for lab, mask, sh in (("previous week", wk == cw - 1, "PW"), ("previous month", mo == cm - 1, "PM")):
+        z = d[mask]
+        if len(z):
+            ref += [(sh + "H", lab + " high (futures)", float(z.high.max())), (sh + "L", lab + " low (futures)", float(z.low.min()))]
+    S10 = sess[-days:]; g = f[f.d.isin(S10)]
+    for n, lab, w in ((days, f"{days}-day", 2.5), (5, "5-day", 2.0)):
+        pr = _profile(g[g.d.isin(S10[-n:])], STEP[key])
+        if pr:
+            items += [(pr["poc"], w, f"{lab} POC", "price"), (pr["vah"], 1.5, f"{lab} VAH", "price"), (pr["val"], 1.5, f"{lab} VAL", "price")]
+            if n == 5:
+                ref += [("VAH", "5-day value area high (futures volume profile)", pr["vah"]), ("VAL", "5-day value area low (futures volume profile)", pr["val"]),
+                        ("POC", "5-day point of control (futures)", pr["poc"])]
+            if n == days:
+                items += [(p, 1.5, f"{lab} volume node", "price") for p in pr["nodes"] if abs(p - pr["poc"]) > 3 * BAND[key]]
+    zs = g[g.d == S10[-1]]
+    if len(zs) and zs.volume.sum() > 0:
+        ref.append(("VWAP", f"VWAP of the {S10[-1][5:]} session (futures)", float(((zs.high + zs.low + zs.close) / 3 * zs.volume).sum() / zs.volume.sum())))
+    z = zs[zs.t < "10:15"]
+    if len(z) >= 30:
+        ref += [("IBH", f"initial balance high {S10[-1][5:]} (futures)", float(z.high.max())), ("IBL", f"initial balance low {S10[-1][5:]} (futures)", float(z.low.min()))]
+    for i, sd in enumerate(S10):
+        z = g[g.d == sd].reset_index(drop=True)
+        if len(z) < 60:
+            continue
+        gg = z.groupby(z.index // 30).agg(h=("high", "max"), l=("low", "min"))
+        w = 0.5 + 0.5 * (i + 1) / len(S10)
+        for j in range(1, len(gg) - 1):
+            if gg.h[j] >= gg.h[j - 1] and gg.h[j] >= gg.h[j + 1]:
+                items.append((float(gg.h[j]), w, f"{sd[5:]} swing high", "price"))
+            if gg.l[j] <= gg.l[j - 1] and gg.l[j] <= gg.l[j + 1]:
+                items.append((float(gg.l[j]), w, f"{sd[5:]} swing low", "price"))
+    bd, st = BAND[key], STEP[key]
+    lo_g, hi_g = px * 0.96, px * 1.04
+    items = [x for x in items if lo_g <= x[0] <= hi_g and x[1] > 0]
+    grid = np.arange(round(lo_g / st) * st, hi_g, st)
+    P = np.array([x[0] for x in items]); Wt = np.array([x[1] for x in items])
+    score = np.array([Wt[np.abs(P - gq) <= bd].sum() for gq in grid]) if len(items) else np.zeros(len(grid))
+    peaks = []
+    for i in np.argsort(-score):
+        if score[i] < 2.5 or len(peaks) >= 12:
+            break
+        if all(abs(grid[i] - grid[j]) >= 4 * bd for j in peaks):
+            peaks.append(i)
+    blocks = []
+    for i in peaks:
+        pk = score[i]; lo = hi = i
+        while lo > 0 and score[lo - 1] >= 0.8 * pk: lo -= 1
+        while hi < len(grid) - 1 and score[hi + 1] >= 0.8 * pk: hi += 1
+        lo_p, hi_p = float(grid[lo]) - bd / 2, float(grid[hi]) + bd / 2
+        inside = sorted([x for x in items if lo_p - bd <= x[0] <= hi_p + bd], key=lambda x: -x[1])
+        strength = "strong" if pk >= 8 else "medium" if pk >= 5 else "weak"
+        blocks.append({"lo": round(lo_p, 1), "hi": round(hi_p, 1), "mid": round(float(grid[i]), 1), "score": round(float(pk), 1), "strength": strength,
+                       "alerts": [x[2] for x in inside if x[3] == "alert"], "parts": [x[2] for x in inside][:10], "side": "resistance" if grid[i] > px else "support"})
+    blocks.sort(key=lambda b: b["mid"])
+    levels = [{"short": a, "name": n, "px": round(v, 1), "dist_pct": round(100 * (v / px - 1), 2)} for a, n, v in ref if v]
+    return {"key": key, "fut": round(px, 1), "as_of": str(last_day.date()), "days": days, "blocks": blocks, "levels": levels, "prices": "futures",
+            "note": "Futures-only map: no spot, no basis, no option strikes. Strength by score alone."}
+
+
+def get_fut(key: str = "NIFTY", days: int = 10) -> dict:
+    c = _C.get(("fut", key, days))
+    if c and time.time() - c[0] < 600:
+        return c[1]
+    try:
+        v = build_fut(key, days)
+    except Exception as e:
+        v = c[1] if c else {"key": key, "error": str(e)[:200], "blocks": []}
+    _C[("fut", key, days)] = (time.time(), v)
+    return v

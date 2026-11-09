@@ -4,7 +4,8 @@ Level first, DOM second (claude/dom-strategy-test-plan.md). Paper only - nothing
 
 Markets : Nifty + Bank Nifty near-month FUTURES (Dhan order-flow engine, per-second file: bid / ask / trades / 20-level book)
           + the 48 liquid F&O stocks on the same 20-level connection (book every 5 s; no trade feed for stocks).
-Levels  : fixed for the day the first time they are read (saved in levels_<day>.json, so a restart gives the same day):
+Levels  : fixed for the day the first time they are read (saved in levels_<day>.json, so a restart gives the same day).
+          2026-11-09 v3: index zones are FUTURES prices from levelmap.build_fut (no spot, no basis, no option walls); see LEVELS below.
             index  - medium / strong blocks from the Level map (shifted to futures by the live basis) + the call / put OI walls
             stocks - yesterday's high / low / close (NSE end-of-day file)
           plus, from the day's own data: the opening range (09:15-09:30, stocks) / initial balance (09:15-10:15, index).
@@ -155,6 +156,8 @@ def _prep_lv(lv):
         v = (lv or {}).get(k)
         if not isinstance(v, dict):
             continue
+        if v.get("prices") == "futures":              # v3: already futures prices, nothing to move
+            continue
         if "zones_spot" not in v:
             b0 = float(v.get("basis") or 0.0)
             v["zones_spot"] = [[round(z["lo"] - b0, 2), round(z["hi"] - b0, 2), z["name"]] for z in v.get("zones") or []]
@@ -214,7 +217,7 @@ def _rebase(k, t, I):
     so the basis is a MEDIAN over many pairs: the whole previous session until today has 20 pairs (~10:15), then every pair so far
     today. Zones move only when that median moves >= BASIS_MOVE pts."""
     lv = (S.get("lv") or {}).get(k)
-    if not isinstance(lv, dict) or "zones_spot" not in lv:
+    if not isinstance(lv, dict) or "zones_spot" not in lv or lv.get("prices") == "futures":
         return
     if "basis_prev" not in lv:
         lv["basis_prev"] = _prev_basis(S["day"], k)
@@ -234,6 +237,27 @@ def _rebase(k, t, I):
         S["lv_save"] = True
 
 
+# 2026-11-09 v3 (Nikhil: "be careful, all prices need to be futures prices"): index zones come from levelmap.build_fut - medium / strong
+# blocks built from the near-month FUTURES 1-min bars only (highs / lows, volume profile, swings). No spot, no basis, no option-strike
+# walls (strikes are index prices). IB high / low are added by the engine from the futures mid as before. The v1 (tracker basis) and
+# v2 (measured basis) code above is kept but not used while LEVELS == "fut".
+LEVELS = "fut"
+
+
+def _index_levels_fut(hot):
+    out = {}
+    for k in INDEX:
+        z = []
+        try:
+            for b in hot("levelmap").get_fut(k, 10).get("blocks") or []:
+                if b.get("strength") in ("medium", "strong"):
+                    z.append((b["lo"], b["hi"], f"{b['strength']} block {b['lo']:.0f}-{b['hi']:.0f}"))
+        except Exception as e:
+            S.setdefault("err", {})["levelmap_fut"] = str(e)[:100]
+        out[k] = {"zones": _merge(z), "prices": "futures", "basis": None}
+    return out
+
+
 def levels(hot=None, views=None):
     """Today's fixed levels (computed once, then read from disk)."""
     day = S["day"]
@@ -245,7 +269,7 @@ def levels(hot=None, views=None):
         return S["lv"]
     if hot is None or not views or not all((views.get(k) or {}).get("fut") for k in INDEX):
         return None                                        # wait until the tracker has spot + futures for both indices
-    lv = {**_stock_levels(day), **_index_levels(hot, views)}
+    lv = {**_stock_levels(day), **(_index_levels_fut(hot) if LEVELS == "fut" else _index_levels(hot, views))}
     os.makedirs(OUT, exist_ok=True)
     json.dump({"at": datetime.now().isoformat(timespec="seconds"), **lv}, open(p, "w"), indent=1)
     S["lv"] = _prep_lv(json.load(open(p)))
@@ -527,9 +551,9 @@ def tick(hot=None, views=None):
     if now.weekday() >= 5 or not ("09:15" <= now.strftime("%H:%M") <= "15:35"):
         return
     day = now.strftime("%Y-%m-%d")
-    if S.get("day") != day or S.get("ver") != 5:
+    if S.get("day") != day or S.get("ver") != 7:
         _new_day(day)
-        S["ver"] = 5                                   # v2 (3 Nov): skip empty / wide stock books; v4 (9 Nov): measured basis -> today rebuilt once
+        S["ver"] = 7                                   # v2 (3 Nov): stock books; v4/5 (9 Nov): measured basis; v6 (9 Nov): futures-native levels
     if levels(hot, views) is None:
         return
     S["lv_ts"] = S.get("lv_ts") or _lv_ts()

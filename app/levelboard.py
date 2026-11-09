@@ -64,7 +64,7 @@ def _dom(hot, key, basis):
     trades = [x for x in S.get("trades") or [] if x.get("key") == key and x.get("day") == S.get("day")]
     out = []
     for z in zones:
-        zid = z["name"]; st = (I.get("lv") or {}).get(zid) or {}
+        zid = f"{z['lo']}-{z['hi']}"; st = (I.get("lv") or {}).get(zid) or {}
         lo, hi = z["lo"], z["hi"]
         pos = "above" if mid > hi else "below" if mid < lo else "in"
         hold_dir = "long" if pos == "above" else "short" if pos == "below" else None    # price above a zone -> it is support -> HOLD long
@@ -107,16 +107,26 @@ def _dom(hot, key, basis):
 
 
 def build(key, prep, oi, flv, hot):
+    """2026-11-09 v2 (Nikhil: "be careful, all prices need to be futures prices"): every row is a FUTURES price. Blocks and reference
+    levels come from levelmap.get_fut (futures 1-min bars only); walls, the book and the DOM engine's zones are futures already, so no
+    conversion anywhere. The only spot data left is option OI at a block (strikes are index prices): it is matched to a futures row with
+    the live basis for that one lookup, and shown with its strike."""
     key = (key or "NIFTY").upper()
-    P = (prep or {}).get(key) or {}
-    if not P or P.get("error"):
-        return {"key": key, "err": "no Level Map for " + key}
-    px = (oi or {}).get("spot") or P.get("spot")
-    basis = (flv or {}).get("basis")
+    FM = hot("levelmap").get_fut(key, 10) or {}
+    if FM.get("error"):
+        return {"key": key, "err": "no futures Level Map for " + key + ": " + str(FM["error"])}
     BW = hot("bigwalls"); W = BW.api(key) or {}
-    if basis is None and W.get("price") and px:
-        basis = round(W["price"] - px, 1)
+    spot = (oi or {}).get("spot") or ((prep or {}).get(key) or {}).get("spot")
+    basis = (flv or {}).get("basis")
+    if basis is None and W.get("price") and spot:
+        basis = round(W["price"] - spot, 1)
     basis = float(basis or 0.0)
+    px = W.get("price") or (FM.get("fut") or 0) + 0.0            # futures price now
+    if not px:
+        return {"key": key, "err": "no futures price yet"}
+    P = {"blocks": {st: [{"lo": b["lo"], "hi": b["hi"], "star": bool(b.get("alerts")), "why": ", ".join(b.get("parts") or [])[:90]}
+                         for b in FM.get("blocks") or [] if b.get("strength") == st] for st in ("strong", "medium", "weak")},
+         "levels": FM.get("levels") or []}
     book, binfo = _book(BW, key)
     lot = LOT.get(key, 1)
     rows = []
@@ -133,15 +143,18 @@ def build(key, prep, oi, flv, hot):
         else:
             bd = px * 0.0004
             rows.append({"lo": r["px"] - bd, "hi": r["px"] + bd, "kind": "ref", "strength": "ref", "star": r["short"][1:2] in ("W", "M"), "why": r.get("name") or "", "tags": [r["short"]]})
-    # OI at the blocks (strong / medium only, by overlap)
+    # OI at the blocks: oiwatch works on the SPOT level map, so its blocks are index prices - moved to futures with the live basis for
+    # this one match (overlap), shown with the strikes it counted
     for b in (oi or {}).get("blocks") or []:
-        hit = next((x for x in rows if x["kind"] == "block" and abs(x["lo"] - b["lo"]) < 1 and abs(x["hi"] - b["hi"]) < 1), None)
-        if hit:
+        bl, bh = b["lo"] + basis, b["hi"] + basis
+        hit = next((x for x in rows if x["kind"] == "block" and x["lo"] <= bh and bl <= x["hi"]), None)
+        if hit and not hit.get("oi"):
             d = b.get("defenders") or {}
-            hit["oi"] = {"type": d.get("type"), "oi": d.get("oi"), "pct30": d.get("pct_m30"), "pct_open": d.get("pct_open"), "read": b.get("read"), "tone": b.get("tone")}
-    # big walls, futures -> index prices
+            hit["oi"] = {"type": d.get("type"), "oi": d.get("oi"), "pct30": d.get("pct_m30"), "pct_open": d.get("pct_open"), "read": b.get("read"), "tone": b.get("tone"),
+                         "strikes": b.get("strikes")}
+    # big walls (futures prices already)
     for w in (W.get("above") or []) + (W.get("below") or []):
-        wp = w["price"] - basis
+        wp = w["price"]
         hit = next((x for x in rows if x["lo"] - px * TOL / 100 <= wp <= x["hi"] + px * TOL / 100), None)
         info = {"side": w["side"], "x": w["x"], "trend": w["trend"], "age": w["age_min"], "fut": w["price"], "qty": w["qty_now"]}
         if hit:
@@ -152,14 +165,14 @@ def build(key, prep, oi, flv, hot):
             rows.append({"lo": wp - bd, "hi": wp + bd, "kind": "wall", "strength": "wall", "star": False, "why": "big resting order, not at a mapped level", "tags": [], "wall": info})
     # resting orders inside each zone (latest minute of the book)
     if book:
-        bk_lo, bk_hi = min(p for p, _, _ in book) - basis, max(p for p, _, _ in book) - basis
+        bk_lo, bk_hi = min(p for p, _, _ in book), max(p for p, _, _ in book)
         bids = sorted(q for _, q, _ in book if q > 0); asks = sorted(q for _, _, q in book if q > 0)
         mb = bids[len(bids) // 2] if bids else 0; ma = asks[len(asks) // 2] if asks else 0
         for x in rows:
             lo, hi = x["lo"] - 2, x["hi"] + 2
             if hi < bk_lo or lo > bk_hi:
                 x["book"] = None; continue
-            inz = [(p, b, a) for p, b, a in book if lo <= p - basis <= hi]
+            inz = [(p, b, a) for p, b, a in book if lo <= p <= hi]
             n = max(len(inz), 1); qb = sum(b for _, b, _ in inz); qa = sum(a for _, _, a in inz)
             x["book"] = {"bid_lots": round(qb / lot), "ask_lots": round(qa / lot), "bid_x": round(qb / n / mb, 1) if mb and qb else None,
                          "ask_x": round(qa / n / ma, 1) if ma and qa else None, "buckets": len(inz)}
@@ -167,13 +180,10 @@ def build(key, prep, oi, flv, hot):
         DZ, dctx = _dom(hot, key, basis)
     except Exception as e:
         DZ, dctx = [], {"err": f"DOM state: {type(e).__name__}: {str(e)[:80]}"}
-    dbas = dctx.get("basis_open")
-    dbas = basis if dbas is None else dbas
-    if dctx.get("basis_open") is not None and abs(dctx["basis_open"] - basis) > 15:
-        dctx["basis_warn"] = (f"DOM engine set its levels with a {dctx['basis_open']:+.0f} pt basis at the open; live basis is {basis:+.0f} - "
-                              f"its zones sit about {abs(dctx['basis_open'] - basis):.0f} pts away from where those levels trade in futures now")
-    for z in DZ:                                              # engine zone (futures, set with ITS 09:15 basis) -> index prices; blocks match by name
-        zl, zh = z["lo"] - dbas, z["hi"] - dbas
+    if dctx.get("basis_open") is not None:                     # engine still on spot-moved levels (v1 / v2 file) - say so
+        dctx["basis_warn"] = f"DOM engine levels were moved from index prices with a {dctx['basis_open']:+.0f} pt basis (old-style levels file)"
+    for z in DZ:                                              # engine zones are futures prices (v3); blocks match by name
+        zl, zh = z["lo"], z["hi"]
         import re as _re
         m = _re.search(r"block (\d+)-(\d+)", str(z.get("name") or ""))
         hit = None
@@ -187,7 +197,7 @@ def build(key, prep, oi, flv, hot):
             hit = {"lo": zl, "hi": zh, "kind": "dom", "strength": "dom", "star": False, "why": "DOM engine level: " + str(z["name"]), "tags": [str(z["name"])]}
             rows.append(hit)
             if book:
-                inz = [(p, bq, aq) for p, bq, aq in book if zl - 2 <= p - basis <= zh + 2]
+                inz = [(p, bq, aq) for p, bq, aq in book if zl - 2 <= p <= zh + 2]
                 hit["book"] = {"bid_lots": round(sum(q for _, q, _ in inz) / lot), "ask_lots": round(sum(q for _, _, q in inz) / lot), "buckets": len(inz)} if inz else None
         hit["dom"] = z
     out = []
@@ -234,13 +244,13 @@ def build(key, prep, oi, flv, hot):
             act, tone = f"Testing now - HOLD {hs['dir']} needs {', '.join(k for k in ('held', 'lean', 'absorbed') if not hs.get(k)) or 'the bounce'}", "wait"
         elif bs.get("state") == "breaking" and not any(f["status"] == "open" for f in dz.get("fired") or []):
             act, tone = f"Breaking now - BREAK {bs['dir']} needs {', '.join(k for k in ('stay', 'lean', 'delta') if not bs.get(k)) or '30 s beyond'}", "wait"
-        out.append({"lo": round(x["lo"], 1), "hi": round(x["hi"], 1), "fut_lo": round(x["lo"] + basis, 1), "fut_hi": round(x["hi"] + basis, 1), "kind": x["kind"],
+        out.append({"lo": round(x["lo"], 1), "hi": round(x["hi"], 1), "spot_lo": round(x["lo"] - basis, 1), "spot_hi": round(x["hi"] - basis, 1), "kind": x["kind"],
                     "strength": x["strength"], "star": x["star"], "why": x["why"], "tags": x["tags"], "side": side, "dist": round(dist, 1), "dist_pct": round(dist / px * 100, 2),
                     "oi": x.get("oi"), "wall": x.get("wall"), "book": x.get("book"), "score": sc, "action": act, "tone": tone, "score_why": why, "dom": x.get("dom")})
     out.sort(key=lambda r: -r["hi"])
-    return {"key": key, "price": round(px, 1), "fut": W.get("price"), "basis": round(basis, 1), "at": time.strftime("%H:%M"), "oi_at": (oi or {}).get("at"),
+    return {"key": key, "price": round(px, 1), "prices": "futures", "spot": round(spot, 1) if spot else None, "basis": round(basis, 1), "map_as_of": FM.get("as_of"), "at": time.strftime("%H:%M"), "oi_at": (oi or {}).get("at"),
             "walls_at": W.get("as_of"), "walls_src": W.get("source"), "book": binfo, "rows": out, "pulled": W.get("pulled") or [],
-            "dom": dctx, "note": "Action is a fixed rule (level strength + option writers + big wall + resting orders), untested - an indication, never an order."}
+            "dom": dctx, "note": "All prices are near-month futures. Action is a fixed rule (level strength + option writers + big wall + resting orders), untested - an indication, never an order."}
 
 
 def api(key, prep, oi, flv, hot):
