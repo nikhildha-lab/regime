@@ -2428,7 +2428,7 @@ function fcRender(){
   const el = $("#fcCard"), D = FC.d; if (!el) return; const k = FC.k;
   const btn = (on, lab, fn) => `<button class="${on ? "on" : ""}" onclick="${fn}">${lab}</button>`;
   const head = `<div class="spread"><h2>Flow Chart <span class="small muted">${esc(SHORT[k]||k)} · resting liquidity · big prints · liquidations · absorption · all venues</span></h2>
-    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="fx-tf">${[30,90,180].map(m => btn(FC.mins === m, m + " min", `fcSet(${m})`)).join("")}</span>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="fx-tf">${[5,15,30,90,180].map(m => btn(FC.mins === m, m + " min", `fcSet(${m})`)).join("")}</span>
     <span class="fx-tf">${[["heat","Liquidity heat"],["big","Big prints"],["liq","Liquidations"],["abs","Absorption"]].map(([a, l]) => btn(FC.show[a], l, `fcToggle('${a}')`)).join("")}</span></div></div>`;
   if (!D){ morph(el, head + `<p class="small muted">Loading…</p>`); return; }
   const P = D.path || [], HT = FC.show.heat ? (D.heat || []) : [], big = FC.show.big ? (D.big || []) : [], liq = FC.show.liq ? (D.liq || []) : [], abs_ = FC.show.abs ? (D.absorb || []) : [];
@@ -2462,7 +2462,7 @@ function fcRender(){
   const nt = 6, stepP = (hi - lo) / nt;
   for (let i = 0; i <= nt; i++){ const p = lo + i * stepP, yy = Y(p); g += `<line x1="${L}" x2="${L + pw}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-dasharray="2 4" opacity="0.6"/><text x="${L + pw + 6}" y="${(yy + 4).toFixed(1)}" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${fmt(p, dp)}</text>`; }
   g += `<line x1="${L}" x2="${L + pw}" y1="${Y(mid).toFixed(1)}" y2="${Y(mid).toFixed(1)}" stroke="var(--ink)" stroke-width="1" opacity="0.5"/><rect x="${L + pw + 2}" y="${(Y(mid) - 8).toFixed(1)}" width="${R - 4}" height="16" rx="3" fill="var(--ink)"/><text x="${L + pw + 6}" y="${(Y(mid) + 4).toFixed(1)}" font-size="11" font-weight="700" fill="var(--surface)" font-family="IBM Plex Mono,monospace">${fmt(mid, dp)}</text>`;
-  const tstep = D.minutes <= 30 ? 300 : D.minutes <= 90 ? 900 : 1800;
+  const tstep = D.minutes <= 5 ? 60 : D.minutes <= 15 ? 180 : D.minutes <= 30 ? 300 : D.minutes <= 90 ? 900 : 1800;
   for (let ts = Math.ceil(t0 / tstep) * tstep; ts <= t1; ts += tstep){ const x = X(ts); g += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${T + ph}" y2="${T + ph + 4}" stroke="var(--muted)"/><text x="${x.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${new Date((ts + 19800) * 1000).toISOString().slice(11,16)}</text>`; }
   morph(el, head + `<div style="margin-top:8px"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(k)} flow chart">${g}</svg></div>
     <p class="small faint" style="margin:6px 0 0">Time axis in IST. Purple = money resting in the books (all venues, brighter = more; a wall is a bright horizontal streak, a pulled wall a streak that stops). Line = last price each minute with its high-low; ○ big prints (≥ 8× the coin's median trade, size = $, green bought / red sold); ◆ liquidations (red = longs, green = shorts); A = absorption (heavy trading, no move). Hover anything for venue and size. Updated ${esc(D.at||"")} IST · descriptive, not a tested signal.</p>`);

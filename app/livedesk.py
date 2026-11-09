@@ -1018,7 +1018,7 @@ def handle_get(path: str, q: dict):
         return _hot("tabnews").api(q.get("tab"))
     if path == "/api/livedesk/flowchart":                 # 2026-11-10 (Nikhil: "bubble chart and resting liquidity as a new chart")
         mins = int(q.get("minutes") or 90) if str(q.get("minutes") or "90").isdigit() else 90
-        return _cold("cryptoflow").flowchart(q.get("key", "BTC"), max(15, min(mins, 360)))
+        return _cold("cryptoflow").flowchart(q.get("key", "BTC"), max(5, min(mins, 360)))
     if path == "/api/livedesk/cryptoflow":                # 2026-11-10 (Nikhil): venue comparison, liquidations, OI, positioning, big prints
         return _cold("cryptoflow").api(q.get("key", "BTC"))
     if path == "/api/livedesk/bookwalls":                 # 2026-11-09: aggregated resting-order walls (Binance + Bybit + OKX; Hyperliquid for metals)
