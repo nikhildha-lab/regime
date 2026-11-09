@@ -37,6 +37,7 @@ SD = os.path.join(ROOT, "data_store", "research", "stocks_intraday")
 TR = os.path.join(ROOT, "data_store", "livedesk", "domcards", "trades.json")
 OUT = os.path.join(ROOT, "data_store", "research", "strategy_changes")
 COST_ORB, COST_DOM = 0.12, 0.08
+ORB_MODES = ("base", "trail1", "trail1.5", "all2R", "half+3R", "t1=1R,trail=vwap", "t1=1R,trail=1atr", "t1=1R,trail=1.5atr", "t1=1R,trail=1R", "t1=1R,trail=0.5R", "t1=1.5R,trail=1R", "t1=0.75R,trail=1R")
 
 
 def t(x):
@@ -62,6 +63,29 @@ def orb_exit(b, i, s, e, stop, mode):
     R = abs(e - stop); left, pnl, cur = 1.0, 0.0, stop
     H, L, C, V, HM, A = b.high.values, b.low.values, b.close.values, b.vwap.values, b.hm.values, b.atr.values
     day = b.day.values[i]; D = b.day.values; best = e
+    # 2026-11-09 (Nikhil: "keep T1 closer with 50 % booked and then trail if we move up .. we always use min 2 lots"):
+    # mode "t1=<x>R,trail=<y>" -> book half at x R, stop to entry, the other half trails y (1atr / 1.5atr / 1R / 0.5R / vwap)
+    if mode.startswith("t1="):
+        t1 = float(mode.split("t1=")[1].split("R")[0]); trail = mode.split("trail=")[1]
+        for k in range(i + 1, len(b)):
+            if D[k] != day:
+                return pnl + left * s * (C[k - 1] - e)
+            if HM[k] >= "15:10":
+                return pnl + left * s * (C[k] - e)
+            if (s > 0 and L[k] <= cur) or (s < 0 and H[k] >= cur):
+                return pnl + left * s * (cur - e)
+            if left == 1.0 and ((s > 0 and H[k] >= e + t1 * R) or (s < 0 and L[k] <= e - t1 * R)):
+                pnl += 0.5 * t1 * R; left = 0.5; cur = e; best = e + s * t1 * R
+            if left == 0.5:
+                if trail == "vwap":
+                    if s * (C[k] - V[k]) < 0:
+                        return pnl + left * s * (C[k] - e)
+                    continue
+                best = max(best, C[k]) if s > 0 else min(best, C[k])
+                dist = A[k] * (1.5 if trail == "1.5atr" else 1.0) if trail.endswith("atr") else R * (0.5 if trail == "0.5R" else 1.0)
+                ns = best - s * dist
+                cur = max(cur, ns) if s > 0 else min(cur, ns)
+        return pnl + left * s * (C[-1] - e)
     for k in range(i + 1, len(b)):
         if D[k] != day:
             return pnl + left * s * (C[k - 1] - e)
@@ -113,7 +137,7 @@ def orb():
                     if s * (c - stop) <= 0:
                         break
                     r = {"sym": sym, "day": str(dday)[:10], "t": str(b.index[i]), "rv": rv}
-                    for mode in ("base", "trail1", "trail1.5", "all2R", "half+3R"):
+                    for mode in ORB_MODES:
                         r[mode] = orb_exit(b, i, s, c, stop, mode) / c * 100 - COST_ORB
                     rows.append(r)
                     break
@@ -141,6 +165,20 @@ def dom_stocks():
         after = day[day.index > t0]; sd = 1 if x["side"] == "long" else -1; e, stop, risk = x["entry"], x["stop"], x["risk"]
         op = float(day.open.iloc[0]); daymove = e / op - 1
         against = (sd < 0 and daymove > 0.005) or (sd > 0 and daymove < -0.005)
+        def sim2(t1, trail_r, maxmin=60):
+            """book half at t1 R (stop to entry), the other half trails trail_r x risk behind the best close; 60-min exit; 15:20 flat"""
+            cur, left, pnl, best = stop, 1.0, 0.0, e; tend = t0 + pd.Timedelta(minutes=maxmin)
+            for ts, r in after.iterrows():
+                if ts.strftime("%H:%M") >= "15:20" or ts >= tend:
+                    return pnl + left * (r.close - e) * sd, "time"
+                if (sd > 0 and r.low <= cur) or (sd < 0 and r.high >= cur):
+                    return pnl + left * (cur - e) * sd, "stop" if left == 1.0 else "trail"
+                if left == 1.0 and ((sd > 0 and r.high >= e + t1 * risk) or (sd < 0 and r.low <= e - t1 * risk)):
+                    pnl += 0.5 * t1 * risk; left = 0.5; cur = e; best = e + sd * t1 * risk
+                if left == 0.5:
+                    best = max(best, r.close) if sd > 0 else min(best, r.close)
+                    ns = best - sd * trail_r * risk; cur = max(cur, ns) if sd > 0 else min(cur, ns)
+            return (pnl + left * (after.close.iloc[-1] - e) * sd) if len(after) else 0.0, "end"
         def sim(rr, maxmin):
             tgt = e + sd * rr * risk; tend = t0 + pd.Timedelta(minutes=maxmin)
             for ts, r in after.iterrows():
@@ -157,6 +195,9 @@ def dom_stocks():
         for nm, (rr, mm) in {"base": (2.0, 60), "tgt1.5R": (1.5, 60), "tgt1R": (1.0, 60), "time30": (2.0, 30)}.items():
             pts, why = sim(rr, mm)
             out[nm] = pts / e * 100 - COST_DOM; out[nm + "_why"] = why
+        for nm, (t1, trl) in {"t1=1R,trail=1R": (1.0, 1.0), "t1=1R,trail=0.5R": (1.0, 0.5), "t1=0.75R,trail=0.75R": (0.75, 0.75), "t1=1.5R,trail=1R": (1.5, 1.0)}.items():
+            pts, why = sim2(t1, trl)
+            out[nm] = pts / e * 100 - COST_DOM; out[nm + "_why"] = why
         rows.append(out)
     return pd.DataFrame(rows)
 
@@ -168,22 +209,22 @@ def main():
     A = orb(); A.to_csv(os.path.join(OUT, "orb_variants.csv"), index=False)
     days = sorted(A.day.unique()); cut = days[int(len(days) * 0.7)]
     L.append(f"A. STOCKS IN PLAY ORB · {len(A)} trades · {days[0]} .. {days[-1]} · % of position per trade after 0.12 % costs (x Rs 1,00,000 = Rs; MIS 5x on Rs 20,000)")
-    L.append(f"   {'exit version':12s} {'avg %':>7s} {'win':>5s} {'t':>6s} {'Rs/trade':>9s} {'total Rs':>10s} | train avg / test avg (cut {cut})")
-    for m in ("base", "trail1", "trail1.5", "all2R", "half+3R"):
+    L.append(f"   {'exit version':20s} {'avg %':>7s} {'win':>5s} {'t':>6s} {'Rs/trade':>9s} {'total Rs':>10s} | train avg / test avg (cut {cut})")
+    for m in ORB_MODES:
         a, b_ = A[A.day < cut][m], A[A.day >= cut][m]
-        L.append(f"   {m:12s} {A[m].mean():+7.3f} {100*(A[m]>0).mean():4.0f}% {t(A[m]):+6.1f} {1000*A[m].mean():+9.0f} {1000*A[m].sum():+10.0f} | {a.mean():+.3f} / {b_.mean():+.3f}")
+        L.append(f"   {m:20s} {A[m].mean():+7.3f} {100*(A[m]>0).mean():4.0f}% {t(A[m]):+6.1f} {1000*A[m].mean():+9.0f} {1000*A[m].sum():+10.0f} | {a.mean():+.3f} / {b_.mean():+.3f}")
     L.append("   (live record so far: 7 trades, 6 won, every winner smaller at the exit than at its best point)")
     # B
     B = dom_stocks(); B.to_csv(os.path.join(OUT, "dom_stock_variants.csv"), index=False)
     L.append(f"\nB. DOM STOCKS · {len(B)} recorded trades replayed on 1-min bars · % of position per trade after 0.08 % costs · Rs = % x risk-normalised: the rule risks Rs 1,000 a trade -> Rs = % / risk% x 1,000")
     B["rs_base"] = B.base / B.risk_pct * 1000
     L.append(f"   check: recorded avg R {B.rec_r.mean():+.2f} vs replayed base {(B.base / B.risk_pct).mean():+.2f} (1-min bars vs 5-s mids)")
-    L.append(f"   {'version':18s} {'n':>4s} {'avg R':>6s} {'win':>5s} {'t':>6s} {'total Rs':>9s} {'stops':>6s} {'targets':>8s}")
+    L.append(f"   {'version':22s} {'n':>4s} {'avg R':>6s} {'win':>5s} {'t':>6s} {'total Rs':>9s} {'stops':>6s} {'targets':>8s}")
     def line(nm, X, col):
         R = X[col] / X.risk_pct
         why = X[col + "_why"] if col + "_why" in X else X["base_why"]
-        L.append(f"   {nm:18s} {len(X):4d} {R.mean():+6.2f} {100*(R>0).mean():4.0f}% {t(R):+6.1f} {1000*R.sum():+9.0f} {100*(why=='stop').mean():5.0f}% {100*(why=='target').mean():7.0f}%")
-    for nm in ("base", "tgt1.5R", "tgt1R", "time30"):
+        L.append(f"   {nm:22s} {len(X):4d} {R.mean():+6.2f} {100*(R>0).mean():4.0f}% {t(R):+6.1f} {1000*R.sum():+9.0f} {100*(why=='stop').mean():5.0f}% {100*(why=='target').mean():7.0f}%")
+    for nm in ("base", "tgt1.5R", "tgt1R", "time30", "t1=1R,trail=1R", "t1=1R,trail=0.5R", "t1=0.75R,trail=0.75R", "t1=1.5R,trail=1R"):
         line(nm, B, nm)
     line("dayfilt (2R)", B[~B.against], "base")
     line("tgt1.5R+dayfilt", B[~B.against], "tgt1.5R")
