@@ -156,8 +156,13 @@ def analyze(candles: list[Candle], k: int = 2, orb_minutes: int = 15,
     # support/resistance from swing clusters relative to current price
     tol = max(tick_size * 20, (max(c.high for c in candles) -
                                min(c.low for c in candles)) * 0.0015)
-    sup = _cluster([s.price for s in lows if s.price < price], tol)
-    res = _cluster([s.price for s in highs if s.price > price], tol)
+    # 2026-11-09 (Nikhil: "Resistance keeps changing within a few seconds"): the lists used to be swing HIGHS above price and swing LOWS
+    # below price, so the moment price ticked above a swing high that level vanished (it was neither) and the label jumped to the next one;
+    # a tick back and it reappeared. Now: a level keeps its side until price is clearly through it (more than `tol` beyond), and a level
+    # price has gone through flips to the other side (broken resistance = support), so the nearest levels change only on a real break.
+    band = max(tol, price * 0.0015)
+    res = _cluster([s.price for s in highs if s.price > price - band] + [s.price for s in lows if s.price > price + band], tol)
+    sup = _cluster([s.price for s in lows if s.price < price + band] + [s.price for s in highs if s.price < price - band], tol)
     out.support = sup[:3]
     out.resistance = res[:3]
     return out

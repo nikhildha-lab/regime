@@ -506,6 +506,10 @@ def poll_once():
                 _hot("fnobreakfade").tick()
             except Exception as e:
                 _STATE["fnobreakfade_error"] = str(e)[:160]
+            try:                                   # 2026-11-09 (Nikhil: "add to metals and commodities"): Trend 55 record-only rule (app/trend55.py)
+                _hot("trend55").tick()
+            except Exception as e:
+                _STATE["trend55_error"] = str(e)[:160]
             try:                                   # 2026-11-08 (Nikhil): Stock Volume Break v1 paper rule (app/stockvb.py) - own hours / weekday check inside
                 _hot("stockvb").tick()
             except Exception as e:
@@ -937,6 +941,8 @@ def handle_get(path: str, q: dict):
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
     if path == "/api/livedesk/idxstrangle":            # 2026-11-09: index weekly strangle / condor paper trades
         return _hot("idxstrangle").api(q)
+    if path == "/api/livedesk/trend55":                # 2026-11-09: Trend 55 (metals / commodities) signals + trades
+        return _hot("trend55").api()
     if path == "/api/livedesk/fnobreakfade":           # 2026-11-09: BreakFade signals + trades (record only)
         return _hot("fnobreakfade").api()
     if path == "/api/livedesk/fnoshort":               # 2026-11-08: F&O Short Build-up v1 signals + trades
