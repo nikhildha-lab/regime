@@ -244,7 +244,7 @@ def _rebase(k, t, I):
 LEVELS = "fut"
 # 2026-11-09 (Nikhil: "flush out all trades for DOM 2"): the index record restarts clean with v3. Index trades before IX_START are
 # dropped on load and not created; the flushed trades are in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/.
-IX_START = "2026-11-10"
+IX_START = "2099-01-01"   # 2026-11-09 (Nikhil: "FLUSH THE TRADES" after the failed v3 backtest): DOM Index RETIRED - no index trades recorded; stocks continue
 
 
 def _index_levels_fut(hot):
