@@ -506,6 +506,10 @@ def poll_once():
                 _hot("fnobreakfade").tick()
             except Exception as e:
                 _STATE["fnobreakfade_error"] = str(e)[:160]
+            try:                                   # 2026-11-10 (Nikhil): crypto trades / liquidations / OI / funding streams (app/cryptoflow.py)
+                _cold("cryptoflow").start()
+            except Exception as e:
+                _STATE["cryptoflow_error"] = str(e)[:160]
             try:                                   # 2026-11-09 (Nikhil): multi-exchange order books for the Crypto / Metals Level Board (app/bookwalls.py)
                 _hot("bookwalls").tick()
             except Exception as e:
@@ -675,6 +679,13 @@ def _bs_hv(desk, key):
         _STATE["_stk_hv"][key] = (time.time(), h)
         return h
     return (_hot("hourverdict").S.get("last") or {}).get(key)
+
+
+def _cold(name: str):
+    """2026-11-10: import once, never reload - for modules that own live WebSocket threads (app/cryptoflow.py, app/bookws.py); a reload
+    would reset their state and start the streams twice. Code changes there need a Market Pulse restart."""
+    import importlib
+    return importlib.import_module(name)
 
 
 def _hot(name: str):
@@ -1000,6 +1011,8 @@ def handle_get(path: str, q: dict):
         return _hot("edgeboard").api()
     if path == "/api/livedesk/tabnews":                   # 2026-11-04: swing catalysts per market tab (app/tabnews.py)
         return _hot("tabnews").api(q.get("tab"))
+    if path == "/api/livedesk/cryptoflow":                # 2026-11-10 (Nikhil): venue comparison, liquidations, OI, positioning, big prints
+        return _cold("cryptoflow").api(q.get("key", "BTC"))
     if path == "/api/livedesk/bookwalls":                 # 2026-11-09: aggregated resting-order walls (Binance + Bybit + OKX; Hyperliquid for metals)
         return _hot("bookwalls").api(q.get("key", "BTC"))
     if path == "/api/livedesk/levelboard2":               # 2026-11-09 (Nikhil): Level Board for the Crypto / Metals / Commodities tabs (app/levelboard2.py)

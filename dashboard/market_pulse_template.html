@@ -669,6 +669,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <section class="card" id="csCard" hidden></section>   <!-- 2026-11-09 (Nikhil): section removed - the score is the Level Board's Next Day column -->
   <section class="card" id="lbCard"></section>
   <section class="card" id="lb2Card" hidden></section>   <!-- 2026-11-09 (Nikhil): Level Board for Crypto / Metals / Commodities (app/levelboard2.py) -->
+  <section class="card" id="cfCard" hidden></section>    <!-- 2026-11-10 (Nikhil): Crypto Flow - venues, liquidations, OI, positioning, big prints (app/cryptoflow.py) -->
   <section class="card" id="bwCard"></section>
   <section class="card ptCard" data-keys="BTC,ETH" data-title="Crypto paper trades · BTC / ETH"></section>
   <div id="cliveDesk"></div>
@@ -2169,6 +2170,9 @@ function b4Render(){
 function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearInterval(b4Start.w); clearInterval(b4Start.l2);
   { const c2 = $("#lb2Card"); const on = document.body.dataset.tab === "intraday" && ["crypto","metals","global"].includes(v); if (c2) c2.hidden = !on;
     if (on){ lb2Load(); b4Start.l2 = setInterval(() => { if (!document.hidden) lb2Load(); }, 30000); } }
+  clearInterval(b4Start.cf);
+  { const c3 = $("#cfCard"); const on = document.body.dataset.tab === "intraday" && v === "crypto"; if (c3) c3.hidden = !on;
+    if (on){ cfLoad(); b4Start.cf = setInterval(() => { if (!document.hidden) cfLoad(); }, 10000); } }
   if (document.body.dataset.tab === "intraday" && v === "india"){ bigwLoad(); lbLoad(); b4Start.w = setInterval(() => { if (!document.hidden){ bigwLoad(); lbLoad(); } }, 60000); }
   if (document.body.dataset.tab === "intraday" && ["crypto","india","metals","global"].includes(v)){ csLoad(); b4Start.c = setInterval(() => { if (!document.hidden) csLoad(); }, 60000); }
   if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
@@ -2331,6 +2335,59 @@ function lb2Render(){
   morph(el, head + `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Away</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall 4h score">Next Day</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.5%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.5%")) + farRow + `</tbody></table></div>`
     + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · levels ${esc(D.levels_src||"")} ${esc(D.levels_at||"")} · books ${esc(D.walls_at||"–")}. Big wall = one price bin holding ≥4× the normal resting size on its side, within 0.6% of price, present in 70% of the last 15 minutes; "2 of 3 venues" = the same wall sits on two exchanges' books (one venue alone can be a single player). Resting orders = bid / ask notional within ±0.1% of the level, all venues. ${D.note ? esc(D.note) + ". " : ""}Context only - on Nifty, walls did not hold better than ordinary levels.</p>`);
+}
+// 2026-11-10 (Nikhil: "liquidation feed, open interest, positioning regime, big-print bubbles, venue comparing panel"): Crypto Flow card.
+// Data: app/cryptoflow.py (Binance, Bybit, OKX, Bitget trade / liquidation / OI / funding streams). Descriptive, not a tested signal.
+const CF = {d: null, tab: (() => { try { return localStorage.getItem("mp.cf.tab") || "venues"; } catch(e){ return "venues"; } })(), k: null};
+function cfTab(t){ CF.tab = t; try { localStorage.setItem("mp.cf.tab", t); } catch(e){} cfRender(); }
+async function cfLoad(){
+  const el = $("#cfCard"); if (!el || el.hidden) return; const k = (typeof lb2Key === "function" ? lb2Key() : "BTC") || "BTC"; CF.k = k;
+  try { CF.d = await fetch(`/api/livedesk/cryptoflow?key=${k}`).then(r => r.json()); } catch(e){ return; }
+  cfRender();
+}
+function cfRender(){
+  const el = $("#cfCard"), D = CF.d; if (!el) return; const k = CF.k;
+  const tabs = [["venues","Venues"],["liq","Liquidations"],["oi","Open Interest · Positioning"],["big","Big Prints"]].map(([t, l]) => `<button class="chip" aria-pressed="${CF.tab===t}" onclick="cfTab('${t}')">${l}</button>`).join(" ");
+  const head = `<div class="spread"><h2>Crypto Flow <span class="small muted">${esc(SHORT[k]||k)} · Binance · Bybit · OKX · Bitget · live streams</span></h2><div class="row" style="gap:6px;flex-wrap:wrap">${tabs}</div></div>`;
+  if (!D){ morph(el, head + `<p class="small muted">Loading…</p>`); return; }
+  const usd = v => v == null ? "–" : (v < 0 ? "−" : "") + (Math.abs(v) >= 1e9 ? "$" + fmt(Math.abs(v)/1e9, 2) + "B" : Math.abs(v) >= 1e6 ? "$" + fmt(Math.abs(v)/1e6, 1) + "M" : "$" + fmt(Math.abs(v)/1e3, 0) + "k");
+  const sg = v => v > 0 ? "pos" : v < 0 ? "neg" : "", hm = ts => new Date(ts*1000 + 330*60000).toISOString().slice(11,19), dp = (D.oi.price||0) < 1 ? 4 : (D.oi.price||0) < 10 ? 3 : (D.oi.price||0) < 1000 ? 2 : 1;
+  const VN = {binance:"Binance", bybit:"Bybit", okx:"OKX", bitget:"Bitget", hyperliquid:"Hyperliquid"};
+  let body = "";
+  if (CF.tab === "venues"){ const V = D.venues;
+    const row = r => `<tr><td><b>${VN[r.venue]||r.venue}</b></td><td class="num">${r.price != null ? fmt(r.price, dp) : "–"}</td><td class="num ${sg(r.basis_bps)}">${r.basis_bps == null ? "–" : (r.basis_bps>0?"+":"") + fmt(r.basis_bps,1)}</td>
+      <td class="num ${sg(r.m1.cvd)}">${usd(r.m1.cvd)}</td><td class="num ${sg(r.m5.cvd)}">${usd(r.m5.cvd)}</td><td class="num ${sg(r.m15.cvd)}">${usd(r.m15.cvd)}</td><td class="num">${usd(r.m15.buy + r.m15.sell)}</td>
+      <td class="num">${r.oi_usd ? usd(r.oi_usd) : "–"}</td><td class="num ${sg(r.funding)}">${r.funding == null ? "–" : (r.funding*100).toFixed(4) + "%"}</td><td class="num"><span class="neg">${usd(r.m15.liq_long)}</span> / <span class="pos">${usd(r.m15.liq_short)}</span></td><td class="num">${r.big15}</td></tr>`;
+    body = `${V.disagree ? `<div class="small" style="margin:6px 0"><span class="pill p-wait">venues disagree</span> 5-min flow has opposite signs on the big three - one crowd is buying what another sells.</div>` : ""}
+      <div class="tscroll"><table class="ld-tbl small" style="width:100%;white-space:nowrap;margin-top:6px"><thead><tr><th>Venue</th><th>Last</th><th title="vs Binance mark, basis points">Basis</th><th>CVD 1m</th><th>CVD 5m</th><th>CVD 15m</th><th>Traded 15m</th><th>Open Interest</th><th title="current funding rate per period">Funding</th><th title="long / short liquidations, last 15 min">Liq 15m L / S</th><th title="big prints last 15 min">Big</th></tr></thead>
+      <tbody>${V.venues.length ? V.venues.map(row).join("") : `<tr><td colspan="11" class="small faint">Streams warming up…</td></tr>`}</tbody></table></div>
+      <p class="small faint" style="margin:6px 0 0">CVD = taker buys − taker sells in $ (perpetuals). Basis = this venue's last vs Binance's mark. Funding per 8 h (Hyperliquid hourly). Liquidations: Binance sends at most one per symbol per second (a sample); Bitget has none.</p>`; }
+  else if (CF.tab === "liq"){ const L = D.liq, mx = Math.max(1, ...L.strip.map(a => a[1] + a[2]));
+    const bars = L.strip.map(([m, l, s_]) => { const hL = Math.round(44 * l / mx), hS = Math.round(44 * s_ / mx); return `<div title="${hm(m)} · longs ${usd(l)} · shorts ${usd(s_)}" style="display:flex;flex-direction:column;justify-content:flex-end;width:1.4%;height:48px"><div style="height:${hS}px;background:var(--bull)"></div><div style="height:${hL}px;background:var(--bear)"></div></div>`; }).join("");
+    body = `<div class="small" style="margin:6px 0 2px"><b>Last 60 minutes</b> <span class="muted">· red = longs liquidated (forced sells), green = shorts liquidated (forced buys)</span>${L.cascade ? ` <span class="pill p-bear">cascade - this minute > 5× the hour's normal</span>` : ""}</div>
+      <div style="display:flex;gap:1px;align-items:flex-end;border-bottom:1px solid var(--line)">${bars}</div>
+      <div class="tscroll" style="max-height:300px;overflow:auto;margin-top:8px"><table class="ld-tbl small" style="width:100%;white-space:nowrap"><thead><tr><th>Time</th><th>Venue</th><th>Side</th><th>Size</th><th>Price</th></tr></thead>
+      <tbody>${L.recent.length ? L.recent.map(r => `<tr><td>${hm(r.ts)}</td><td>${VN[r.venue]||r.venue}</td><td class="${r.side==="long"?"neg":"pos"}">${r.side === "long" ? "long liquidated" : "short liquidated"}</td><td class="num"><b>${usd(r.usd)}</b></td><td class="num">${fmt(r.px, dp)}</td></tr>`).join("") : `<tr><td colspan="5" class="small faint">No liquidation seen yet on ${esc(k)}.</td></tr>`}</tbody></table></div>
+      <p class="small faint" style="margin:6px 0 0">${esc(L.note)}</p>`; }
+  else if (CF.tab === "oi"){ const O = D.oi, P = D.pos, ch = O.change || {};
+    const chg = (c, lab) => `<div><span class="small muted">${lab}</span><br><b class="${sg(c.oi_pct)}">${c.oi_pct == null ? "–" : (c.oi_pct>0?"+":"") + fmt(c.oi_pct,2) + "%"}</b> <span class="small faint">OI</span> · <b class="${sg(c.px_pct)}">${c.px_pct == null ? "–" : (c.px_pct>0?"+":"") + fmt(c.px_pct,2) + "%"}</b> <span class="small faint">price</span>${c.mins < (lab==="1 h"?55:lab==="4 h"?220:1300) ? ` <span class="small faint">(${c.mins} min of history)</span>` : ""}</div>`;
+    const H = O.hist || [], mn = Math.min(...H.map(h => h[1])), mxo = Math.max(...H.map(h => h[1])), W = 600, Hh = 60;
+    const spark = H.length > 2 ? `<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:60px;display:block"><polyline fill="none" stroke="var(--accent)" stroke-width="1.6" points="${H.map((h, i) => `${(i/(H.length-1)*W).toFixed(1)},${(Hh - 4 - (h[1]-mn)/((mxo-mn)||1)*(Hh-8)).toFixed(1)}`).join(" ")}"/></svg>` : `<p class="small faint">OI history builds from now (one point a minute).</p>`;
+    const pv = Object.entries(O.per_venue||{}).map(([v, d]) => `<tr><td>${VN[v]||v}</td><td class="num">${d.oi != null ? fmt(d.oi, 0) : "–"} <span class="small faint">${esc(k)}</span></td><td class="num">${usd(d.oi_usd)}</td><td class="num ${sg(d.funding)}">${d.funding == null ? "–" : (d.funding*100).toFixed(4) + "%"}</td></tr>`).join("");
+    body = `<div class="row" style="gap:28px;flex-wrap:wrap;margin:8px 0;align-items:flex-start">
+        <div><span class="small muted">Open interest, all venues</span><br><b style="font-size:20px">${usd(O.oi_usd)}</b>${O.label_1h ? `<br><span class="pill p-${/long build|short cover/.test(O.label_1h) ? "bull" : /short build|long unwind/.test(O.label_1h) ? "bear" : "neutral"}">${esc(O.label_1h)}</span> <span class="small faint">last hour</span>` : ""}</div>
+        ${chg(ch["1h"]||{}, "1 h")}${chg(ch["4h"]||{}, "4 h")}${chg(ch["24h"]||{}, "24 h")}</div>${spark}
+      <div class="tscroll"><table class="ld-tbl small" style="margin-top:8px;white-space:nowrap"><thead><tr><th>Venue</th><th>OI</th><th>OI $</th><th>Funding</th></tr></thead><tbody>${pv || `<tr><td colspan="4" class="small faint">warming up…</td></tr>`}</tbody></table></div>
+      <div style="margin-top:12px;padding:8px 10px;border-radius:8px;background:var(--surface-2)"><div class="spread"><b>Positioning: <span class="${/long/.test(P.label) ? "pos" : /short/.test(P.label) ? "neg" : ""}">${esc(P.label)}</span></b><span class="small muted">score ${P.score>0?"+":""}${P.score}</span></div>
+        <div class="small" style="margin-top:4px">${(P.why||[]).map(esc).join(" · ") || "waiting for funding / OI data"}</div>
+        ${P.deriv && P.deriv.ts ? `<div class="small faint" style="margin-top:3px">Binance 15-min positioning as of ${esc(String(P.deriv.ts))}: top traders by position ${P.deriv.top_pos ?? "–"} · by accounts ${P.deriv.top_acc ?? "–"} · all accounts ${P.deriv.glob_acc ?? "–"} · taker buy/sell ${P.deriv.taker_bs ?? "–"}</div>` : ""}
+        <div class="small faint" style="margin-top:3px">${esc(P.caveat)}</div></div>`; }
+  else { const B = D.big;
+    body = `<p class="small" style="margin:6px 0">${esc(B.rule)} · last hour · all venues. Bubbles on the chart come next.</p>
+      <div class="tscroll" style="max-height:320px;overflow:auto"><table class="ld-tbl small" style="width:100%;white-space:nowrap"><thead><tr><th>Time</th><th>Venue</th><th>Side</th><th>Size</th><th>Price</th></tr></thead>
+      <tbody>${B.prints.length ? B.prints.map(r => `<tr><td>${hm(r.ts)}</td><td>${VN[r.venue]||r.venue}</td><td class="${r.side==="buy"?"pos":"neg"}">${r.side === "buy" ? "▲ bought" : "▼ sold"}</td><td class="num"><b>${usd(r.usd)}</b></td><td class="num">${fmt(r.px, dp)}</td></tr>`).join("") : `<tr><td colspan="5" class="small faint">No big print in the last hour (the median needs ~200 trades first).</td></tr>`}</tbody></table></div>`; }
+  const st = D.status || {}, off = Object.entries(st.venues||{}).filter(([v, x]) => x.state !== "live").map(([v, x]) => `${VN[v]||v}: ${x.state}`);
+  morph(el, head + body + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} IST${off.length ? " · " + esc(off.join(", ")) : " · all streams live"}. Descriptive panels - none of this is a tested signal yet (see crypto-flow-panels-plan.md, step D).</p>`);
 }
 async function bigwLoad(){
   const el = $("#bwCard"); if (!el) return;
@@ -3203,6 +3260,7 @@ function showView(v){
     if (top && st) top.after(st); if (st && n) st.after(n); if (n && d) n.after(d); if (d && lv) d.after(lv); if (lv && pm) lv.after(pm); if (pm && ag) pm.after(ag);
     { const lb = $("#lbCard"); if (lb && d) d.before(lb); }      // 2026-11-09 (Nikhil): Level Board on top of the order-flow chart
     { const l2 = $("#lb2Card"), dk = v === "crypto" ? $("#cliveDesk") : ["metals","global"].includes(v) ? $("#mliveDesk") : null; if (l2 && dk) dk.before(l2); }   // 2026-11-09: crypto / metals Level Board above their chart
+    { const c3 = $("#cfCard"), dk = $("#cliveDesk"); if (c3 && dk && v === "crypto") dk.before(c3); }   // 2026-11-10: Crypto Flow between the Level Board and the chart
     const more = $("#lvlMore"); if (more) more.open = true; } } catch(e){}   // trade cards + order flow chart just above Strategy recommendations
   try { if (v==="india") indApply(); else document.body.classList.remove("ind-stock"); } catch(e){}
   if (hasM){
