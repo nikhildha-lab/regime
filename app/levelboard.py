@@ -20,6 +20,7 @@ import time
 
 RANGE, NEAR, FAR, TOL = 1.2, 0.30, 0.70, 0.02        # % of price: rows kept, "near", "far", wall-to-level match tolerance
 LOT = {"NIFTY": 65, "BANKNIFTY": 30}
+STEP = {"NIFTY": 50, "BANKNIFTY": 100}
 STR = {"strong": 2, "medium": 1, "weak": 0}
 REF_OK = {"PDH", "PDL", "PWH", "PWL", "PMH", "PML", "VWAP", "POC", "VAH", "VAL"}
 S: dict = {"cache": {}}
@@ -107,26 +108,37 @@ def _dom(hot, key, basis):
 
 
 def build(key, prep, oi, flv, hot):
-    """2026-11-09 v2 (Nikhil: "be careful, all prices need to be futures prices"): every row is a FUTURES price. Blocks and reference
-    levels come from levelmap.get_fut (futures 1-min bars only); walls, the book and the DOM engine's zones are futures already, so no
-    conversion anywhere. The only spot data left is option OI at a block (strikes are index prices): it is matched to a futures row with
-    the live basis for that one lookup, and shown with its strike."""
+    """2026-11-09 v3 (Nikhil: "use spot price wherever possible, with synthetic future" - matches DOM Index v4): every row is a SPOT index
+    price: the spot Level Map blocks and reference levels and the option strikes as published, the DOM v4 engine's zones directly. The
+    only futures data - big walls and the resting-order book - is moved to spot with the live basis for display and shown with its
+    futures price. (The earlier futures-only board is in _archive/2026-11-03/backups/2026-11-09_dom_v4_split/.)"""
     key = (key or "NIFTY").upper()
-    FM = hot("levelmap").get_fut(key, 10) or {}
-    if FM.get("error"):
-        return {"key": key, "err": "no futures Level Map for " + key + ": " + str(FM["error"])}
+    P = (prep or {}).get(key) or {}
+    if not P or P.get("error"):
+        return {"key": key, "err": "no Level Map for " + key}
     BW = hot("bigwalls"); W = BW.api(key) or {}
-    spot = (oi or {}).get("spot") or ((prep or {}).get(key) or {}).get("spot")
+    live_spot = None
+    try:                                                           # v4 engine's own spot tick (of_engine spot feed) when fresh
+        sp = ((hot("domcards").S.get("spot") or {}).get(key) or {}).get("last")
+        if sp:
+            live_spot = float(sp)
+    except Exception:
+        pass
     basis = (flv or {}).get("basis")
+    # spot now: the engine's own tick; else futures price minus the measured basis (the tracker's spot can be minutes stale); else tracker
+    if live_spot:
+        spot, src = live_spot, "engine tick"
+    elif W.get("price") and basis is not None:
+        spot, src = W["price"] - float(basis), "futures − basis"
+    else:
+        spot, src = (oi or {}).get("spot") or P.get("spot"), "tracker"
     if basis is None and W.get("price") and spot:
         basis = round(W["price"] - spot, 1)
     basis = float(basis or 0.0)
-    px = W.get("price") or (FM.get("fut") or 0) + 0.0            # futures price now
+    px = float(spot or 0)
     if not px:
-        return {"key": key, "err": "no futures price yet"}
-    P = {"blocks": {st: [{"lo": b["lo"], "hi": b["hi"], "star": bool(b.get("alerts")), "why": ", ".join(b.get("parts") or [])[:90]}
-                         for b in FM.get("blocks") or [] if b.get("strength") == st] for st in ("strong", "medium", "weak")},
-         "levels": FM.get("levels") or []}
+        return {"key": key, "err": "no spot price yet"}
+    FM = {"as_of": P.get("as_of") or P.get("for_day")}
     book, binfo = _book(BW, key)
     lot = LOT.get(key, 1)
     rows = []
@@ -143,18 +155,17 @@ def build(key, prep, oi, flv, hot):
         else:
             bd = px * 0.0004
             rows.append({"lo": r["px"] - bd, "hi": r["px"] + bd, "kind": "ref", "strength": "ref", "star": r["short"][1:2] in ("W", "M"), "why": r.get("name") or "", "tags": [r["short"]]})
-    # OI at the blocks: oiwatch works on the SPOT level map, so its blocks are index prices - moved to futures with the live basis for
-    # this one match (overlap), shown with the strikes it counted
+    # OI at the blocks (same spot level map - match by overlap)
     for b in (oi or {}).get("blocks") or []:
-        bl, bh = b["lo"] + basis, b["hi"] + basis
+        bl, bh = b["lo"], b["hi"]
         hit = next((x for x in rows if x["kind"] == "block" and x["lo"] <= bh and bl <= x["hi"]), None)
         if hit and not hit.get("oi"):
             d = b.get("defenders") or {}
             hit["oi"] = {"type": d.get("type"), "oi": d.get("oi"), "pct30": d.get("pct_m30"), "pct_open": d.get("pct_open"), "read": b.get("read"), "tone": b.get("tone"),
                          "strikes": b.get("strikes")}
-    # big walls (futures prices already)
+    # big walls: futures -> spot with the live basis (display only)
     for w in (W.get("above") or []) + (W.get("below") or []):
-        wp = w["price"]
+        wp = w["price"] - basis
         hit = next((x for x in rows if x["lo"] - px * TOL / 100 <= wp <= x["hi"] + px * TOL / 100), None)
         info = {"side": w["side"], "x": w["x"], "trend": w["trend"], "age": w["age_min"], "fut": w["price"], "qty": w["qty_now"]}
         if hit:
@@ -165,14 +176,14 @@ def build(key, prep, oi, flv, hot):
             rows.append({"lo": wp - bd, "hi": wp + bd, "kind": "wall", "strength": "wall", "star": False, "why": "big resting order, not at a mapped level", "tags": [], "wall": info})
     # resting orders inside each zone (latest minute of the book)
     if book:
-        bk_lo, bk_hi = min(p for p, _, _ in book), max(p for p, _, _ in book)
+        bk_lo, bk_hi = min(p for p, _, _ in book) - basis, max(p for p, _, _ in book) - basis
         bids = sorted(q for _, q, _ in book if q > 0); asks = sorted(q for _, _, q in book if q > 0)
         mb = bids[len(bids) // 2] if bids else 0; ma = asks[len(asks) // 2] if asks else 0
         for x in rows:
             lo, hi = x["lo"] - 2, x["hi"] + 2
             if hi < bk_lo or lo > bk_hi:
                 x["book"] = None; continue
-            inz = [(p, b, a) for p, b, a in book if lo <= p <= hi]
+            inz = [(p, b, a) for p, b, a in book if lo <= p - basis <= hi]
             n = max(len(inz), 1); qb = sum(b for _, b, _ in inz); qa = sum(a for _, _, a in inz)
             x["book"] = {"bid_lots": round(qb / lot), "ask_lots": round(qa / lot), "bid_x": round(qb / n / mb, 1) if mb and qb else None,
                          "ask_x": round(qa / n / ma, 1) if ma and qa else None, "buckets": len(inz)}
@@ -180,10 +191,10 @@ def build(key, prep, oi, flv, hot):
         DZ, dctx = _dom(hot, key, basis)
     except Exception as e:
         DZ, dctx = [], {"err": f"DOM state: {type(e).__name__}: {str(e)[:80]}"}
-    if dctx.get("basis_open") is not None:                     # engine still on spot-moved levels (v1 / v2 file) - say so
-        dctx["basis_warn"] = f"DOM engine levels were moved from index prices with a {dctx['basis_open']:+.0f} pt basis (old-style levels file)"
-    for z in DZ:                                              # engine zones are futures prices (v3); blocks match by name
-        zl, zh = z["lo"], z["hi"]
+    lvp = (hot("domcards").S.get("lv") or {}).get(key) or {}
+    zshift = -basis if lvp.get("prices") == "futures" else 0.0   # a v3 (futures) levels file would need moving; v4 (spot) does not
+    for z in DZ:                                              # engine zones (v4: spot); blocks match by name
+        zl, zh = z["lo"] + zshift, z["hi"] + zshift
         import re as _re
         m = _re.search(r"block (\d+)-(\d+)", str(z.get("name") or ""))
         hit = None
@@ -197,7 +208,7 @@ def build(key, prep, oi, flv, hot):
             hit = {"lo": zl, "hi": zh, "kind": "dom", "strength": "dom", "star": False, "why": "DOM engine level: " + str(z["name"]), "tags": [str(z["name"])]}
             rows.append(hit)
             if book:
-                inz = [(p, bq, aq) for p, bq, aq in book if zl - 2 <= p <= zh + 2]
+                inz = [(p, bq, aq) for p, bq, aq in book if zl - 2 <= p - basis <= zh + 2]
                 hit["book"] = {"bid_lots": round(sum(q for _, q, _ in inz) / lot), "ask_lots": round(sum(q for _, _, q in inz) / lot), "buckets": len(inz)} if inz else None
         hit["dom"] = z
     out = []
@@ -244,13 +255,101 @@ def build(key, prep, oi, flv, hot):
             act, tone = f"Testing now - HOLD {hs['dir']} needs {', '.join(k for k in ('held', 'lean', 'absorbed') if not hs.get(k)) or 'the bounce'}", "wait"
         elif bs.get("state") == "breaking" and not any(f["status"] == "open" for f in dz.get("fired") or []):
             act, tone = f"Breaking now - BREAK {bs['dir']} needs {', '.join(k for k in ('stay', 'lean', 'delta') if not bs.get(k)) or '30 s beyond'}", "wait"
-        out.append({"lo": round(x["lo"], 1), "hi": round(x["hi"], 1), "spot_lo": round(x["lo"] - basis, 1), "spot_hi": round(x["hi"] - basis, 1), "kind": x["kind"],
+        out.append({"lo": round(x["lo"], 1), "hi": round(x["hi"], 1), "fut_lo": round(x["lo"] + basis, 1), "fut_hi": round(x["hi"] + basis, 1), "kind": x["kind"],
                     "strength": x["strength"], "star": x["star"], "why": x["why"], "tags": x["tags"], "side": side, "dist": round(dist, 1), "dist_pct": round(dist / px * 100, 2),
                     "oi": x.get("oi"), "wall": x.get("wall"), "book": x.get("book"), "score": sc, "action": act, "tone": tone, "score_why": why, "dom": x.get("dom")})
     out.sort(key=lambda r: -r["hi"])
-    return {"key": key, "price": round(px, 1), "prices": "futures", "spot": round(spot, 1) if spot else None, "basis": round(basis, 1), "map_as_of": FM.get("as_of"), "at": time.strftime("%H:%M"), "oi_at": (oi or {}).get("at"),
+    plan, today = _plan(key, out, px, basis, hot, dctx)
+    return {"key": key, "price": round(px, 1), "prices": "spot", "spot_src": src, "fut": W.get("price"), "basis": round(basis, 1),
+            "map_as_of": FM.get("as_of"), "at": time.strftime("%H:%M"), "oi_at": (oi or {}).get("at"),
             "walls_at": W.get("as_of"), "walls_src": W.get("source"), "book": binfo, "rows": out, "pulled": W.get("pulled") or [],
-            "dom": dctx, "note": "All prices are near-month futures. Action is a fixed rule (level strength + option writers + big wall + resting orders), untested - an indication, never an order."}
+            "plan": plan, "today": today,
+            "dom": dctx, "note": "All prices are the spot index (DOM Index v4 works in spot). Action is a fixed rule (level strength + option writers + big wall + resting orders), untested - an indication, never an order."}
+
+
+def _expiry_next(key, hot):
+    """first weekly / monthly expiry >= 5 days away (same pick as the DOM report), from the latest chains file"""
+    try:
+        import os
+        from datetime import date
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        d = os.path.join(root, "data_store", "research", "chains")
+        f = sorted(x for x in os.listdir(d) if x.startswith("ch_"))[-1]
+        import pandas as pd
+        c = pd.read_csv(os.path.join(d, f), usecols=["sym", "expiry"])
+        ex = sorted(c[c.sym == key].expiry.unique())
+        return next(e for e in ex if (date.fromisoformat(e) - date.today()).days >= 5)
+    except Exception:
+        return None
+
+
+def _plan(key, rows, px, basis, hot, dctx):
+    """2026-11-09 (Nikhil: "make it more impactful and actionable ... manual trading for the day"): the 3 nearest real levels as
+    trade cards, written the way the DOM v4 engine would trade them: HOLD plan (bounce) and BREAK plan (run through), each with entry
+    zone, stop, target (next level >= 2R else 2R), R, rupee risk for 1 lot of the synthetic future, the synthetic legs and a 0.6-delta
+    option alternative. Status: far / approaching / near / testing / in trade. Same untested rule as the Action column - indication only."""
+    step = STEP[key]; lot = LOT[key]; band = px * 0.0004
+    trad = lambda r: r.get("dom") or (r["kind"] == "block" and r["strength"] in ("strong", "medium")) or r["kind"] == "dom" or any(t.startswith(("IB", "call wall", "put wall")) for t in r["tags"])
+    real = [r for r in rows if trad(r)]                      # only levels the DOM v4 engine trades: medium / strong blocks, option walls, IB
+    near = sorted(real, key=lambda r: abs(r["dist"]))[:3]
+    lv_sorted = sorted(rows, key=lambda r: r["lo"])
+    exp = _expiry_next(key, hot)
+    atm = round(px / step) * step
+    def tgt(entry, sd, risk):
+        cands = [r["lo"] if sd > 0 else r["hi"] for r in lv_sorted if (r["lo"] > entry if sd > 0 else r["hi"] < entry)]
+        cands = sorted(cands, key=lambda p: abs(p - entry))
+        t = next((p for p in cands if abs(p - entry) >= 2 * risk), None)
+        return (t, "next level") if t is not None else (entry + sd * 2 * risk, "2R")
+    def leg(sd, entry, stop, note):
+        risk = abs(entry - stop)
+        if risk <= 0:
+            return None
+        t, tn = tgt(entry, sd, risk)
+        return {"dir": "long" if sd > 0 else "short", "entry": round(entry, 1), "stop": round(stop, 1), "target": round(t, 1), "target_note": tn,
+                "risk_pts": round(risk, 1), "rr": round(abs(t - entry) / risk, 1), "risk_rs": round(risk * lot), "note": note,
+                "synthetic": (f"buy {atm:.0f} CE + sell {atm:.0f} PE" if sd > 0 else f"buy {atm:.0f} PE + sell {atm:.0f} CE") + (f" · {exp}" if exp else "") + " · 1 lot",
+                "option_06": (f"buy {atm - step:.0f} CE" if sd > 0 else f"buy {atm + step:.0f} PE") + " (≈0.6 delta, one strike in the money)" + (f" · {exp}" if exp else "")}
+    cards = []
+    for r in near:
+        lo, hi = r["lo"], r["hi"]; side = r["side"]
+        dp = abs(r["dist"]) / px * 100
+        dz = r.get("dom") or {}
+        open_tr = next((f for f in dz.get("fired") or [] if f["status"] == "open"), None)
+        if open_tr:
+            status = "in trade"
+        elif (dz.get("hold") or {}).get("state") == "testing" or (dz.get("brk") or {}).get("state") == "breaking":
+            status = "testing now"
+        elif side == "inside":
+            status = "price in zone"
+        elif dp <= NEAR:
+            status = "near"
+        elif dp <= FAR:
+            status = "approaching"
+        else:
+            status = "far"
+        if side == "S" or side == "inside":
+            hold = leg(+1, hi, lo - 2 * band, f"if {hi:.0f}–{lo:.0f} holds: buy on the bounce back above {hi:.0f} with buyers in the book")
+            brk = leg(-1, lo, lo + band, f"if price closes below {lo:.0f} and stays 30 s with sellers: short the break")
+        else:
+            hold = leg(-1, lo, hi + 2 * band, f"if {lo:.0f}–{hi:.0f} holds: sell on the rejection back below {lo:.0f} with sellers in the book")
+            brk = leg(+1, hi, hi - band, f"if price closes above {hi:.0f} and stays 30 s with buyers: buy the break")
+        name = (f"{r['strength']} block" if r["kind"] == "block" else " ".join(r["tags"]) or r["why"])
+        cards.append({"level": f"{lo:.0f}–{hi:.0f}" if hi - lo > 3 else f"{(lo + hi) / 2:.0f}", "lo": lo, "hi": hi, "name": name, "tags": r["tags"], "side": side,
+                      "dist": r["dist"], "dist_pct": r["dist_pct"], "status": status, "score": r["score"], "action": r["action"], "tone": r["tone"],
+                      "hold": hold, "brk": brk, "open": open_tr, "dom": {"hold": (dz.get("hold") or {}).get("state"), "brk": (dz.get("brk") or {}).get("state")} if dz else None,
+                      "fut": f"{lo + basis:.0f}–{hi + basis:.0f}"})
+    # today's engine limits (the kill switch)
+    today = {}
+    try:
+        DC = hot("domcards"); S_ = DC.S; day = S_.get("day")
+        T = [x for x in (S_.get("trades") or []) if x.get("key") == key and x.get("day") == day]
+        cl = [x for x in T if x["status"] == "closed"]
+        today = {"n": len(T), "limit": DC.P["per_day"], "r_closed": round(sum(x.get("r") or 0 for x in cl), 2), "pnl": round(sum(x.get("pnl") or 0 for x in cl)),
+                 "plan_stop": DC.P["plan_stop"], "open": next((f"{x['setup']} {x['side']} @ {x['entry']}" for x in T if x["status"] == "open"), None),
+                 "window": f"{DC.P['first']}–{DC.P['last']}", "flat": DC.P["flat"], "gate": dctx.get("gate")}
+    except Exception:
+        pass
+    return cards, today
 
 
 def api(key, prep, oi, flv, hot):
