@@ -242,6 +242,9 @@ def _rebase(k, t, I):
 # walls (strikes are index prices). IB high / low are added by the engine from the futures mid as before. The v1 (tracker basis) and
 # v2 (measured basis) code above is kept but not used while LEVELS == "fut".
 LEVELS = "fut"
+# 2026-11-09 (Nikhil: "flush out all trades for DOM 2"): the index record restarts clean with v3. Index trades before IX_START are
+# dropped on load and not created; the flushed trades are in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/.
+IX_START = "2026-11-10"
 
 
 def _index_levels_fut(hot):
@@ -359,6 +362,8 @@ def _close(tr, px, t, why):
 
 
 def _open(k, setup, side, entry, stop, zone, zones, t, why):
+    if k in INDEX and S["day"] < IX_START:            # 2026-11-09: index record flushed; v3 starts on IX_START
+        return
     sd = 1 if side == "long" else -1
     risk = abs(entry - stop)
     if risk <= 0:
@@ -542,7 +547,7 @@ def _new_day(day):
     S.clear()
     S.update(day=day, off={}, inst={}, lv=None, changed=False, err={})
     # today is rebuilt from the day's files (same result after a restart); earlier days come from the store
-    S["trades"] = [x for x in _load() if x["day"] != day]
+    S["trades"] = [x for x in _load() if x["day"] != day and not (x["key"] in INDEX and x["day"] < IX_START)]
 
 
 def tick(hot=None, views=None):
@@ -551,9 +556,9 @@ def tick(hot=None, views=None):
     if now.weekday() >= 5 or not ("09:15" <= now.strftime("%H:%M") <= "15:35"):
         return
     day = now.strftime("%Y-%m-%d")
-    if S.get("day") != day or S.get("ver") != 7:
+    if S.get("day") != day or S.get("ver") != 8:
         _new_day(day)
-        S["ver"] = 7                                   # v2 (3 Nov): stock books; v4/5 (9 Nov): measured basis; v6 (9 Nov): futures-native levels
+        S["ver"] = 8                                   # v2 (3 Nov): stock books; v4/5 (9 Nov): measured basis; v6 (9 Nov): futures-native levels
     if levels(hot, views) is None:
         return
     S["lv_ts"] = S.get("lv_ts") or _lv_ts()
