@@ -1934,7 +1934,7 @@ function legsHtml(t){
 const RULE_SHORT = {b4h: "4H Break", b4h_v4: "4H Break v4", b4h_h2: "4H Break H2", b4h_g2: "4H Break Gold", dom_ix: "DOM Index", dom_ix_break: "DOM Break", dom_ix_hold: "DOM Hold",
   dom_stocks: "DOM Stocks", touchv2: "Touch v2", ovn_h30: "Overnight", ovn_h30f: "Overnight+OF", vcy_night: "Night Straddle", vcy_day: "Day Straddle", vcy_day_sk: "Day Skew",
   vcy_day_bw: "Day Wing Fly", vcy_day_dh: "Day Hedged", us_desk: "US Desk", us_manual: "US Manual", svb: "Vol Break", svb_tr: "Vol Break Trail", istr_n: "Nifty Strangle",
-  icon_s: "Sensex Condor", fsb2: "BuildUp v2", fsb: "BuildUp v1", bkf: "BreakFade", t55: "Trend 55", qph: "30d High", sorb: "Stocks ORB", touch: "Touch v1", touchdom: "Touch+DOM", sbt: "Block Touch"};
+  icon_s: "Sensex Condor", fsb2: "BuildUp v2", fsb: "BuildUp v1", bkf: "BreakFade", t55: "Trend 55", qph: "30d High", n5m: "N500 Mom", sorb: "Stocks ORB", touch: "Touch v1", touchdom: "Touch+DOM", sbt: "Block Touch"};
 const ruleShort = (r, lab) => RULE_SHORT[r] || String(lab || r).split(" · ")[0].split(" (")[0];
 const PTL = {rows: null, t: 0, f: (() => { try { return JSON.parse(localStorage.getItem("mp.ptl.f") || "{}"); } catch(e){ return {}; } })(), open: {}};
 PTL.f = Object.assign({rule: "all", range: "0", from: "", to: "", status: "all", grp: "tab"}, PTL.f);   // default: today, this tab

@@ -514,6 +514,10 @@ def poll_once():
                 _hot("bookwalls").tick()
             except Exception as e:
                 _STATE["bookwalls_error"] = str(e)[:160]
+            try:                                   # 2026-11-10 (Nikhil: "ok add"): Nifty 500 Momentum 12-1 monthly basket, record only (app/n500mom.py)
+                _hot("n500mom").tick()
+            except Exception as e:
+                _STATE["n500mom_error"] = str(e)[:160]
             try:                                   # 2026-11-10 (Nikhil: Quantpedia winners): Crypto 30-Day High record-only rule (app/qphigh.py)
                 _hot("qphigh").tick()
             except Exception as e:
@@ -965,6 +969,8 @@ def handle_get(path: str, q: dict):
         return {t: {"kept": len(v.get("items", [])), "scanned": v.get("scanned"), "errors": v.get("errors") or v.get("error")} for t, v in (r or {}).get("tabs", {}).items()}
     if path == "/api/livedesk/idxstrangle":            # 2026-11-09: index weekly strangle / condor paper trades
         return _hot("idxstrangle").api(q)
+    if path == "/api/livedesk/n500mom":                # 2026-11-10: Nifty 500 momentum basket (record only)
+        return _hot("n500mom").api()
     if path == "/api/livedesk/qphigh":                 # 2026-11-10: Crypto 30-Day High signals + trades (record only)
         return _hot("qphigh").api()
     if path == "/api/livedesk/trend55":                # 2026-11-09: Trend 55 (metals / commodities) signals + trades

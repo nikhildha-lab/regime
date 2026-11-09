@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 NAME = {"BTC": "BTC", "ETH": "ETH", "GOLD": "Gold", "NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty",
-        "SOL": "SOL", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH", "AVAX": "AVAX", "ES": "S&P 500 (ES)", "NQ": "Nasdaq 100 (NQ)", "SPY": "SPY"}   # 2026-11-04: 4H break forward test on more coins
+        "SOL": "SOL", "N500MOM": "Nifty 500 basket", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH", "AVAX": "AVAX", "ES": "S&P 500 (ES)", "NQ": "Nasdaq 100 (NQ)", "SPY": "SPY"}   # 2026-11-04: 4H break forward test on more coins
 # 2026-11-06 (Nikhil: "retire and fully remove"): retired + removed - touch (option buying), touchdom, sbt, dom (mixed plan account), ovn plain + h20,
 # vcy_day_w, vcy_night_ts, vcy_night_tx. Their past trades: _archive/2026-11-03/backups/2026-11-06_retire/retired_trades.csv
 RULES = {
@@ -43,6 +43,7 @@ RULES = {
     "istr_n": {"label": "Index Strangle · NIFTY weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2023-26: +Rs 1,700 a lot a week in positive-gamma weeks, win 78 %, worst week about -Rs 34k; judge after ~20 weeks"},
     "icon_s": {"label": "Index Condor · SENSEX weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2024-26: +Rs 1,870 a lot a week in positive-gamma weeks, win 82 %, risk capped by wings; judge after ~20 weeks"},
     "fsb2": {"label": "BuildUp v2 · v1 minus 'late' shorts (at 60-day low / bullish order block broken)", "edge": "new 9 Nov - from Oct 2024: 210 trades, +0.77 % a trade after costs (t 2.7) vs v1 +0.43 % on the same period; judge after ~30"},
+    "n5m": {"label": "Nifty 500 Momentum 12-1 · monthly top-decile basket, equal weight (record only)", "edge": "Quantpedia idea, gauntlet 10 Nov: +0.66 Sharpe of EXCESS return over the equal-weight Nifty 500, 17 of 21 years (2006-26); universe = today's members (survivorship) - record only, Rs 1,00,000 notional"},
     "qph": {"label": "Crypto 30-Day High · long while the daily close is a 30-day high (record only)", "edge": "Quantpedia idea, gauntlet 10 Nov: BTC Sharpe 0.89 (hold 0.92, a third of the drawdown), SOL 1.23 (hold 1.03), ETH borderline; in the market ~12 % of days; 500 USDT notional - record only"},
     "t55": {"label": "Trend 55 · long 55-session breakouts, 1 ATR stop, 20 sessions (metals / commodities, record only)", "edge": "new 9 Nov - 2012-26 on gold, silver, copper, WTI, natgas + MCX crude: 878 trades, +0.88 % a trade after costs, PF 1.49 both halves, all 6 markets positive, 11 of 15 years; win 27 % (trend-following) - record only"},
     "bkf": {"label": "BreakFade · short fresh-OI 20-day breakouts, 1 ATR stop / 3 R / 10 sessions (record only)", "edge": "new 9 Nov - from the 132k-experiment search: 753 trades, +0.51 % a trade after costs, PF 1.30, but the train-only pick made +0.06 % out of sample - PROVISIONAL, record only; judge after 60 closed trades"},
@@ -362,6 +363,21 @@ def _qph(hot):
     return out
 
 
+def _n5m(hot):
+    """2026-11-10: Nifty 500 Momentum 12-1 (app/n500mom.py) - one record per month: the basket as an index (100 at the month-end it was formed)."""
+    out = []
+    for b in hot("n500mom").trades():
+        t = {"rule": "n5m", "key": "N500MOM", "side": "long", "opened": f"{b['formed']} 15:30", "entry": 100.0, "stop": None, "target": None,
+             "how": f"{b['n']} names equal weight · held to the next month-end close, then re-ranked · no stop (the tested rule) · record only", "instrument": f"basket of {b['n']} Nifty 500 stocks, Rs 1,00,000",
+             "size": 100000, "ccy": "₹", "status": b["status"], "why": b.get("why", ""), "legs_text": ", ".join(h["sym"] for h in b.get("holdings", [])[:12]) + (" …" if len(b.get("holdings", [])) > 12 else "")}
+        if b["status"] == "closed":
+            t.update(exit=round(100 * b.get("exit_value", 1.0), 2), exit_reason="month-end rebalance", closed=f"{b['closed']} 15:30", pnl=b.get("pnl"))
+        elif b.get("pnl_open") is not None:
+            t.update(pnl_open=b["pnl_open"], now=round(100 * b.get("now_value", 1.0), 2))
+        out.append(t)
+    return out
+
+
 def _idx(hot):
     """2026-11-09: index weekly strangle (NIFTY) / condor (SENSEX), gamma filter (app/idxstrangle.py) - rupees per lot after fees at settlement."""
     out = []
@@ -552,7 +568,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -579,7 +595,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:

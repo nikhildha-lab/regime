@@ -151,3 +151,28 @@ if __name__ == "__main__":
     res.update({f"xhigh_{k}": v for k, v in g1().items()}); res.update(g2()); res.update(g3()); res.update(g4())
     P("\n#### SUMMARY"); P("   PASS: " + ", ".join(k for k, v in res.items() if v)); P("   FAIL: " + ", ".join(k for k, v in res.items() if not v))
     open(OUT, "w").write("\n".join(L))
+
+
+def g5():
+    """sweep-2 candidate: SPY correlation-acceleration hedge (threshold chosen on the TRAIN half only)."""
+    import quantpedia_sweep2 as Q2
+    P("\n#### 5. SPY CORRELATION-ACCELERATION HEDGE (out of SPY when the 20-d avg pairwise sector correlation rose > th in 10 sessions; costs 0.02 %/side)")
+    Pz = Q2.sectors(); R = Pz.pct_change(fill_method=None); spy = Q.etf("SPY").close.pct_change().reindex(R.index).dropna()
+    out = []
+    for i in range(len(R)):
+        if i < 20: out.append(np.nan); continue
+        c = R.iloc[i - 20:i].corr().values; n = c.shape[0]; out.append((c.sum() - n) / (n * (n - 1)))
+    ac = pd.Series(out, index=R.index); acc = ac - ac.shift(10)
+    cut = spy.index[int(len(spy) * 0.7)]
+    best, res = None, {}
+    for th in (0.05, 0.08, 0.10, 0.12, 0.15, 0.20, 0.25):
+        pos = (acc <= th).astype(float); r, _ = Q.run_pos(pos.shift(1), spy, Q.C_FUT)
+        tr = r[r.index < cut]; res[th] = (sh(tr, 252), sh(r[r.index >= cut], 252), sh(r, 252))
+        if best is None or res[th][0] > res[best][0]: best = th
+    P("   threshold: train / test / all Sharpe  " + " · ".join(f"{th}: {a:+.2f} / {b:+.2f} / {c:+.2f}" for th, (a, b, c) in res.items()) + f"   (SPY train {sh(spy[spy.index < cut], 252):+.2f} / test {sh(spy[spy.index >= cut], 252):+.2f})")
+    pos = (acc <= best).astype(float); r, _ = Q.run_pos(pos.shift(1), spy, Q.C_FUT); turn = (pos - pos.shift(1).fillna(0)).abs().shift(1).fillna(0) * Q.C_FUT
+    return {"corr_hedge": gauntlet(f"SPY correlation-acceleration hedge · threshold {best} chosen on train · in market {100*pos.mean():.0f}%", r, 252, turn, bench=spy)}
+
+
+if __name__ == "__main__" and "--g5" in sys.argv:
+    g5(); open(OUT, "a").write("\n" + "\n".join(L))

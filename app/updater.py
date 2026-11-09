@@ -526,9 +526,14 @@ def _days(after: date, now: pd.Timestamp, max_days: int):
 
 def breadth_symbols() -> set:
     p = os.path.join(ROOT, "stocks_data.csv")
-    if not os.path.exists(p):
-        return set()
-    return set(pd.read_csv(p, usecols=["Symbol"])["Symbol"].dropna().unique())
+    out = set(pd.read_csv(p, usecols=["Symbol"])["Symbol"].dropna().unique()) if os.path.exists(p) else set()
+    try:                                                   # 2026-11-10 (Nikhil): + the Nifty 500 list, so the monthly momentum basket (app/n500mom.py) has daily closes for every name
+        n5 = os.path.join(os.environ.get("MP_DOCS") or os.path.join(os.path.expanduser("~"), "Documents"), "MASTER_BACKTESTER", "data", "nse_nifty500", "ind_nifty500list.csv")
+        if os.path.exists(n5):
+            out |= set(pd.read_csv(n5, usecols=["Symbol"])["Symbol"].dropna().unique())
+    except Exception:
+        pass
+    return out
 
 
 def update_nse(now=None, max_days: int = 250) -> dict:
