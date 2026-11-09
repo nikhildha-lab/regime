@@ -670,6 +670,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <section class="card" id="lbCard"></section>
   <section class="card" id="lb2Card" hidden></section>   <!-- 2026-11-09 (Nikhil): Level Board for Crypto / Metals / Commodities (app/levelboard2.py) -->
   <section class="card" id="cfCard" hidden></section>    <!-- 2026-11-10 (Nikhil): Crypto Flow - venues, liquidations, OI, positioning, big prints (app/cryptoflow.py) -->
+  <section class="card" id="fcCard" hidden></section>    <!-- 2026-11-10 (Nikhil: "bubble chart and resting liquidity as a new chart"): Flow Chart -->
   <section class="card" id="bwCard"></section>
   <section class="card ptCard" data-keys="BTC,ETH" data-title="Crypto paper trades · BTC / ETH"></section>
   <div id="cliveDesk"></div>
@@ -1316,7 +1317,7 @@ const ldPx = (v,d) => v==null ? "–" : Number(v).toLocaleString("en-IN",{maximu
 const FX = {sel:{nifty:"NIFTY", crypto:"BTC", metals:"GOLD"}, tf:{}, data:{}};
 // 2026-11-06 (Nikhil: "yes for all"): chart layers you can switch on / off (kept in this browser), paper trades drawn on the chart,
 // day volume profile, moving VWAP, stacked imbalances, hover detail per cell, and a "Fit day" view that squeezes the day onto one screen.
-FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, walls:1, fit:0, flow:1, heat:1};   // 2026-11-10: flow = big prints / liquidations / absorption, heat = resting liquidity (crypto)
+FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, walls:1, fit:0, flow:0, heat:0};   // 2026-11-10: flow = big prints / liquidations / absorption, heat = resting liquidity (crypto)
   try { return Object.assign(d, JSON.parse(localStorage.getItem("mp.fxlayers") || "{}")); } catch(e){ return d; } })();
 function fxLayer(k, desk){ FX.L[k] = FX.L[k] ? 0 : 1; try { localStorage.setItem("mp.fxlayers", JSON.stringify(FX.L)); } catch(e){} ldLoad(desk); }
 FX.trd = {};
@@ -2191,9 +2192,11 @@ function b4Render(){
 function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearInterval(b4Start.w); clearInterval(b4Start.l2);
   { const c2 = $("#lb2Card"); const on = document.body.dataset.tab === "intraday" && ["crypto","metals","global"].includes(v); if (c2) c2.hidden = !on;
     if (on){ lb2Load(); b4Start.l2 = setInterval(() => { if (!document.hidden) lb2Load(); }, 30000); } }
-  clearInterval(b4Start.cf);
+  clearInterval(b4Start.cf); clearInterval(b4Start.fc);
   { const c3 = $("#cfCard"); const on = document.body.dataset.tab === "intraday" && v === "crypto"; if (c3) c3.hidden = !on;
     if (on){ cfLoad(); b4Start.cf = setInterval(() => { if (!document.hidden) cfLoad(); }, 10000); } }
+  { const c4 = $("#fcCard"); const on = document.body.dataset.tab === "intraday" && v === "crypto"; if (c4) c4.hidden = !on;
+    if (on){ fcLoad(); b4Start.fc = setInterval(() => { if (!document.hidden) fcLoad(); }, 15000); } }
   if (document.body.dataset.tab === "intraday" && v === "india"){ bigwLoad(); lbLoad(); b4Start.w = setInterval(() => { if (!document.hidden){ bigwLoad(); lbLoad(); } }, 60000); }
   if (document.body.dataset.tab === "intraday" && ["crypto","india","metals","global"].includes(v)){ csLoad(); b4Start.c = setInterval(() => { if (!document.hidden) csLoad(); }, 60000); }
   if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
@@ -2409,6 +2412,60 @@ function cfRender(){
       <tbody>${B.prints.length ? B.prints.map(r => `<tr><td>${hm(r.ts)}</td><td>${VN[r.venue]||r.venue}</td><td class="${r.side==="buy"?"pos":"neg"}">${r.side === "buy" ? "▲ bought" : "▼ sold"}</td><td class="num"><b>${usd(r.usd)}</b></td><td class="num">${fmt(r.px, dp)}</td></tr>`).join("") : `<tr><td colspan="5" class="small faint">No big print in the last hour (the median needs ~200 trades first).</td></tr>`}</tbody></table></div>`; }
   const st = D.status || {}, off = Object.entries(st.venues||{}).filter(([v, x]) => x.state !== "live").map(([v, x]) => `${VN[v]||v}: ${x.state}`);
   morph(el, head + body + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} IST${off.length ? " · " + esc(off.join(", ")) : " · all streams live"}. Descriptive panels - none of this is a tested signal yet (see crypto-flow-panels-plan.md, step D).</p>`);
+}
+// 2026-11-10 (Nikhil: "can we have bubble chart and resting liquidity as a new chart"): the Flow Chart - time x price for the last
+// 30 / 90 / 180 minutes: resting-liquidity heat behind (all venues, brightness = $ resting), price path with the minute range, big-print
+// bubbles (size = $), liquidation diamonds, absorption tags. Data /api/livedesk/flowchart (app/cryptoflow.py + app/bookwalls.heat).
+const FC = {d: null, mins: (() => { try { return +localStorage.getItem("mp.fc.mins") || 90; } catch(e){ return 90; } })(), k: null, show: {heat:1, big:1, liq:1, abs:1}};
+function fcSet(m){ FC.mins = m; try { localStorage.setItem("mp.fc.mins", String(m)); } catch(e){} fcLoad(); }
+function fcToggle(k){ FC.show[k] = FC.show[k] ? 0 : 1; fcRender(); }
+async function fcLoad(){
+  const el = $("#fcCard"); if (!el || el.hidden) return; const k = (typeof lb2Key === "function" ? lb2Key() : "BTC") || "BTC"; FC.k = k;
+  try { FC.d = await fetch(`/api/livedesk/flowchart?key=${k}&minutes=${FC.mins}`).then(r => r.json()); } catch(e){ return; }
+  fcRender();
+}
+function fcRender(){
+  const el = $("#fcCard"), D = FC.d; if (!el) return; const k = FC.k;
+  const btn = (on, lab, fn) => `<button class="${on ? "on" : ""}" onclick="${fn}">${lab}</button>`;
+  const head = `<div class="spread"><h2>Flow Chart <span class="small muted">${esc(SHORT[k]||k)} · resting liquidity · big prints · liquidations · absorption · all venues</span></h2>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="fx-tf">${[30,90,180].map(m => btn(FC.mins === m, m + " min", `fcSet(${m})`)).join("")}</span>
+    <span class="fx-tf">${[["heat","Liquidity heat"],["big","Big prints"],["liq","Liquidations"],["abs","Absorption"]].map(([a, l]) => btn(FC.show[a], l, `fcToggle('${a}')`)).join("")}</span></div></div>`;
+  if (!D){ morph(el, head + `<p class="small muted">Loading…</p>`); return; }
+  const P = D.path || [], HT = FC.show.heat ? (D.heat || []) : [], big = FC.show.big ? (D.big || []) : [], liq = FC.show.liq ? (D.liq || []) : [], abs_ = FC.show.abs ? (D.absorb || []) : [];
+  if (!P.length){ morph(el, head + `<p class="small muted" style="margin:8px 0">Collecting trades for ${esc(k)} - the chart appears after the first minute.</p>`); return; }
+  const W = Math.max(640, (FX.availW || 1100) - 4), H = 420, L = 8, R = 74, T = 10, B = 26, pw = W - L - R, ph = H - T - B;
+  const now = Math.floor(Date.now() / 1000), t1 = Math.ceil(now / 60) * 60, t0 = t1 - D.minutes * 60;
+  const prices = [...P.flatMap(r => [r[2], r[3]]), ...big.map(t => t.px), ...liq.map(t => t.px)].filter(v => v != null && isFinite(v));
+  let lo = Math.min(...prices), hi = Math.max(...prices); const mid = P.at(-1)[1];
+  // keep the heat's price span if it is wider but not absurdly so (the heat covers +-1.2 % by construction)
+  HT.forEach(h => h.cells.forEach(([px]) => { if (px > mid * 0.994 && px < mid * 1.006){ lo = Math.min(lo, px); hi = Math.max(hi, px); } }));
+  const pad = (hi - lo) * 0.06 || mid * 0.001; lo -= pad; hi += pad;
+  const X = ts => L + (ts - t0) / (t1 - t0) * pw, Y = p => T + (hi - p) / (hi - lo) * ph, dp = mid < 1 ? 4 : mid < 10 ? 3 : mid < 1000 ? 2 : mid < 20000 ? 1 : 0;
+  const colW = Math.max(1.5, pw / D.minutes), VN = {binance:"Binance", bybit:"Bybit", okx:"OKX", bitget:"Bitget"};
+  let g = `<rect x="${L}" y="${T}" width="${pw}" height="${ph}" fill="var(--surface-2)" opacity="0.5"/>`;
+  // heat
+  if (HT.length){ const hmx = Math.max(1, ...HT.flatMap(h => h.cells.map(c => c[1]))); const binH = Math.max(1.2, (mid * 0.0005) / (hi - lo) * ph);
+    HT.forEach(h => { const x = X(h.ts - 60); if (x < L - colW || x > L + pw) return;
+      h.cells.forEach(([px, u]) => { if (px < lo || px > hi) return; const a = Math.min(0.9, 0.05 + Math.sqrt(u / hmx)); g += `<rect x="${x.toFixed(1)}" y="${(Y(px) - binH / 2).toFixed(1)}" width="${(colW + 0.6).toFixed(1)}" height="${binH.toFixed(1)}" fill="#8B7CF6" fill-opacity="${a.toFixed(2)}"><title>${esc(new Date(h.ts*1000).toISOString().slice(11,16))} UTC · ${ldPx(px)} · resting ${esc(fxK(u))} $</title></rect>`; }); }); }
+  // price path: minute range as thin wick + last as a line
+  P.forEach(r => { const x = X(r[0] + 30); g += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${Y(r[2]).toFixed(1)}" y2="${Y(r[3]).toFixed(1)}" stroke="var(--muted)" stroke-opacity="0.55" stroke-width="1"/>`; });
+  g += `<polyline fill="none" stroke="var(--ink)" stroke-width="1.6" points="${P.map(r => `${X(r[0] + 30).toFixed(1)},${Y(r[1]).toFixed(1)}`).join(" ")}"/>`;
+  // bubbles
+  const bmx = Math.max(1, ...big.map(t => t.usd));
+  big.forEach(t => { if (t.ts < t0 || t.px < lo || t.px > hi) return; const r = 3 + Math.sqrt(t.usd / bmx) * 16, c = t.side === "buy" ? "var(--bull)" : "var(--bear)";
+    g += `<circle cx="${X(t.ts).toFixed(1)}" cy="${Y(t.px).toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" fill-opacity="0.22" stroke="${c}" stroke-width="1.1"><title>${esc(new Date(t.ts*1000).toISOString().slice(11,19))} UTC · ${VN[t.venue]||t.venue} · big ${t.side} ${esc(fxK(t.usd))} $ at ${ldPx(t.px)}</title></circle>`; });
+  liq.forEach(t => { if (t.ts < t0 || t.px < lo || t.px > hi) return; const r = Math.min(10, 3 + Math.sqrt(t.usd / 20000)), c = t.side === "long" ? "var(--bear)" : "var(--bull)", x = X(t.ts), yy = Y(t.px);
+    g += `<path d="M${x.toFixed(1)} ${(yy - r).toFixed(1)} L${(x + r).toFixed(1)} ${yy.toFixed(1)} L${x.toFixed(1)} ${(yy + r).toFixed(1)} L${(x - r).toFixed(1)} ${yy.toFixed(1)}Z" fill="${c}" fill-opacity="0.9" stroke="var(--surface)" stroke-width="0.8"><title>${esc(new Date(t.ts*1000).toISOString().slice(11,19))} UTC · ${VN[t.venue]||t.venue} · ${t.side === "long" ? "long liquidated (forced sell)" : "short liquidated (forced buy)"} ${esc(fxK(t.usd))} $ at ${ldPx(t.px)}</title></path>`; });
+  abs_.forEach(t => { if (t.ts < t0 || t.px < lo || t.px > hi) return; const c = t.side === "buyers absorbing" ? "var(--bull)" : "var(--bear)", x = X(t.ts + 30), yy = Y(t.px);
+    g += `<g><title>${esc(new Date(t.ts*1000).toISOString().slice(11,16))} UTC · ${esc(t.side)}: ${esc(fxK(t.usd))} $ in one minute, price barely moved (delta ${t.cvd > 0 ? "+" : ""}${esc(fxK(t.cvd))})</title><rect x="${(x - 9).toFixed(1)}" y="${(yy - 7).toFixed(1)}" width="18" height="14" rx="3" fill="var(--surface)" stroke="${c}" stroke-width="1.3"/><text x="${x.toFixed(1)}" y="${(yy + 4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="${c}">A</text></g>`; });
+  // axes: price on the right (6 ticks), time below (every 15 / 30 min)
+  const nt = 6, stepP = (hi - lo) / nt;
+  for (let i = 0; i <= nt; i++){ const p = lo + i * stepP, yy = Y(p); g += `<line x1="${L}" x2="${L + pw}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-dasharray="2 4" opacity="0.6"/><text x="${L + pw + 6}" y="${(yy + 4).toFixed(1)}" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${fmt(p, dp)}</text>`; }
+  g += `<line x1="${L}" x2="${L + pw}" y1="${Y(mid).toFixed(1)}" y2="${Y(mid).toFixed(1)}" stroke="var(--ink)" stroke-width="1" opacity="0.5"/><rect x="${L + pw + 2}" y="${(Y(mid) - 8).toFixed(1)}" width="${R - 4}" height="16" rx="3" fill="var(--ink)"/><text x="${L + pw + 6}" y="${(Y(mid) + 4).toFixed(1)}" font-size="11" font-weight="700" fill="var(--surface)" font-family="IBM Plex Mono,monospace">${fmt(mid, dp)}</text>`;
+  const tstep = D.minutes <= 30 ? 300 : D.minutes <= 90 ? 900 : 1800;
+  for (let ts = Math.ceil(t0 / tstep) * tstep; ts <= t1; ts += tstep){ const x = X(ts); g += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${T + ph}" y2="${T + ph + 4}" stroke="var(--muted)"/><text x="${x.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${new Date((ts + 19800) * 1000).toISOString().slice(11,16)}</text>`; }
+  morph(el, head + `<div style="margin-top:8px"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(k)} flow chart">${g}</svg></div>
+    <p class="small faint" style="margin:6px 0 0">Time axis in IST. Purple = money resting in the books (all venues, brighter = more; a wall is a bright horizontal streak, a pulled wall a streak that stops). Line = last price each minute with its high-low; ○ big prints (≥ 8× the coin's median trade, size = $, green bought / red sold); ◆ liquidations (red = longs, green = shorts); A = absorption (heavy trading, no move). Hover anything for venue and size. Updated ${esc(D.at||"")} IST · descriptive, not a tested signal.</p>`);
 }
 async function bigwLoad(){
   const el = $("#bwCard"); if (!el) return;
@@ -3282,6 +3339,7 @@ function showView(v){
     { const lb = $("#lbCard"); if (lb && d) d.before(lb); }      // 2026-11-09 (Nikhil): Level Board on top of the order-flow chart
     { const l2 = $("#lb2Card"), dk = v === "crypto" ? $("#cliveDesk") : ["metals","global"].includes(v) ? $("#mliveDesk") : null; if (l2 && dk) dk.before(l2); }   // 2026-11-09: crypto / metals Level Board above their chart
     { const c3 = $("#cfCard"), dk = $("#cliveDesk"); if (c3 && dk && v === "crypto") dk.before(c3); }   // 2026-11-10: Crypto Flow between the Level Board and the chart
+    { const c4 = $("#fcCard"), dk = $("#cliveDesk"); if (c4 && dk && v === "crypto") dk.before(c4); }   // 2026-11-10: Flow Chart under it
     const more = $("#lvlMore"); if (more) more.open = true; } } catch(e){}   // trade cards + order flow chart just above Strategy recommendations
   try { if (v==="india") indApply(); else document.body.classList.remove("ind-stock"); } catch(e){}
   if (hasM){

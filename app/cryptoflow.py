@@ -478,6 +478,32 @@ def chart(coin, minutes=90):
             "liq": [{"ts": r[0], "venue": r[1], "side": r[2], "usd": r[3], "px": r[4]} for r in liq[-150:]], "absorb": absorption(coin, minutes)}
 
 
+def path(coin, minutes=90):
+    """per-minute price path aggregated over venues: [[minute_epoch, last, hi, lo, buy_usd, sell_usd]] oldest first."""
+    now = time.time(); m0 = int(now // 60 * 60) - 60 * (minutes - 1)
+    with _LOCK:
+        per = {}
+        for (c, v), d in BK.items():
+            if c != coin: continue
+            for k, b in d.items():
+                if k < m0 or b["px"] is None: continue
+                a = per.setdefault(k, [k, b["px"], b["hi"], b["lo"], 0.0, 0.0, 0])
+                a[2] = max(a[2], b["hi"]); a[3] = min(a[3], b["lo"]); a[4] += b["buy"]; a[5] += b["sell"]
+                if b["n"] > a[6]: a[1] = b["px"]; a[6] = b["n"]          # last = the venue with the most trades that minute
+    return [[k, r[1], r[2], r[3], round(r[4]), round(r[5])] for k, r in sorted(per.items())]
+
+
+def flowchart(coin, minutes=90, hot=None):
+    """everything the standalone Flow Chart needs: price path, heat, big prints, liquidations, absorption."""
+    out = {"coin": coin, "minutes": minutes, "path": path(coin, minutes), **chart(coin, minutes), "at": datetime.now().strftime("%H:%M:%S")}
+    try:
+        import bookwalls as BW
+        out["heat"] = BW.heat(coin, minutes)
+    except Exception:
+        out["heat"] = []
+    return out
+
+
 def api(coin="BTC"):
     start()
     return {"venues": venues(coin), "liq": liquidations(coin), "oi": open_interest(coin), "pos": positioning(coin), "big": big_prints(coin),
