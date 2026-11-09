@@ -900,6 +900,21 @@ def handle_get(path: str, q: dict):
                 "imb20": now.get("imb20"), "cvd": I.get("cvd"), "walls": I.get("walls"),
                 "absorption": I.get("absorption_counts"), "feeds": L.get("feeds"),
                 "error": None if I.get("ladder") else "no order book yet (market opens 09:15; the engine needs a minute to connect)"}
+    if path == "/api/livedesk/run_tool" and q.get("name") == "fetch_spot_1m":   # 2026-11-09 (Nikhil: "use spot price wherever possible"): index spot 1-min history for the DOM v4 replay
+        import dhan_live as DL
+        from datetime import date as _d
+        d0 = _d.fromisoformat(q.get("start") or "2026-10-15"); d1 = _d.today()
+        outd = os.path.join(ROOT, "data_store", "research", "spot_1m"); os.makedirs(outd, exist_ok=True); res = {}
+        for sym, sid in (("NIFTY", 13), ("BANKNIFTY", 25)):
+            try:
+                bars = DL.intraday("IDX_I", sid, "INDEX", d0, d1, mins=1, oi=False)
+                import pandas as pd
+                df = pd.DataFrame(bars)
+                df.to_csv(os.path.join(outd, f"{sym}.csv"), index=False)
+                res[sym] = {"rows": len(df), "first": str(df.ts.min()) if len(df) else None, "last": str(df.ts.max()) if len(df) else None}
+            except Exception as e:
+                res[sym] = {"err": str(e)[:160]}
+        return res
     if path == "/api/livedesk/run_tool" and q.get("name") == "restart_of_engine":  # 2026-11-03: restart the Dhan order-flow engine (loads code changes)
         import subprocess
         d = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "orderflow")

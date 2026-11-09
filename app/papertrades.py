@@ -23,7 +23,7 @@ RULES = {
     "b4h_v4": {"label": "4H break · v4 (ETH / BTC record)", "edge": "new - picked on 2023-26 after a grid; judge on live trades"},
     "b4h_h2": {"label": "4H break · BTC H2 (half at 1R + trail)", "edge": "new - record beside BTC targets; history +0.32 % vs +0.28 % a trade"},
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
-    "dom_ix": {"label": "DOM Index (Nifty, Bank Nifty · synthetic)", "edge": "RETIRED 9 Nov - v3 backtest failed (65 trades, PF 0.84, every stress negative); record flushed"},
+    "dom_ix": {"label": "DOM Index v4 (spot levels · synthetic future)", "edge": "forward test from 10 Nov - v4 replay 14 sessions PF 0.91 (BREAK 1.49 on 17); v1-v3 records flushed 9 Nov"},
     "dom_stocks": {"label": "DOM Stocks (record only)", "edge": "loss-making (-0.18R a trade, 312 trades) - needs new logic, not traded"},
     "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic, Nifty only from 6 Nov)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
     "ovn_h30": {"label": "Overnight hold · synthetic + 0.3-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 40,010"},

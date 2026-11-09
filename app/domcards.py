@@ -156,7 +156,7 @@ def _prep_lv(lv):
         v = (lv or {}).get(k)
         if not isinstance(v, dict):
             continue
-        if v.get("prices") == "futures":              # v3: already futures prices, nothing to move
+        if v.get("prices") in ("futures", "spot"):    # v3 / v4: already in the engine's own price terms, nothing to move
             continue
         if "zones_spot" not in v:
             b0 = float(v.get("basis") or 0.0)
@@ -217,7 +217,7 @@ def _rebase(k, t, I):
     so the basis is a MEDIAN over many pairs: the whole previous session until today has 20 pairs (~10:15), then every pair so far
     today. Zones move only when that median moves >= BASIS_MOVE pts."""
     lv = (S.get("lv") or {}).get(k)
-    if not isinstance(lv, dict) or "zones_spot" not in lv or lv.get("prices") == "futures":
+    if not isinstance(lv, dict) or "zones_spot" not in lv or lv.get("prices") in ("futures", "spot"):
         return
     if "basis_prev" not in lv:
         lv["basis_prev"] = _prev_basis(S["day"], k)
@@ -244,7 +244,34 @@ def _rebase(k, t, I):
 LEVELS = "fut"
 # 2026-11-09 (Nikhil: "flush out all trades for DOM 2"): the index record restarts clean with v3. Index trades before IX_START are
 # dropped on load and not created; the flushed trades are in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/.
-IX_START = "2099-01-01"   # 2026-11-09 (Nikhil: "FLUSH THE TRADES" after the failed v3 backtest): DOM Index RETIRED - no index trades recorded; stocks continue
+# 2026-11-09 v4 (Nikhil: "lets use spot price wherever possible, with synthetic future"): PRICE = "spot" -> the index is followed on the
+# SPOT index tick (of_engine spot_<SYM>.csv, Dhan IDX ticker), levels are the spot Level Map blocks + option-strike walls exactly as
+# published (no basis anywhere), stops / targets / IB are spot too. The futures book is used only for the direction confirmation
+# (lean, absorption, delta). The trade is the synthetic future (ATM call + put): its P&L ~ spot points moved (basis drift over a
+# <= 60 min hold is ignored) minus SYN_PTS. v3 (futures-only) stays selectable with PRICE = "fut"; v1 / v2 code is kept unused.
+PRICE = "spot"
+IX_START = "2026-11-10"   # v4 record starts here (v1-v3 records flushed 9 Nov, archived in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/)
+
+
+def _index_levels_spot(hot, views):
+    out = {}
+    for k in INDEX:
+        v = (views or {}).get(k) or {}
+        z = []
+        try:
+            for b in hot("levelmap").get(k, 10).get("blocks") or []:
+                if b.get("strength") in ("medium", "strong"):
+                    z.append((b["lo"], b["hi"], f"{b['strength']} block {b['lo']:.0f}-{b['hi']:.0f}"))
+        except Exception as e:
+            S.setdefault("err", {})["levelmap"] = str(e)[:100]
+        px = _f(v.get("spot")) or 0
+        bd = px * BAND["index"]
+        for side, nm in (("call", "call wall"), ("put", "put wall")):
+            w = _f((v.get("walls") or {}).get(side))
+            if w and bd:
+                z.append((w - bd, w + bd, f"{nm} {w:.0f}"))
+        out[k] = {"zones": _merge(z), "prices": "spot", "basis": None}
+    return out
 
 
 def _index_levels_fut(hot):
@@ -272,7 +299,7 @@ def levels(hot=None, views=None):
         return S["lv"]
     if hot is None or not views or not all((views.get(k) or {}).get("fut") for k in INDEX):
         return None                                        # wait until the tracker has spot + futures for both indices
-    lv = {**_stock_levels(day), **(_index_levels_fut(hot) if LEVELS == "fut" else _index_levels(hot, views))}
+    lv = {**_stock_levels(day), **(_index_levels_spot(hot, views) if PRICE == "spot" else _index_levels_fut(hot) if LEVELS == "fut" else _index_levels(hot, views))}
     os.makedirs(OUT, exist_ok=True)
     json.dump({"at": datetime.now().isoformat(timespec="seconds"), **lv}, open(p, "w"), indent=1)
     S["lv"] = _prep_lv(json.load(open(p)))
@@ -306,12 +333,28 @@ def _tail(path):
     return [l for l in lines if l]
 
 
+def _with_spot(rows, sp):
+    """rows (k, t, fut_mid, ...) -> same rows with the spot price in place of the mid; rows before the first spot tick are dropped.
+    sp = {"q": pending (t, spot) ticks, "last": latest spot}. Forward-fills across tick gaps."""
+    out = []
+    q = sp["q"]; i = 0
+    for r in rows:
+        while i < len(q) and q[i][0] <= r[1]:
+            sp["last"] = q[i][1]; i += 1
+        if sp["last"] is None:
+            continue
+        out.append((r[0], r[1], sp["last"]) + tuple(r[3:]))
+    del q[:i]
+    return out
+
+
 def _rows():
     """New rows as (key, t, mid, imb20, buy, sell, bid_qty20, ask_qty20), oldest first."""
     day = S["day"]
     out = []
     for k in INDEX:
         p = os.path.join(OFD, "of", day, f"sec_{k}.csv")
+        rows = []
         for l in _tail(p):
             c = l.split(",")
             if c[0] == "t" or len(c) < 15:
@@ -319,7 +362,15 @@ def _rows():
             mid = _f(c[4])
             if not mid:
                 continue
-            out.append((k, int(c[0]), mid, _f(c[11]) or 0.0, _f(c[6]) or 0.0, _f(c[7]) or 0.0, _f(c[13]) or 0.0, _f(c[14]) or 0.0))
+            rows.append((k, int(c[0]), mid, _f(c[11]) or 0.0, _f(c[6]) or 0.0, _f(c[7]) or 0.0, _f(c[13]) or 0.0, _f(c[14]) or 0.0))
+        if PRICE == "spot":                            # v4: replace the futures mid with the latest spot tick at or before that second
+            sp = S.setdefault("spot", {}).setdefault(k, {"q": [], "last": None})
+            for l in _tail(os.path.join(OFD, "of", day, f"spot_{k}.csv")):
+                c = l.split(",")
+                if c[0] != "t" and len(c) >= 2 and _f(c[1]):
+                    sp["q"].append((int(c[0]), _f(c[1])))
+            rows = _with_spot(rows, sp)
+        out += rows
     p = os.path.join(OFD, "stocks_depth", f"{day}.csv")
     for l in _tail(p):
         c = l.split(",")
@@ -386,7 +437,8 @@ def _open(k, setup, side, entry, stop, zone, zones, t, why):
                         "opened": f"{S['day']} {_hm(t)}", "t0": t, "entry": round(entry, 2), "stop": round(stop, 2), "target": round(tgt, 2),
                         "target_note": tnote, "risk": risk, "cost_r": round(_cost_r(k, entry, risk), 3), "level": zone["name"],
                         "zone": [zone["lo"], zone["hi"]], "why": why, "plan": plan, "plan_ix": plan_ix, "status": "open",
-                        "kind": "futures" if k in INDEX else "stock",
+                        "kind": ("synthetic on spot" if PRICE == "spot" else "futures") if k in INDEX else "stock",
+                        "engine": ("v4 spot" if PRICE == "spot" else "v3 fut") if k in INDEX else None,
                         # 2026-11-03 audit (look-ahead): index levels (blocks, OI walls, basis) are fixed when first read. If that
                         # happened after this trade's time (a restart mid-day), the trade used levels it could not have known.
                         "late_levels": bool(k in INDEX and t < S.get("lv_ts", 0))})
@@ -556,9 +608,9 @@ def tick(hot=None, views=None):
     if now.weekday() >= 5 or not ("09:15" <= now.strftime("%H:%M") <= "15:35"):
         return
     day = now.strftime("%Y-%m-%d")
-    if S.get("day") != day or S.get("ver") != 8:
+    if S.get("day") != day or S.get("ver") != 9:
         _new_day(day)
-        S["ver"] = 8                                   # v2 (3 Nov): stock books; v4/5 (9 Nov): measured basis; v6 (9 Nov): futures-native levels
+        S["ver"] = 9                                   # v2 (3 Nov): stock books; v4/5 (9 Nov): measured basis; v6 (9 Nov): futures-native levels
     if levels(hot, views) is None:
         return
     S["lv_ts"] = S.get("lv_ts") or _lv_ts()

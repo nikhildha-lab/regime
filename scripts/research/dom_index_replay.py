@@ -52,6 +52,64 @@ def _sec(day, k):
     return out
 
 
+SPOT1M = os.path.join(ROOT, "data_store", "research", "spot_1m")
+
+
+def spot_rows(day, rows):
+    """2026-11-09 v4: the futures per-second rows with the SPOT price in place of the mid. History has spot only as 1-min bars
+    (Dhan IDX_I), so inside minute m every second uses that bar's OPEN (known at the minute's start - no look-ahead). The live
+    engine uses real spot ticks, so the live path is finer than this replay."""
+    out = []
+    for k in D.INDEX:
+        b = pd.read_csv(os.path.join(SPOT1M, f"{k}.csv"), usecols=["ts", "open"])
+        b = b[b.ts.str[:10] == day]
+        if b.empty:
+            continue
+        q = [(int(pd.Timestamp(ts).timestamp()), float(o)) for ts, o in zip(b.ts, b.open)]
+        q.sort()
+        kr = [r for r in rows if r[0] == k]
+        out += D._with_spot(kr, {"q": q, "last": None})
+    out.sort(key=lambda r: r[1])
+    return out
+
+
+def rebuilt_levels_spot(day, rows):
+    """v4 levels: spot Level Map blocks as of the previous session + option walls (max OI strike, first chain snapshot), unshifted."""
+    o = None
+    p = os.path.join(OCD, f"{day}.csv.gz")
+    if os.path.exists(p):
+        o = pd.read_csv(p, usecols=["ts", "symbol", "expiry", "strike", "side", "oi", "underlying"])
+        o = o[o.expiry.notna()]; o["ts"] = pd.to_datetime(o.ts)
+    out = {}
+    for k in D.INDEX:
+        z, walls, px = [], {}, None
+        if o is not None:
+            x = o[o.symbol == k]
+            if len(x):
+                s0 = x.ts.min(); a = x[x.ts == s0]
+                exp = sorted(a.expiry.astype(str).unique())[0]; a = a[a.expiry.astype(str) == exp]
+                px = float(a.underlying.iloc[0])
+                for side, nm in (("CE", "call"), ("PE", "put")):
+                    bb = a[a.side == side]
+                    if len(bb) and bb.oi.max() > 0:
+                        walls[nm] = float(bb.loc[bb.oi.idxmax(), "strike"])
+        try:
+            prev = (pd.Timestamp(day) - pd.offsets.BDay(1)).strftime("%Y-%m-%d")
+            for b in LM.build(k, 10, asof=prev).get("blocks") or []:
+                if b.get("strength") in ("medium", "strong"):
+                    z.append((b["lo"], b["hi"], f"{b['strength']} block {b['lo']:.0f}-{b['hi']:.0f}"))
+        except Exception as e:
+            print("levelmap", k, day, e)
+        px = px or next((r[2] for r in rows if r[0] == k), 0)
+        bd = px * D.BAND["index"]
+        for nm in ("call", "put"):
+            w = walls.get(nm)
+            if w:
+                z.append((w - bd, w + bd, f"{nm} wall {w:.0f}"))
+        out[k] = {"zones": D._merge(z), "prices": "spot", "basis": None, "rebuilt": True}
+    return out
+
+
 def rebuilt_levels_fut(day):
     """2026-11-09 v3: futures-native levels (levelmap.build_fut as of the previous session) - what the live engine now uses."""
     out = {}
@@ -120,12 +178,17 @@ def replay(day, lv, rows):
 
 def main():
     os.makedirs(OUTD, exist_ok=True)
-    tag = "_fut" if D.LEVELS == "fut" else ""
+    tag = "_spot" if getattr(D, "PRICE", "fut") == "spot" else "_fut" if D.LEVELS == "fut" else ""
     allt, lvsrc = [], {}
     for day in days():
         rows = sorted(_sec(day, "NIFTY") + _sec(day, "BANKNIFTY"), key=lambda r: r[1])
         p = os.path.join(D.OUT, f"levels_{day}.json")
-        if D.LEVELS == "fut":                               # 2026-11-09 v3: same futures-native levels for every day
+        if getattr(D, "PRICE", "fut") == "spot":            # 2026-11-09 v4: spot price path + spot levels for every day
+            rows = spot_rows(day, rows)
+            if not rows:
+                print(day, "no spot history"); continue
+            lv = rebuilt_levels_spot(day, rows); src = "rebuilt (spot)"
+        elif D.LEVELS == "fut":                               # 2026-11-09 v3: same futures-native levels for every day
             L = json.load(open(p)) if os.path.exists(p) else {}
             if all(isinstance(L.get(k), dict) and L[k].get("prices") == "futures" for k in D.INDEX):
                 lv = {k: L[k] for k in D.INDEX}; src = "live file (futures)"

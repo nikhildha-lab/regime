@@ -30,7 +30,9 @@ sys.path.insert(0, HERE)
 import dom_index_replay as R   # noqa: E402
 D = R.D
 D.IX_START = "2000-01-01"     # research: the live-record flush must not block past days
-OUTD = os.path.join(R.ROOT, "data_store", "research", "dom_index_v3_bt")
+MODE = os.environ.get("DOM_MODE", "spot" if getattr(D, "PRICE", "fut") == "spot" else "fut")   # DOM_MODE=fut re-runs v3
+D.PRICE = MODE
+OUTD = os.path.join(R.ROOT, "data_store", "research", "dom_index_v3_bt" if MODE == "fut" else "dom_index_v4_spot_bt")
 LOT = D.LOT; SYN = D.SYN_PTS; FUT = {"NIFTY": 16.5, "BANKNIFTY": 40.0}
 P0 = copy.deepcopy(D.P); BAND0 = dict(D.BAND)
 
@@ -41,11 +43,17 @@ def load_days():
         rows = sorted(R._sec(day, "NIFTY") + R._sec(day, "BANKNIFTY"), key=lambda r: r[1])
         if len(rows) < 2000:
             continue
-        p = os.path.join(D.OUT, f"levels_{day}.json"); L = json.load(open(p)) if os.path.exists(p) else {}
-        if all(isinstance(L.get(k), dict) and L[k].get("prices") == "futures" for k in D.INDEX):
-            lv = {k: L[k] for k in D.INDEX}
+        if MODE == "spot":
+            rows = R.spot_rows(day, rows)
+            if not rows:
+                continue
+            lv = R.rebuilt_levels_spot(day, rows)
         else:
-            lv = R.rebuilt_levels_fut(day)
+            p = os.path.join(D.OUT, f"levels_{day}.json"); L = json.load(open(p)) if os.path.exists(p) else {}
+            if all(isinstance(L.get(k), dict) and L[k].get("prices") == "futures" for k in D.INDEX):
+                lv = {k: L[k] for k in D.INDEX}
+            else:
+                lv = R.rebuilt_levels_fut(day)
         out.append((day, lv, rows))
     return out
 
@@ -127,7 +135,8 @@ def report(days, cut, G):
     base = pd.read_csv(os.path.join(OUTD, "trades_base.csv"))
     out = io.StringIO()
     with redirect_stdout(out):
-        print(f"DOM INDEX v3 BACKTEST · {len(days)} sessions {names[0]} .. {names[-1]} · synthetic future 1 lot after costs (Rs) · fills at the futures mid\n")
+        print(f"DOM INDEX {'v4 SPOT' if MODE == 'spot' else 'v3 FUTURES'} BACKTEST · {len(days)} sessions {names[0]} .. {names[-1]} · synthetic future 1 lot after costs (Rs) · "
+              f"{'price path = spot (1-min bar opens), levels = spot Level Map + option walls, book from futures' if MODE == 'spot' else 'fills at the futures mid'}\n")
         print("1. BASE RULE          ", fmt(stats(base)))
         print("   train (first 70%)  ", fmt(stats(base[base.day < cut])), f"  [< {cut}]")
         print("   test  (last 30%)   ", fmt(stats(base[base.day >= cut])))
