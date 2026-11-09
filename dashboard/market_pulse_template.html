@@ -666,7 +666,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 <div class="view" id="viewCLive" hidden>
   <section class="card" hidden data-anchor="1"></section>   <!-- 2026-11-03 audit: placement anchor (old tracker status header removed) -->
   <section class="card" id="b4Crypto"></section>
-  <section class="card" id="csCard"></section>
+  <section class="card" id="csCard" hidden></section>   <!-- 2026-11-09 (Nikhil): section removed - the score is the Level Board's Next Day column -->
   <section class="card" id="lbCard"></section>
   <section class="card" id="bwCard"></section>
   <section class="card ptCard" data-keys="BTC,ETH" data-title="Crypto paper trades · BTC / ETH"></section>
@@ -681,7 +681,8 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 <div class="view" id="viewFno" hidden><div id="fnoBoard"></div></div>
 <div class="view" id="viewLogbook" hidden>
   <section class="card ptCard" id="ptAll" data-keys="" data-title="All paper trades · every rule, every market"></section>
-  <section class="card" id="ptCharts" style="margin-top:12px"></section>
+  <section class="card" id="ptCharts" style="margin-top:12px" hidden></section>   <!-- 2026-11-09 (Nikhil): section removed - the chart opens from a row of All Paper Trades -->
+  <section class="card" id="perfCard" style="margin-top:12px"></section>
 </div>
 </div>
 
@@ -1778,21 +1779,26 @@ function tcChart(t){
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.market)} ${esc(t.tag)} trade chart">${g}</svg>${off ? `<div class="small faint">futures candles - the trade's spot prices are drawn ${off > 0 ? "+" : ""}${off} pts higher to line up</div>` : ""}`;
 }
 async function tcLoad(){
-  const el = $("#ptCharts"); if (!el || el.offsetParent === null) return;
+  const el = $("#ptCharts"); if (!el || el.hidden || el.offsetParent === null) return;
   const grp = MKT_TABS.includes(VIEW) ? VIEW : "india";
   let D; try { D = await fetch(`/api/livedesk/tradecharts?group=${grp}&days=${TC.days}`).then(r => r.json()); } catch(e){ return; }
   TC.d = D; tcRender();
 }
-function tcRender(){
-  const el = $("#ptCharts"), D = TC.d; if (!el || !D) return;
-  const all = D.trades || [], tags = [...new Set(all.map(t => t.tag))], F = TC.f === "All" || tags.includes(TC.f) ? TC.f : "All", show = all.filter(t => F === "All" || t.tag === F);
+// 2026-11-09 (Nikhil): the flash card (chart + why / right / wrong / improve) is shared with the clickable rows of All Paper Trades
+function tcCard(t){
   const money = (v, c) => v == null ? "–" : (v < 0 ? "−" : "+") + (c || "") + fmt(Math.abs(v), c === "₹" ? 0 : 2), sg = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
-  const card = t => `<div class="tc-card"><div class="spread"><b>${esc(t.market)} <span class="${t.side === "long" ? "pos" : "neg"}">${t.side === "long" ? "▲ long" : "▼ short"}</span></b><span class="pill p-neutral" title="${esc(t.rule_label||"")}">${esc(t.tag)}</span></div>
+  return `<div class="tc-card"><div class="spread"><b>${esc(t.market)} <span class="${t.side === "long" ? "pos" : "neg"}">${t.side === "long" ? "▲ long" : "▼ short"}</span></b><span class="pill p-neutral" title="${esc(t.rule_label||"")}">${esc(t.tag)}</span></div>
       <div class="small muted">${esc(String(t.opened||"").slice(5,16))} → ${t.status === "open" ? "open" : esc(String(t.closed||"").slice(5,16))} · ${t.status === "open" ? (t.pnl_open != null ? `<b class="${sg(t.pnl_open)}">${money(t.pnl_open, t.ccy)}</b> open` : "open") : `<b class="${sg(t.pnl)}">${money(t.pnl, t.ccy)}</b>${t.r != null ? ` · ${t.r > 0 ? "+" : ""}${t.r}R` : ""} · ${esc(t.exit_reason||"")}`}</div>
       ${tcChart(t)}
       ${t.legs_text ? `<div class="small" style="margin-bottom:4px">${esc(t.legs_text)}</div>` : ""}
       <div class="small"><b>Why:</b> ${esc(t.why||"–")}</div>
       ${t.review ? `<div class="small" style="margin-top:3px">${t.review.right ? `<span class="pos">✓ ${esc(t.review.right)}</span><br>` : ""}${t.review.wrong ? `<span class="neg">✗ ${esc(t.review.wrong)}</span><br>` : ""}<b>Improve:</b> ${esc(t.review.improve||"–")}</div>` : t.status === "open" ? `<div class="small faint">trade open</div>` : ""}</div>`;
+}
+function tcRender(){
+  const el = $("#ptCharts"), D = TC.d; if (!el || !D) return;
+  const all = D.trades || [], tags = [...new Set(all.map(t => t.tag))], F = TC.f === "All" || tags.includes(TC.f) ? TC.f : "All", show = all.filter(t => F === "All" || t.tag === F);
+  const money = (v, c) => v == null ? "–" : (v < 0 ? "−" : "+") + (c || "") + fmt(Math.abs(v), c === "₹" ? 0 : 2), sg = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
+  const card = tcCard;
   setKeep(el, `<div class="spread"><h2>Strategy Paper Trades · Charts <span class="small muted">paper only · never orders</span></h2><span class="small muted">updated ${esc(D.at||"")}</span></div>
     <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px"><div class="ld-btns" style="margin:0">${["All", ...tags].map(k => `<button class="${k === F ? "on" : ""}" onclick="TC.f='${esc(k)}';tcRender()">${esc(k)}${k === "All" ? ` (${all.length})` : ` (${all.filter(t => t.tag === k).length})`}</button>`).join("")}</div>
       <div class="ld-btns" style="margin:0">${[[1,"Today"],[5,"Last 5 days"]].map(([n, l]) => `<button class="${n === TC.days ? "on" : ""}" onclick="TC.days=${n};tcLoad()">${l}</button>`).join("")}</div></div>
@@ -1908,7 +1914,17 @@ async function ptlLoad(el){
   if (!PTL.rows || Date.now() - PTL.t > 60000){
     try { const d = await fetch("/api/livedesk/tradelog").then(r => r.json()); PTL.rows = d.rows || []; PTL.t = Date.now(); PTL.as_of = d.as_of; } catch(e){ if (!PTL.rows) return; } }
   try { const P = await fetch("/api/livedesk/papertrades").then(r => r.json()); PTL.open = {}; (P.open||[]).forEach(t => { PTL.open[`${t.rule}|${t.key}|${t.opened}`] = t; }); } catch(e){}
-  PTL.el = el; ptlRender();
+  if (!PTL.tvAt || Date.now() - PTL.tvAt > 120000){ try { PTL.topvol = await fetch("/api/livedesk/topvol").then(r => r.json()); PTL.tvAt = Date.now(); } catch(e){} }   // 2026-11-09: today's top-10 universe
+  PTL.el = el; ptlRender(); perfRender();
+}
+PTL.flash = {}; PTL.openId = null;
+async function ptlFlash(id, rule, key, opened, side){
+  if (PTL.openId === id){ PTL.openId = null; ptlRender(); return; }
+  PTL.openId = id; ptlRender();
+  if (!PTL.flash[id] || PTL.flash[id].status === "open" || PTL.flash[id].err){
+    try { PTL.flash[id] = await fetch(`/api/livedesk/tradechart?rule=${encodeURIComponent(rule)}&key=${encodeURIComponent(key)}&opened=${encodeURIComponent(opened)}&side=${encodeURIComponent(side)}`).then(r => r.json()); }
+    catch(e){ PTL.flash[id] = {err: "could not load the chart"}; } }
+  if (PTL.openId === id) ptlRender();
 }
 function ptlRender(){
   const el = PTL.el; if (!el || !PTL.rows) return;
@@ -1951,16 +1967,79 @@ function ptlRender(){
   const imp = r => { const t = r.where_to_improve; return t && t !== "-" ? `<span title="${esc(t)}">${esc(cut(t, 60))}</span>` : '<span class="faint">–</span>'; };
   const tr = r => { const live = PTL.open[`${r.rule}|${r.key}|${r.opened_ist}`]; const d = dayOf(r), tIn = String(r.opened_ist).slice(11,16), tOut = String(r.closed_ist||"").slice(11,16);
     const pnl = r.status === "open" ? (live && live.pnl_open != null ? money(live.pnl_open, r.ccy) + ' <span class="small faint">live</span>' : (num(r.pnl_open) != null && !isNaN(num(r.pnl_open)) ? money(r.pnl_open, r.ccy) + ' <span class="small faint">open</span>' : '<span class="pill p-accent" style="font-size:11px">open</span>')) : money(r.pnl, r.ccy);
-    return `<tr><td style="white-space:nowrap">${esc(d.slice(5))}</td><td style="white-space:nowrap" class="small">${esc(tIn)}${tOut ? "→" + esc(tOut) : ""}</td><td title="${esc(r.rule_label)}" style="white-space:nowrap">${esc(ruleShort(r.rule, r.rule_label))}</td><td><b>${esc(r.market)}</b></td>
+    const id = `${r.rule}|${r.key}|${r.opened_ist}|${r.side}`, isOpen = PTL.openId === id, Fd = PTL.flash[id];
+    const flash = !isOpen ? "" : `<tr class="ptl-flash"><td colspan="12" style="background:var(--surface-2);padding:8px 10px">${!Fd ? '<span class="small muted">Loading the chart…</span>' : Fd.err ? `<span class="small muted">${esc(Fd.err)}</span>` : `<div style="max-width:560px">${tcCard(Fd)}</div>`}</td></tr>`;
+    return `<tr style="cursor:pointer;${isOpen ? "background:var(--surface-2)" : ""}" title="click for the trade's chart" onclick="ptlFlash(${JSON.stringify(id).replace(/"/g, "&quot;")}, ${JSON.stringify(r.rule).replace(/"/g, "&quot;")}, ${JSON.stringify(r.key).replace(/"/g, "&quot;")}, ${JSON.stringify(r.opened_ist).replace(/"/g, "&quot;")}, ${JSON.stringify(r.side).replace(/"/g, "&quot;")})"><td style="white-space:nowrap">${isOpen ? "▾ " : ""}${esc(d.slice(5))}</td><td style="white-space:nowrap" class="small">${esc(tIn)}${tOut ? "→" + esc(tOut) : ""}</td><td title="${esc(r.rule_label)}" style="white-space:nowrap">${esc(ruleShort(r.rule, r.rule_label))}</td><td><b>${esc(r.market)}</b></td>
       <td class="${r.side==="long"?"pos":"neg"}">${esc(r.side)}</td><td class="num">${f(r.entry)}</td><td class="num">${r.status==="open" ? (live && live.now != null ? f(live.now) : "–") : f(r.exit)}</td>
       <td class="small">${r.status==="open" ? "" : esc(r.exit_reason||"")}</td><td class="num">${num(r.r) != null && !isNaN(num(r.r)) && r.status !== "open" ? `<span class="${num(r.r)>0?"pos":"neg"}">${num(r.r)>0?"+":""}${fmt(num(r.r),2)}</span>` : "–"}</td>
-      <td class="num" style="white-space:nowrap">${pnl}</td><td title="${esc(r.why_taken||"")}" class="small" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.why_taken||"")}</td><td class="small" style="min-width:200px">${rv(r)}</td><td class="small" style="min-width:180px">${imp(r)}</td></tr>`; };
-  el.innerHTML = `<div class="spread"><h2>All Paper Trades <span class="small muted">every rule · paper only, never orders</span></h2></div>${bar}
+      <td class="num" style="white-space:nowrap">${pnl}</td><td class="small" style="min-width:200px">${rv(r)}</td><td class="small" style="min-width:180px">${imp(r)}</td></tr>${flash}`; };   // 2026-11-09 (Nikhil): Why column removed (it is in the flash card)
+  const TV = PTL.topvol, uni = !TV ? "" : `<div class="small" style="margin:2px 0 4px"><b>Today's stock universe</b> <span class="muted">(top ${TV.n || 10} F&amp;O stocks by 09:15–09:30 traded value - the intraday stock rules trade only these):</span> ${(TV.top||[]).length ? TV.top.map(esc).join(", ") : `<span class="faint">${esc(TV.note || "not ranked yet")}</span>`}</div>`;
+  el.innerHTML = `<div class="spread"><h2>All Paper Trades <span class="small muted">every rule · paper only, never orders</span></h2></div>${uni}${bar}
     <div class="small" style="margin:2px 0 6px">${tot || '<span class="faint">No closed trade in this selection.</span>'}</div>
-    <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th>Why</th><th title="the trade's own review from its price path">Right / Wrong</th><th>Improve</th></tr></thead>
-      <tbody>${rows.length ? rows.map(tr).join("") : `<tr><td colspan="13" class="small faint">No trades match.</td></tr>`}</tbody></table></div>
+    <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th title="the trade's own review from its price path">Right / Wrong</th><th>Improve</th></tr></thead>
+      <tbody>${rows.length ? rows.map(tr).join("") : `<tr><td colspan="12" class="small faint">No trades match.</td></tr>`}</tbody></table></div>
     ${byRule ? `<details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">By strategy in this selection</summary><div class="tscroll"><table class="ld-tbl small" style="margin-top:4px"><thead><tr><th>Strategy</th><th>Closed</th><th>Won</th><th>P&amp;L</th></tr></thead><tbody>${byRule}</tbody></table></div></details>` : ""}
-    <p class="small faint" style="margin:6px 0 0">Hover a strategy, Why, Right / Wrong or Improve cell for the full text. Right / Wrong and Improve are the trade's own review, written from its price path after it closed (best / worst point, what followed). Open trades show live P&amp;L when the engine has a price. Source: the paper trade log, refreshed every 5 minutes.</p>`;
+    <p class="small faint" style="margin:6px 0 0">Click a row for its chart (candles around the trade, entry / stop / target / exit, why it was taken). Hover a strategy, Right / Wrong or Improve cell for the full text. Right / Wrong and Improve are the trade's own review, written from its price path after it closed (best / worst point, what followed). Open trades show live P&amp;L when the engine has a price. Source: the paper trade log, refreshed every 5 minutes.</p>`;
+}
+// 2026-11-09 (Nikhil: "new section Strategy Performance, measuring all strategies with standard industry metrics"): computed in the
+// browser from the paper trade log (closed trades only). Per strategy and currency: trades, win rate, profit factor, payoff ratio,
+// expectancy, net P&L, max drawdown (on the trade-by-trade equity curve), recovery factor, SQN (Van Tharp, on R), t-stat, longest
+// losing run, average hold. Under 30 trades nothing here is proven - the row says so.
+const PERF = {f: (() => { try { return JSON.parse(localStorage.getItem("mp.perf.f") || "{}"); } catch(e){ return {}; } })()};
+PERF.f = Object.assign({range: "all", grp: "tab", by: "pnl"}, PERF.f);
+function perfSet(k, v){ PERF.f[k] = v; try { localStorage.setItem("mp.perf.f", JSON.stringify(PERF.f)); } catch(e){} perfRender(); }
+function perfStats(rows){
+  const num = v => { v = v === "" || v == null ? NaN : +v; return isNaN(v) ? null : v; };
+  const R = rows.slice().sort((a, b) => String(a.closed_ist).localeCompare(String(b.closed_ist)));
+  const pnl = R.map(r => num(r.pnl) || 0), rs = R.map(r => num(r.r)).filter(v => v != null);
+  const n = pnl.length, wins = pnl.filter(v => v > 0), losses = pnl.filter(v => v < 0);
+  const gp = wins.reduce((a, b) => a + b, 0), gl = -losses.reduce((a, b) => a + b, 0), net = gp - gl;
+  const avgW = wins.length ? gp / wins.length : null, avgL = losses.length ? gl / losses.length : null;
+  let eq = 0, peak = 0, dd = 0, run = 0, worstRun = 0;
+  pnl.forEach(v => { eq += v; peak = Math.max(peak, eq); dd = Math.max(dd, peak - eq); run = v < 0 ? run + 1 : 0; worstRun = Math.max(worstRun, run); });
+  const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null, sd = a => { if (a.length < 2) return null; const m = mean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / (a.length - 1)); };
+  const sdP = sd(pnl), sdR = sd(rs);
+  const hold = R.map(r => { const a = Date.parse(String(r.opened_ist).replace(" ", "T")), b = Date.parse(String(r.closed_ist).replace(" ", "T")); return isNaN(a) || isNaN(b) ? null : (b - a) / 60000; }).filter(v => v != null);
+  return {n, win: n ? wins.length / n : null, pf: gl > 0 ? gp / gl : (gp > 0 ? Infinity : null), payoff: avgW != null && avgL ? avgW / avgL : null, avgW, avgL, exp: n ? net / n : null,
+    expR: rs.length ? mean(rs) : null, net, dd, rf: dd > 0 ? net / dd : null, sqn: rs.length > 1 && sdR ? Math.sqrt(rs.length) * mean(rs) / sdR : null,
+    t: n > 1 && sdP ? Math.sqrt(n) * mean(pnl) / sdP : null, worstRun, hold: hold.length ? mean(hold) : null, nr: rs.length};
+}
+function perfRender(){
+  const el = $("#perfCard"); if (!el || !PTL.rows) return;
+  const F = PERF.f, todayIST = new Date(Date.now() + 330*60000).toISOString().slice(0,10);
+  const grp = F.grp === "tab" && MKT_TABS.includes(VIEW) ? VIEW : F.grp === "tab" ? "" : F.grp;
+  const since = d => { const x = new Date(todayIST); x.setDate(x.getDate() - d); return x.toISOString().slice(0,10); };
+  let rows = PTL.rows.filter(r => r.status === "closed" && r.closed_ist);
+  if (grp) rows = rows.filter(r => (r.group||"").toLowerCase() === grp);
+  if (F.range !== "all") rows = rows.filter(r => String(r.closed_ist).slice(0,10) >= since(+F.range));
+  const openN = PTL.rows.filter(r => r.status === "open" && (!grp || (r.group||"").toLowerCase() === grp)).reduce((m, r) => { const k = r.rule_label + "|" + r.ccy; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const groups = Object.values(rows.reduce((m, r) => { const k = r.rule_label + "|" + r.ccy; (m[k] = m[k] || {rule: r.rule_label, short: ruleShort(r.rule, r.rule_label), ccy: r.ccy, mk: new Set(), rows: []}); m[k].rows.push(r); m[k].mk.add(r.market); return m; }, {}))
+    .map(g => Object.assign(g, {s: perfStats(g.rows), open: openN[g.rule + "|" + g.ccy] || 0}));
+  const key = {pnl: g => g.s.net, n: g => g.s.n, pf: g => g.s.pf === Infinity ? 1e9 : (g.s.pf ?? -1), sqn: g => g.s.sqn ?? -99, win: g => g.s.win ?? -1, exp: g => g.s.expR ?? -99}[F.by] || (g => g.s.net);
+  groups.sort((a, b) => key(b) - key(a) || b.s.n - a.s.n);
+  const sel = (k, opts, cur) => `<select class="mkpick" style="font-size:12px;padding:3px 6px" onchange="perfSet('${k}', this.value)">${opts.map(([v,l]) => `<option value="${esc(v)}" ${String(v)===String(cur)?"selected":""}>${esc(l)}</option>`).join("")}</select>`;
+  const money = (v, c) => v == null ? "–" : `<b class="${v>0?"pos":v<0?"neg":""}">${v<0?"−":"+"}${c||""}${fmt(Math.abs(v), c==="₹"?0:2)}</b>`;
+  const f2 = (v, d) => v == null ? "–" : v === Infinity ? "∞" : fmt(v, d == null ? 2 : d), pc = v => v == null ? "–" : Math.round(100*v) + "%";
+  const sgn = (v, d) => v == null ? "–" : `<span class="${v>0?"pos":v<0?"neg":""}">${v>0?"+":""}${fmt(v, d == null ? 2 : d)}</span>`;
+  const hold = m => m == null ? "–" : m < 90 ? Math.round(m) + " min" : m < 48*60 ? fmt(m/60, 1) + " h" : fmt(m/1440, 1) + " d";
+  const verdict = s => { if (s.n < 30) return `<span class="pill p-neutral" style="font-size:11px" title="fewer than 30 closed trades - too early to judge">too early (${s.n})</span>`;
+    const good = s.pf != null && s.pf > 1.3 && (s.sqn == null || s.sqn > 1.6), bad = s.pf != null && s.pf < 0.9;
+    return `<span class="pill ${good ? "p-bull" : bad ? "p-bear" : "p-wait"}" style="font-size:11px">${good ? "working" : bad ? "losing" : "marginal"}</span>`; };
+  const row = g => { const s = g.s, c = g.ccy; return `<tr><td title="${esc(g.rule)}" style="white-space:nowrap"><b>${esc(g.short)}</b><br><span class="small faint">${esc([...g.mk].slice(0,3).join(", "))}${g.mk.size > 3 ? ` +${g.mk.size-3}` : ""}${g.open ? ` · ${g.open} open` : ""}</span></td>
+    <td class="num">${s.n}</td><td class="num">${pc(s.win)}</td><td class="num" title="gross profit ÷ gross loss">${f2(s.pf)}</td><td class="num" title="average win ÷ average loss">${f2(s.payoff)}</td>
+    <td class="num" title="average P&L per trade">${money(s.exp, c)}</td><td class="num" title="average R per trade (${s.nr} with R)">${sgn(s.expR)}</td><td class="num">${money(s.net, c)}</td>
+    <td class="num" title="largest peak-to-trough fall of the trade-by-trade equity curve">${s.dd ? `<span class="neg">−${c}${fmt(s.dd, c==="₹"?0:2)}</span>` : "–"}</td><td class="num" title="net P&L ÷ max drawdown">${f2(s.rf, 1)}</td>
+    <td class="num" title="System Quality Number = √n × mean R ÷ std R (Van Tharp): < 1.6 poor, 2–3 good, > 3 excellent">${f2(s.sqn, 1)}</td><td class="num" title="mean ÷ std × √n of the P&L series (≥ 2 = unlikely to be luck)">${f2(s.t, 1)}</td>
+    <td class="num">${s.worstRun}</td><td class="num">${hold(s.hold)}</td><td>${verdict(s)}</td></tr>`; };
+  const bar = `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">
+      <span class="small muted">Period</span> ${sel("range", [["all","All history"],["30","Last 30 days"],["7","Last 7 days"]], F.range)}
+      <span class="small muted">Market</span> ${sel("grp", [["tab","This tab"],["","All markets"],["india","India"],["crypto","Crypto"],["metals","Metals"],["global","Commodities"],["us","US"]], F.grp)}
+      <span class="small muted">Sort by</span> ${sel("by", [["pnl","Net P&L"],["pf","Profit factor"],["sqn","SQN"],["exp","Avg R"],["win","Win rate"],["n","Trades"]], F.by)}
+      <span class="small faint" style="margin-left:auto">${rows.length} closed trades · ${groups.length} strategies</span></div>`;
+  el.innerHTML = `<div class="spread"><h2>Strategy Performance <span class="small muted">standard metrics · closed paper trades · indications, not advice</span></h2></div>${bar}
+    <div class="tscroll"><table class="ld-tbl small" style="width:100%;white-space:nowrap"><thead><tr><th>Strategy</th><th>Trades</th><th>Win Rate</th><th title="gross profit ÷ gross loss">Profit Factor</th><th title="average win ÷ average loss">Payoff</th><th>Expectancy</th><th>Avg R</th><th>Net P&amp;L</th><th>Max Drawdown</th><th title="net ÷ max drawdown">Recovery</th><th title="System Quality Number (on R)">SQN</th><th>t-stat</th><th title="longest run of losing trades">Worst Run</th><th>Avg Hold</th><th>Verdict</th></tr></thead>
+      <tbody>${groups.length ? groups.map(row).join("") : `<tr><td colspan="15" class="small faint">No closed trade in this selection.</td></tr>`}</tbody></table></div>
+    <p class="small faint" style="margin:6px 0 0">Profit factor = gross profit ÷ gross loss (above 1.3 is healthy, below 1 loses). Payoff = average win ÷ average loss. Expectancy = average P&amp;L per trade; Avg R = the same in risk units (1 R = the planned stop). Max drawdown = the biggest fall of the running P&amp;L, trade by trade; Recovery = net ÷ that drawdown. SQN = √n × mean R ÷ std R (under 1.6 poor, 2–3 good, over 3 excellent). t-stat = how far the average is from zero in noise units (2 or more = unlikely to be luck). Verdict needs 30 closed trades; before that every number is a small-sample reading. Paper results after modelled costs; the forward record never changes a rule on its own.</p>`;
 }
 async function ptLoad(){
   for (const el of document.querySelectorAll(".ptCard")){ if (el.offsetParent===null) continue;   // skip hidden cards
@@ -2102,16 +2181,29 @@ function lbAlert(D){ (D.plan||[]).forEach(c => { const id = D.key + "|" + c.leve
 function lbPick(k){ LBRD.k = k; try { localStorage.setItem("mp.lb.k", k); } catch(e){} lbRender(); lbLoad(); }
 async function lbLoad(){
   const el = $("#lbCard"); if (!el) return;
-  try { LBRD.D[LBRD.k] = await fetch(`/api/livedesk/levelboard?key=${LBRD.k}`).then(r => r.json()); } catch(e){ return; }
+  // 2026-11-09 (Nikhil: "move Rise / Fall Score into the Level Board as the last column - next-day view with a score"): the India 1D score is fetched with the board
+  try { const [a, b] = await Promise.all([fetch(`/api/livedesk/levelboard?key=${LBRD.k}`).then(r => r.json()), fetch("/api/livedesk/marketscore?view=india").then(r => r.json()).catch(() => null)]);
+    LBRD.D[LBRD.k] = a; if (b && b.scores) LBRD.cs = b; } catch(e){ return; }
   lbRender();
 }
 function lbRender(){
   const el = $("#lbCard"); if (!el) return; const D = LBRD.D[LBRD.k];
   const tabs = ["NIFTY","BANKNIFTY"].map(k => `<button class="chip" aria-pressed="${k===LBRD.k}" onclick="lbPick('${k}')">${k==="NIFTY"?"Nifty":"Bank Nifty"}</button>`).join(" ");
-  const head = `<div class="spread"><h2>Level Board <span class="small muted">spot prices · levels · OI · big walls · resting orders</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
+  const head = `<div class="spread"><h2>Level Board <span class="small muted">spot prices · levels · OI · big walls · resting orders · next-day score</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
   if (!D){ el.innerHTML = head + `<p class="small muted">Loading…</p>`; return; }
   if (D.err){ el.innerHTML = head + `<p class="small muted">${esc(D.err)}</p>`; return; }
   const P = D.price, dp = 0, px = v => fmt(v, dp);
+  // Next Day = the Rise / Fall Score (India 1D model: chance that this index closes LOWER tomorrow). Same number on every row of one index;
+  // the row says whether the level sits in the path of that view (price would have to move towards it) or away from it.
+  const CSX = LBRD.cs || {}, CS = ((CSX.scores||{})[LBRD.k]||{})["1D"] || null, CT = (CSX.tested||{})["1D"] || {}, CL = (CSX.live||{})["1D"] || {};
+  const csv = (() => { if (!CS || CS.p_fall == null) return null; const p = CS.p_fall, fall = p >= 0.5, pct = Math.round(100 * (fall ? p : 1 - p)), weak = Math.abs(p - 0.5) < 0.05;
+    return {p, fall, pct, weak, dir: weak ? null : (fall ? "short" : "long"), lab: weak ? "No view" : (fall ? "Fall " : "Rise ") + pct + "%", col: weak ? "var(--muted)" : fall ? "var(--bear)" : "var(--bull)",
+      why: (CS.drivers||[]).map(d => `${d.name} → ${d.push}`).join(" · "), hist: (CS.prev||[]).concat([p]).map(q => Math.round(100*q)).join(" → ")}; })();
+  const csRel = CT.auc == null ? "untested" : CT.auc < 0.53 ? "coin flip in test" : CT.auc < 0.58 ? "weak in test" : "promising in test (small sample)";
+  const ndLvl = r => { if (!csv) return `<span class="faint small">no score</span>`; const inPath = !csv.dir ? null : (r.side === "R" && csv.dir === "long") || (r.side === "S" && csv.dir === "short");
+    return `<b style="color:${csv.col}" title="${esc(csv.why)}">${csv.lab}</b><br><span class="small faint">${inPath == null ? "no lean" : inPath ? "level in the path of the view" : "away from the view"}</span>`; };
+  const ndLeg = dir => { if (!csv) return `<span class="faint small">no score</span>`; const ag = !csv.dir ? null : dir === csv.dir;
+    return `<b style="color:${csv.col}" title="${esc(csv.why)}">${csv.lab}</b><br><span class="small" style="color:${ag == null ? "var(--muted)" : ag ? "var(--bull)" : "var(--bear)"}">${ag == null ? "no lean" : ag ? "with the view" : "against the view"}</span>`; };
   const TONE = {bull:"var(--bull)", bear:"var(--bear)", wait:"#E8A33C", neutral:"var(--muted)"};
   const STC = {strong:"var(--ink)", medium:"var(--ink)", weak:"var(--muted)", ref:"var(--muted)", wall:"var(--muted)"};
   const typ = r => { const s = r.side === "R" ? "Resistance" : r.side === "S" ? "Support" : "Price inside";
@@ -2149,16 +2241,16 @@ function lbRender(){
     const lab = live ? `<b style="color:#E8A33C">breaking · ${B.held_s}s / 30s</b>` : `<span class="small" style="color:${DIRC(B.dir)}">${B.dir ? "if broken · " + B.dir : "–"}</span>`;
     return `<div style="white-space:nowrap">${dot(B.through, "closed through the far edge")}${dot(B.stay, "stayed beyond 30 s")}${dot(B.lean, "book lean ≥ " + (LBRD.D[LBRD.k].dom||{}).imb_break)}${dot(B.delta, "60-s delta ≥ " + (LBRD.D[LBRD.k].dom||{}).delta_break + "% of volume")}</div>${lab}${f ? "<br>" + f : ""}`; };
   const act = r => `<span style="display:inline-block;border-left:3px solid ${TONE[r.tone]||"var(--muted)"};padding-left:7px"><b style="color:${r.tone==="neutral"?"var(--muted)":"var(--ink)"}">${esc(r.action)}</b><br><span class="small faint" title="score ${r.score}">score ${r.score}: ${esc(r.score_why.join(" · "))}</span></span>`;
-  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${stand(r)}</td><td>${trend(r)}</td><td>${book(r)}</td></tr>`;
+  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${stand(r)}</td><td>${trend(r)}</td><td>${book(r)}</td><td style="white-space:nowrap">${ndLvl(r)}</td></tr>`;
   const FARP = 0.7, showFar = LBRD.far === true;
   const R0 = D.rows.filter(r => r.side === "R"), S0 = D.rows.filter(r => r.side === "S"), I = D.rows.filter(r => r.side === "inside");
   const R = showFar ? R0 : R0.filter(r => Math.abs(r.dist_pct) <= FARP), S = showFar ? S0 : S0.filter(r => Math.abs(r.dist_pct) <= FARP);
   const hid = (R0.length - R.length) + (S0.length - S.length);
-  const farRow = hid ? `<tr><td colspan="8" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=true;lbRender()">${hid} level${hid>1?"s":""} beyond ${FARP}% hidden · show</td></tr>` : (showFar ? `<tr><td colspan="8" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=false;lbRender()">hide far levels</td></tr>` : "");
+  const farRow = hid ? `<tr><td colspan="9" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=true;lbRender()">${hid} level${hid>1?"s":""} beyond ${FARP}% hidden · show</td></tr>` : (showFar ? `<tr><td colspan="9" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=false;lbRender()">hide far levels</td></tr>` : "");
   const X = D.dom || {}, sg = (v, d) => v == null ? "–" : `<b style="color:${v>0?"var(--bull)":v<0?"var(--bear)":"var(--muted)"}">${v>0?"+":""}${fmt(v,d)}</b>`;
-  const prow = `<tr><td colspan="8" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Spot now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}${D.spot_src === "engine tick" ? "" : ` · spot = ${esc(D.spot_src||"")} until the engine's spot feed starts`}</span>`
-    + `<span class="small" style="margin-left:14px">Book lean ${sg(X.lean,2)} <span class="faint">(hold ±${X.imb_hold ?? "–"}, break ±${X.imb_break ?? "–"})</span> · 60-s delta ${X.delta60 == null ? "–" : sg(X.delta60,0) + "%"} <span class="faint">(break ±${X.delta_break ?? "–"}%)</span>${X.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(X.gate)}</span>` : ""}${X.err ? ` · <span class="faint">${esc(X.err)}</span>` : ""}</span>${X.basis_warn ? `<br><span class="small" style="color:#E8A33C">⚠ ${esc(X.basis_warn)}</span>` : ""}</td></tr>`;
-  const empty = t => `<tr><td colspan="8" class="small faint">${t}</td></tr>`;
+  const prow = `<tr><td colspan="9" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Spot now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}${D.spot_src === "engine tick" ? "" : ` · spot = ${esc(D.spot_src||"")} until the engine's spot feed starts`}</span>`
+    + `<span class="small" style="margin-left:14px">Book lean ${sg(X.lean,2)} <span class="faint">(hold ±${X.imb_hold ?? "–"}, break ±${X.imb_break ?? "–"})</span> · 60-s delta ${X.delta60 == null ? "–" : sg(X.delta60,0) + "%"} <span class="faint">(break ±${X.delta_break ?? "–"}%)</span>${X.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(X.gate)}</span>` : ""}${X.err ? ` · <span class="faint">${esc(X.err)}</span>` : ""}</span>${X.basis_warn ? `<br><span class="small" style="color:#E8A33C">⚠ ${esc(X.basis_warn)}</span>` : ""}${csv ? `<br><span class="small" style="margin-top:3px;display:inline-block"><b>Next day (Rise / Fall Score):</b> <b style="color:${csv.col}">${csv.lab}</b> <span class="faint">· history ${esc(csv.hist)}% · ${esc(csv.why)} · ${esc(csRel)}: AUC ${CT.auc ?? "–"}, right ${CT["hit_leaning_%"] ?? "–"}% when leaning${CL.checked ? ` · live ${CL["hit_%"]}% right on ${CL.checked}` : ""}</span></span>` : ""}</td></tr>`;
+  const empty = t => `<tr><td colspan="9" class="small faint">${t}</td></tr>`;
   // 2026-11-09 (Nikhil: "make it more impactful and actionable ... manual trading for the day" -> "YES"): Trade Plan cards for the 3
   // nearest levels, written as the DOM v4 engine would trade them; day limits line; a short beep when a level starts testing or a trade opens.
   const STC2 = {"far":["var(--muted)","Far"], "approaching":["#E8A33C","Approaching"], "near":["#E8A33C","Near"], "price in zone":["#E8A33C","Price in zone"], "testing now":["var(--accent)","Testing now"], "in trade":["var(--bull)","In trade"]};
@@ -2171,12 +2263,12 @@ function lbRender(){
     const lvl = first ? `<td rowspan="2" style="vertical-align:top;border-left:4px solid ${st[0]};white-space:nowrap"><b style="font-size:14px">${esc(c.level)}</b><br><span class="small faint">${esc(c.name)}${c.tags.length ? " · " + c.tags.map(esc).join(" ") : ""}</span><br><span class="small faint">fut ${esc(c.fut)}</span></td>
       <td rowspan="2" style="vertical-align:top;white-space:nowrap">${c.side==="R"?"Resistance":c.side==="S"?"Support":"Inside"}<br><span class="small faint">${c.dist>0?"+":""}${fmt(c.dist,0)} pts · ${c.dist_pct>0?"+":""}${fmt(c.dist_pct,2)}%</span></td>
       <td rowspan="2" style="vertical-align:top"><span class="pill" style="background:${st[0]};color:#fff;white-space:nowrap">${st[1]}</span>${c.open ? `<br><span class="small"><b>in ${c.open.setup.toUpperCase()} ${c.open.side}</b> from ${esc(c.open.at)}</span>` : ""}</td>` : "";
-    if (!L) return `<tr>${lvl}<td>${setup}</td><td colspan="8" class="faint small">–</td></tr>`;
+    if (!L) return `<tr>${lvl}<td>${setup}</td><td colspan="7" class="faint small">–</td></tr>`;
     const dc = L.dir === "long" ? "var(--bull)" : "var(--bear)";
     return `<tr>${lvl}<td><b>${setup}</b></td><td><b style="color:${dc}">${L.dir.toUpperCase()}</b></td><td class="num">${px(L.entry)}</td><td class="num">${px(L.stop)} <span class="small faint">(${L.risk_pts})</span></td>
-      <td class="num">${px(L.target)} <span class="small faint">${esc(L.target_note)}</span></td><td class="num">${L.rr} R</td><td class="num">₹${fmt(L.risk_rs,0)}</td>
-      <td class="small">${esc(L.synthetic)}</td><td class="small">${esc(L.option_06)}</td></tr>`; };
-  const planTable = `<div class="tscroll"><table class="ld-tbl" style="margin-top:6px;width:100%"><thead><tr><th>Level</th><th>Type · Pts Away</th><th>Status</th><th>Setup</th><th>Side</th><th>Entry</th><th>Stop (pts)</th><th>Target</th><th>R</th><th>Risk / lot</th><th>Synthetic Future</th><th>0.6Δ Option</th></tr></thead><tbody>`
+      <td class="num" style="white-space:nowrap">${px(L.target)} <span class="small faint">${esc(L.target_note)}</span></td><td class="num">${L.rr} R</td><td class="num">₹${fmt(L.risk_rs,0)}</td>
+      <td style="white-space:nowrap">${ndLeg(L.dir)}</td></tr>`; };   // 2026-11-09 (Nikhil): Synthetic Future and 0.6Δ Option columns removed; Next Day score instead
+  const planTable = `<div class="tscroll"><table class="ld-tbl" style="margin-top:6px;width:100%"><thead><tr><th>Level</th><th>Type · Pts Away</th><th>Status</th><th>Setup</th><th>Side</th><th>Entry</th><th>Stop (pts)</th><th>Target</th><th>R</th><th>Risk / lot</th><th title="Rise / Fall Score, India 1D model: chance the index closes lower tomorrow">Next Day</th></tr></thead><tbody>`
     + (D.plan||[]).map(c => planRow(c, c.hold, "HOLD", true) + planRow(c, c.brk, "BREAK", false)).join("") + `</tbody></table></div>
     <p class="small faint" style="margin:4px 0 0">HOLD = bounce off the level (stop 2 bands beyond the far edge); BREAK = run through it (stop 1 band inside). Target = next level ≥ 2 R, else 2 R. Status: far / approaching (≤0.7%) / near (≤0.3%) / price in zone / testing now (engine checklist live) / in trade.</p>`;
   const T = D.today || {};
@@ -2184,7 +2276,7 @@ function lbRender(){
   const mute = `<label class="small faint" style="margin-left:10px;cursor:pointer"><input type="checkbox" ${LBRD.mute?"checked":""} onchange="LBRD.mute=this.checked;try{localStorage.setItem('mp.lb.mute',this.checked?'1':'0')}catch(e){}"> mute alerts</label>`;
   const planHtml = (D.plan||[]).length ? `<div class="spread" style="margin-top:8px"><h3 style="margin:0">Trade Plan <span class="small muted">3 nearest levels · how DOM v4 would trade them · indications, untested as a manual plan</span></h3>${mute}</div>` + planTable + kill : "";
   lbAlert(D);
-  el.innerHTML = head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th></tr></thead><tbody>`
+  el.innerHTML = head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall Score, India 1D model">Next Day</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + farRow + `</tbody></table></div>`
     + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
     + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). <b>Every price is the spot index</b> (DOM Index v4 trades in spot; the futures figure under each level is for reference; walls and the book are futures data moved to spot). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
@@ -2953,7 +3045,7 @@ function fnoTable(rows, title, col, full){
 }
 
 async function csLoad(){
-  const el = $("#csCard"); if (!el) return;
+  const el = $("#csCard"); if (!el || el.hidden) return;      // 2026-11-09: section removed (Nikhil) - kept for the Level Board's data path
   const isC = VIEW === "crypto";
   let D; try { D = await fetch(isC ? "/api/livedesk/cryptoscore" : `/api/livedesk/marketscore?view=${VIEW}`).then(r => r.json()); } catch(e){ return; }
   const T = D.tested || {}, LV = D.live || {}, TFL = Object.fromEntries(Object.entries(T).map(([k, v]) => [k, v.label || ({"15m":"next 1 h","1h":"next 6 h","4h":"next 24 h"})[k] || ""]));

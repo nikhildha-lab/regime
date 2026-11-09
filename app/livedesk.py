@@ -1087,6 +1087,10 @@ def handle_get(path: str, q: dict):
         keys = [k for k in (q.get("keys") or "").split(",") if k] or None
         grp = (q.get("group") or "").strip().lower() or None      # 2026-11-04: tab filter for the "All paper trades" card
         return _hot("papertrades").api(_hot, px, keys, grp)
+    if path == "/api/livedesk/tradechart":    # 2026-11-09 (Nikhil): one trade-log row's flash-card chart (All Paper Trades row click)
+        return _hot("tradecharts").one(_hot, (q.get("rule") or "").strip(), (q.get("key") or "").strip(), (q.get("opened") or "").strip(), (q.get("side") or "").strip() or None)
+    if path == "/api/livedesk/topvol":        # 2026-11-09 (Nikhil): today's top-10 F&O stock universe by opening traded value (app/topvol.py)
+        return _hot("topvol").load() or {"top": [], "ranked": [], "note": "not ranked yet (written at 09:30 on a trading day)"}
     if path == "/api/livedesk/tradecharts":   # 2026-11-06 (Nikhil): paper trades with their own price charts (app/tradecharts.py)
         px = {}
         for desk in ("crypto", "nifty", "metals"):

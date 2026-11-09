@@ -126,3 +126,37 @@ def api(hot, px, group=None, days=1) -> dict:
     res = {"trades": open_ + cl, "days": tdays, "at": datetime.now(IST).strftime("%H:%M:%S"), "errors": P.get("errors")}
     _API[ck] = (time.time(), res)
     return res
+
+
+def one(hot, rule, key, opened, side=None) -> dict:
+    """2026-11-09 (Nikhil: "under All Paper Trades .. make each row clickable which shows the same flash card chart"): the chart card for
+    ONE row of data_store/livedesk/trade_log.csv (matched by rule, key, opened time and side), in the same shape as api() trades."""
+    import csv, os
+    pth = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data_store", "livedesk", "trade_log.csv")
+    row = None
+    try:
+        with open(pth, newline="") as f:
+            for r in csv.DictReader(f):
+                if r.get("rule") == rule and r.get("key") == key and str(r.get("opened_ist"))[:16] == str(opened)[:16] and (not side or r.get("side") == side):
+                    row = r
+    except OSError:
+        return {"err": "no trade log yet"}
+    if row is None:
+        return {"err": "trade not found in the log"}
+    num = lambda v: (float(v) if v not in (None, "", "-") else None)
+    t = {"rule": row.get("rule"), "rule_label": row.get("rule_label"), "market": row.get("market"), "key": row.get("key"), "side": row.get("side"),
+         "status": row.get("status"), "opened": row.get("opened_ist"), "closed": row.get("closed_ist") or None, "ccy": row.get("ccy"),
+         "exit_reason": row.get("exit_reason"), "why": row.get("why_taken"), "legs_text": row.get("legs") or None,
+         "review": {"right": row.get("went_right"), "wrong": row.get("went_wrong"), "improve": row.get("where_to_improve")} if (row.get("went_right") or row.get("went_wrong") or row.get("where_to_improve")) else None}
+    for k in ("entry", "stop", "target", "exit", "pnl", "pnl_open", "now", "r"):
+        try:
+            t[k] = num(row.get(k))
+        except ValueError:
+            t[k] = None
+    t["tag"] = TAG.get(t["rule"], t["rule"])
+    try:
+        c = chart(hot, t)
+    except Exception as e:
+        c = {"candles": [], "err": f"{type(e).__name__}: {str(e)[:80]}"}
+    t["chart"] = c
+    return t
