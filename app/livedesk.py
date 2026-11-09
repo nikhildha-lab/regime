@@ -21,7 +21,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DIR = os.path.join(ROOT, "data_store", "livedesk")
 CFG_PATH = os.path.join(DIR, "config.json")
 HOME = os.path.expanduser("~")
-OF_LIVE = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "orderflow", "data", "of", "live.json")
+OF_LIVE = os.path.join(HOME, "Documents", "dhan", "orderflow", "data", "of", "live.json")
 IST = timezone(timedelta(hours=5, minutes=30))
 
 DEFAULT_CFG = {
@@ -179,7 +179,7 @@ def fp_hist(desk: str, key: str, bars: list) -> list:
     return [m[k] for k in sorted(m)]
 
 
-OF_DIR = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "orderflow", "data", "of")
+OF_DIR = os.path.join(HOME, "Documents", "dhan", "orderflow", "data", "of")
 _OFC: dict = {}
 
 
@@ -835,6 +835,11 @@ def view(desk: str, tf: int = 15, want=None) -> dict:
                 v["vp5"] = vp5(desk, k, ((_STATE.get("views") or {}).get(desk) or {}).get(k) or {})
             except Exception as e:
                 _STATE["vp5_error"] = str(e)[:120]
+            if desk == "crypto":                                      # 2026-11-10 (Nikhil): flow overlays (big prints, liquidations, absorption) + liquidity heat
+                try:
+                    v["flow"] = _cold("cryptoflow").chart(k); v["heat"] = _hot("bookwalls").heat(k)
+                except Exception as e:
+                    _STATE["flow_error"] = str(e)[:120]
             if desk == "nifty" and k in ("NIFTY", "BANKNIFTY"):      # 2026-11-07 (Nikhil): big walls on the order-flow chart
                 try:
                     v["bigwalls"] = _hot("bigwalls").api(k)
@@ -877,7 +882,7 @@ def start_tracker(desk: str, restart: bool = False) -> dict:
         return CL.restart() if restart else (CL.start() if not CL._E["running"] else {"ok": True, "detail": "already running"})
     if not name:
         return {"ok": False, "detail": "unknown tracker"}
-    d = os.environ.get("MP_METALS_DIR") if name == "metals-tracker" and os.environ.get("MP_METALS_DIR") else os.path.abspath(os.path.join(ROOT, "..", "..", name))
+    d = os.path.abspath(os.path.join(ROOT, "..", "..", name))
     if not os.path.exists(os.path.join(d, "run_forever.sh")):
         return {"ok": False, "detail": f"{name} not found"}
     if restart:
@@ -940,11 +945,11 @@ def handle_get(path: str, q: dict):
         return res
     if path == "/api/livedesk/run_tool" and q.get("name") == "restart_of_engine":  # 2026-11-03: restart the Dhan order-flow engine (loads code changes)
         import subprocess
-        d = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "orderflow")
+        d = os.path.join(HOME, "Documents", "dhan", "orderflow")
         subprocess.run(["pkill", "-f", "of_engine.py"])
         time.sleep(2)
         log = open(os.path.join(d, "of_engine.log"), "a")
-        p = subprocess.Popen((["caffeinate", "-i"] if __import__("shutil").which("caffeinate") else []) + [os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(HOME, "Documents", "dhan"), "venv", "bin", "python"), "-u", "of_engine.py"],
+        p = subprocess.Popen(["caffeinate", "-i", os.path.join(HOME, "Documents", "dhan", "venv", "bin", "python"), "-u", "of_engine.py"],
                              cwd=d, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
         return {"ok": True, "pid": p.pid, "detail": "order-flow engine restarting - book back in about a minute"}
     if path == "/api/livedesk/run_tool" and q.get("name") == "tabnews_now":

@@ -23,7 +23,7 @@ from datetime import datetime
 CRYPTO = ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX")
 HL = {"GOLD": "xyz:GOLD", "SILVER": "xyz:SILVER", "COPPER": "xyz:COPPER", "CRUDE": "xyz:CL", "NATGAS": "xyz:NATGAS", "ALUMINUM": "xyz:ALUMINIUM"}
 BIN, NEAR, K, PRESENT, WIN, HIST = 0.0005, 0.006, 4.0, 0.7, 15, 20
-S: dict = {"t": 0, "busy": False, "err": {}, "hist": {}, "at": {}}      # hist[(key, exch)] = deque of (ts, mid, {bin: (bid_usd, ask_usd)})
+S: dict = {"t": 0, "busy": False, "err": {}, "hist": {}, "at": {}, "heat": {}}      # hist[(key, exch)] = deque of (ts, mid, step, bins, cov); heat[key] = deque of (ts, mid, [[px, usd]...]) per minute
 _LOCK = threading.Lock()
 
 
@@ -102,8 +102,30 @@ def _work():
                         S["at"][(key, exch)] = time.time(); S["err"].pop((key, exch), None)
             except Exception as e:
                 S["err"][(key, exch)] = f"{type(e).__name__}: {str(e)[:60]}"
+        # 2026-11-10 (Nikhil: "resting-liquidity heatmap"): one aggregated book per market per round, kept 90 minutes
+        for key in list(CRYPTO) + list(HL):
+            try:
+                with _LOCK:
+                    snaps = [h[-1] for (k, e), h in S["hist"].items() if k == key and h and time.time() - h[-1][0] < 120]
+                if not snaps: continue
+                mid = sum(x[1] for x in snaps) / len(snaps); step = mid * BIN; agg = {}
+                for ts, m_, st, bins, *_ in snaps:
+                    for b, v in bins.items():
+                        px = b * st; bb = round(px / step); agg[bb] = agg.get(bb, 0.0) + v[0] + v[1]
+                cells = sorted(((round(b * step, 8), round(u)) for b, u in agg.items() if abs(b * step / mid - 1) <= 0.012), key=lambda x: x[0])
+                with _LOCK:
+                    S["heat"].setdefault(key, deque(maxlen=90)).append((time.time(), mid, cells))
+            except Exception as e:
+                S["err"][(key, "heat")] = str(e)[:60]
     finally:
         S["busy"] = False
+
+
+def heat(key, minutes=75):
+    """minute snapshots of the aggregated book: [{"ts", "mid", "cells": [[px, usd]...]}] oldest first."""
+    with _LOCK:
+        h = list(S["heat"].get(key) or [])[-minutes:]
+    return [{"ts": round(ts), "mid": mid, "cells": cells} for ts, mid, cells in h]
 
 
 def tick(force=False):

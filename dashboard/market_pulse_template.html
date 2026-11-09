@@ -1316,7 +1316,7 @@ const ldPx = (v,d) => v==null ? "–" : Number(v).toLocaleString("en-IN",{maximu
 const FX = {sel:{nifty:"NIFTY", crypto:"BTC", metals:"GOLD"}, tf:{}, data:{}};
 // 2026-11-06 (Nikhil: "yes for all"): chart layers you can switch on / off (kept in this browser), paper trades drawn on the chart,
 // day volume profile, moving VWAP, stacked imbalances, hover detail per cell, and a "Fit day" view that squeezes the day onto one screen.
-FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, walls:1, fit:0};
+FX.L = (() => { const d = {blocks:1, levels:1, signals:1, trades:1, cvd:1, profile:1, vwap:1, walls:1, fit:0, flow:1, heat:1};   // 2026-11-10: flow = big prints / liquidations / absorption, heat = resting liquidity (crypto)
   try { return Object.assign(d, JSON.parse(localStorage.getItem("mp.fxlayers") || "{}")); } catch(e){ return d; } })();
 function fxLayer(k, desk){ FX.L[k] = FX.L[k] ? 0 : 1; try { localStorage.setItem("mp.fxlayers", JSON.stringify(FX.L)); } catch(e){} ldLoad(desk); }
 FX.trd = {};
@@ -1454,6 +1454,16 @@ function fxChart(V){
   const fit = (t, w, px = 5.9) => { if (w < 24) return ""; t = String(t); const n = Math.max(3, Math.floor(w / px)); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
   const mx = Math.max(...bars.flatMap(b => b.bins.map(x => (+x.b)+(+x.s))), 1);
   let g = "";
+  // 2026-11-10 (Nikhil: "resting-liquidity heatmap, big-print bubbles, liquidation feed, absorption markers" on the chart): crypto overlays.
+  // Time -> x: each bar covers tf minutes from its start (UTC for crypto); a minute inside the bar is placed at its fraction of the column.
+  const tfm0 = FX.tf[V.desk] || 15, bstart = bars.map(b => Date.parse(`${b.d}T${b.t}:00Z`) / 1000);
+  const xAt = ts => { let i = -1; for (let j = bars.length - 1; j >= 0; j--){ if (ts >= bstart[j]){ i = j; break; } } if (i < 0 || ts >= bstart[i] + tfm0*60 + 60) return null; return X0 + i*CW + Math.min(1, (ts - bstart[i])/(tfm0*60))*(CW - CL - 4) + CL; };
+  if (V.desk === "crypto" && FX.L.heat && (V.heat||[]).length){
+    const HT = V.heat, hmx = Math.max(1, ...HT.flatMap(h => h.cells.map(c => c[1]))), mw = Math.max(1.5, (CW - CL - 4) / tfm0);
+    HT.forEach(h => { const x = xAt(h.ts); if (x == null) return;
+      h.cells.forEach(([px, u]) => { if (px < lo || px > hi) return; const a = Math.min(0.75, 0.06 + 0.9 * Math.sqrt(u / hmx));
+        g += `<rect x="${(x - mw/2).toFixed(1)}" y="${(y(px) + HC - RH*step/RS/2).toFixed(1)}" width="${mw.toFixed(1)}" height="${Math.max(1, RH*step/RS).toFixed(1)}" fill="#8B7CF6" fill-opacity="${a.toFixed(2)}"><title>${esc(new Date(h.ts*1000).toISOString().slice(11,16))} UTC · resting ${esc(fxK(u))} $ at ${ldPx(px)} (all venues)</title></rect>`; }); });
+    g += `<text x="${X0 + 4}" y="${PH - 8}" font-size="10" fill="#8B7CF6" opacity="0.9">Liquidity heat · resting $ per price, all venues, last ${HT.length} min</text>`; }
   bars.forEach((b,i) => {
     const x = X0 + i*CW, cells = {}, est = !!b.approx;
     if (est) g += `<rect x="${x+1}" y="0" width="${CW-2}" height="${PH}" fill="var(--muted)" fill-opacity="0.06"/>`;
@@ -1666,6 +1676,17 @@ function fxChart(V){
     const d0 = (VP.days||[])[0], d1 = (VP.days||[]).at(-1);
     ov += `<text x="4" y="${TOP+11}" font-size="10" font-weight="600" fill="var(--accent)" stroke="var(--surface)" stroke-width="3" paint-order="stroke">5-day profile${d0 ? ` · ${String(d0).slice(5)} → ${String(d1).slice(5)}` : ""}</text>`;
   }
+  if (V.desk === "crypto" && FX.L.flow && V.flow){ const F = V.flow, VN = {binance:"Binance", bybit:"Bybit", okx:"OKX", bitget:"Bitget"};
+    // big prints: bubbles sized by $ (sqrt), buys green above the price, sells red below
+    (F.big||[]).forEach(t => { const x = xAt(t.ts); if (x == null || t.px < lo || t.px > hi) return; const r = Math.min(10, 2.5 + Math.sqrt(t.usd / 25000) * 1.4), c = t.side === "buy" ? "var(--bull)" : "var(--bear)";
+      g += `<circle cx="${x.toFixed(1)}" cy="${(y(t.px) + HC).toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" fill-opacity="0.2" stroke="${c}" stroke-width="1.1"><title>${esc(new Date(t.ts*1000).toISOString().slice(11,19))} UTC · ${VN[t.venue]||t.venue} · big ${t.side === "buy" ? "buy" : "sell"} ${esc(fxK(t.usd))} $ at ${ldPx(t.px)}</title></circle>`; });
+    // liquidations: diamonds, long liquidations red (forced sells), short liquidations green (forced buys); size by $
+    (F.liq||[]).forEach(t => { const x = xAt(t.ts); if (x == null || t.px < lo || t.px > hi) return; const r = Math.min(9, 2.5 + Math.sqrt(t.usd / 20000)), c = t.side === "long" ? "var(--bear)" : "var(--bull)", yy = y(t.px) + HC;
+      g += `<path d="M${x.toFixed(1)} ${(yy - r).toFixed(1)} L${(x + r).toFixed(1)} ${yy.toFixed(1)} L${x.toFixed(1)} ${(yy + r).toFixed(1)} L${(x - r).toFixed(1)} ${yy.toFixed(1)}Z" fill="${c}" fill-opacity="0.85" stroke="var(--surface)" stroke-width="0.8"><title>${esc(new Date(t.ts*1000).toISOString().slice(11,19))} UTC · ${VN[t.venue]||t.venue} · ${t.side === "long" ? "long liquidated (forced sell)" : "short liquidated (forced buy)"} ${esc(fxK(t.usd))} $ at ${ldPx(t.px)}</title></path>`; });
+    // absorption: a tag at the price where heavy trading moved nothing
+    (F.absorb||[]).forEach(t => { const x = xAt(t.ts + 30); if (x == null || t.px < lo || t.px > hi) return; const c = t.side === "buyers absorbing" ? "var(--bull)" : "var(--bear)", yy = y(t.px) + HC;
+      g += `<g><title>${esc(new Date(t.ts*1000).toISOString().slice(11,16))} UTC · ${esc(t.side)}: ${esc(fxK(t.usd))} $ traded in one minute, price barely moved (delta ${t.cvd > 0 ? "+" : ""}${esc(fxK(t.cvd))})</title><rect x="${(x - 9).toFixed(1)}" y="${(yy - 7).toFixed(1)}" width="18" height="14" rx="3" fill="var(--surface)" stroke="${c}" stroke-width="1.3"/><text x="${x.toFixed(1)}" y="${(yy + 4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="${c}">A</text></g>`; });
+    g += `<text x="${X0 + 4}" y="${PH + 12}" font-size="10" fill="var(--muted)">Flow: ○ big prints (size = $) · ◆ liquidations (red = longs, green = shorts) · A = absorption · hover for venue and size</text>`; }
   return `<div style="position:relative"><div class="fx-scroll" data-w="${W}"><svg class="fx-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" text-rendering="geometricPrecision" style="display:block;max-width:none">${g}</svg></div>${ov ? `<svg width="180" height="${PH}" style="position:absolute;left:0;top:0;pointer-events:none" aria-hidden="true">${ov}</svg>` : ""}</div>`;
 }
 function fxOi(V){
@@ -1706,7 +1727,7 @@ async function fxLoad(desk){
   const dd = ddKeys.length ? `<select class="fx-sel" onchange="${desk==="crypto"?`FX.pick['${desk}']=this.value||null;if(!this.value){FX.sel['${desk}']=null}`:""}if(this.value){FX.sel['${desk}']=this.value};ldLoad('${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:${ddKeys.includes(FX.sel[desk])?"var(--ink)":"var(--surface)"};color:${ddKeys.includes(FX.sel[desk])?"var(--surface)":"var(--ink)"}">
       <option value="">${desk==="crypto"?(FX.pick[desk]?"← back to "+esc(state.market||"BTC"):"More coins ▾"):desk==="nifty"?"Stocks ▾":"Markets ▾"}</option>${ddKeys.map(k=>`<option value="${esc(k)}" ${k===FX.sel[desk]?"selected":""}>${esc(k)} ${ldPx(ins[k].spot)}</option>`).join("")}</select>` : "";
   const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}')">${l}</button>`).join("")}</span>`;
-  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["cvd","CVD"],["profile","5-day profile"],["vwap","VWAP"],["walls","Big walls"],["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
+  const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["cvd","CVD"],["profile","5-day profile"],["vwap","VWAP"],["walls","Big walls"],...(desk === "crypto" ? [["flow","Flow"],["heat","Liquidity heat"]] : []),["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
   const tsel = `<select class="fx-sel" title="paper trades drawn on the chart" onchange="fxTs(this.value,'${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)">${FX_TS.map(([k,l]) => `<option value="${k}" ${k===FX.ts?"selected":""}>Trades: ${l}</option>`).join("")}</select>`;
   const head = `<div class="fx-head">${tfb}${lyr}${tsel}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
     ${I.last_session?`<span class="fx-chip" style="background:var(--wait-soft);color:var(--wait)">tracker off · last session ${esc(I.last_session)} (real order flow)</span>`:""}${I.regime?`<span class="fx-chip">${esc(I.regime)}${I.stance?" · "+esc(I.stance):""}</span>`:""}${I.day_type?`<span class="fx-chip">${esc(I.day_type)}</span>`:""}

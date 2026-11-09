@@ -442,6 +442,42 @@ def big_prints(coin, n=40):
     return {"coin": coin, "prints": [{"ts": r[0], "venue": r[1], "side": r[2], "usd": r[3], "px": r[4]} for r in rows[:n]], "rule": f"trade >= {BIG_X:g}x the coin's rolling median trade size and >= $20k"}
 
 
+def absorption(coin, minutes=90):
+    """venue-aggregated absorption: a minute with traded $ >= 3x the hour's median, price range <= half the median range and >= $1M.
+    side = who absorbed: aggressive buyers that could not lift price were absorbed by sellers -> 'sellers absorbing' (and the mirror)."""
+    now = time.time(); m0 = int(now // 60 * 60) - 60 * minutes
+    with _LOCK:
+        per = {}
+        for (c, v), d in BK.items():
+            if c != coin: continue
+            for k, b in d.items():
+                if k < m0 or b["hi"] is None: continue
+                a = per.setdefault(k, {"buy": 0.0, "sell": 0.0, "hi": b["hi"], "lo": b["lo"], "px": b["px"]})
+                a["buy"] += b["buy"]; a["sell"] += b["sell"]; a["hi"] = max(a["hi"], b["hi"]); a["lo"] = min(a["lo"], b["lo"])
+    if len(per) < 20:
+        return []
+    tr = sorted(a["buy"] + a["sell"] for a in per.values()); rg = sorted(a["hi"] - a["lo"] for a in per.values())
+    mt, mr = tr[len(tr) // 2], rg[len(rg) // 2]
+    out = []
+    for k in sorted(per):
+        a = per[k]; t = a["buy"] + a["sell"]; r = a["hi"] - a["lo"]
+        if mt and mr and t >= 3 * mt and r <= 0.5 * mr and t >= 1_000_000 and k < int(now // 60 * 60):
+            cvd = a["buy"] - a["sell"]
+            out.append({"ts": k, "px": round((a["hi"] + a["lo"]) / 2, 6), "usd": round(t), "cvd": round(cvd), "side": "sellers absorbing" if cvd > 0 else "buyers absorbing"})
+    return out[-12:]
+
+
+def chart(coin, minutes=90):
+    """overlay data for the order-flow chart: big prints, liquidations, absorption marks (last `minutes`)."""
+    now = time.time(); m0 = int(now // 60 * 60) - 60 * minutes
+    with _LOCK:
+        big = [(ts, v, side, usd, px) for (c, v), d in BK.items() if c == coin for k, b in d.items() if k >= m0 for (ts, side, usd, px) in b["big"]]
+        liq = [(ts, v, side, usd, px) for (c, v), d in BK.items() if c == coin for k, b in d.items() if k >= m0 for (ts, side, usd, px) in b["liq"]]
+    big.sort(); liq.sort()
+    return {"big": [{"ts": r[0], "venue": r[1], "side": r[2], "usd": r[3], "px": r[4]} for r in big[-150:]],
+            "liq": [{"ts": r[0], "venue": r[1], "side": r[2], "usd": r[3], "px": r[4]} for r in liq[-150:]], "absorb": absorption(coin, minutes)}
+
+
 def api(coin="BTC"):
     start()
     return {"venues": venues(coin), "liq": liquidations(coin), "oi": open_interest(coin), "pos": positioning(coin), "big": big_prints(coin),
