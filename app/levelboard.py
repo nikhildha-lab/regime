@@ -164,9 +164,15 @@ def build(key, prep, oi, flv, hot):
             hit["oi"] = {"type": d.get("type"), "oi": d.get("oi"), "pct30": d.get("pct_m30"), "pct_open": d.get("pct_open"), "read": b.get("read"), "tone": b.get("tone"),
                          "strikes": b.get("strikes")}
     # big walls: futures -> spot with the live basis (display only)
+    import re as _re2
     for w in (W.get("above") or []) + (W.get("below") or []):
         wp = w["price"] - basis
         hit = next((x for x in rows if x["lo"] - px * TOL / 100 <= wp <= x["hi"] + px * TOL / 100), None)
+        if hit is None:                                   # 2026-11-09 (Nikhil: "apply wherever strikes are overlapping"): a futures wall sitting ON an
+            for x in rows:                                # option strike (round number) belongs to that strike's row even though spot is a basis away
+                m = next((_re2.search(r"wall (\d+)", t) for t in x["tags"] + [x["why"]] if _re2.search(r"wall (\d+)", t)), None)
+                if m and abs(w["price"] - float(m.group(1))) <= px * 0.0004:
+                    hit = x; break
         info = {"side": w["side"], "x": w["x"], "trend": w["trend"], "age": w["age_min"], "fut": w["price"], "qty": w["qty_now"]}
         if hit:
             if not hit.get("wall") or w["x"] > hit["wall"]["x"]:

@@ -2032,7 +2032,7 @@ async function lbLoad(){
 function lbRender(){
   const el = $("#lbCard"); if (!el) return; const D = LBRD.D[LBRD.k];
   const tabs = ["NIFTY","BANKNIFTY"].map(k => `<button class="chip" aria-pressed="${k===LBRD.k}" onclick="lbPick('${k}')">${k==="NIFTY"?"Nifty":"Bank Nifty"}</button>`).join(" ");
-  const head = `<div class="spread"><h2>Level Board <span class="small muted">spot prices · levels · OI · big walls · resting orders · DOM · action</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
+  const head = `<div class="spread"><h2>Level Board <span class="small muted">spot prices · levels · OI · big walls · resting orders</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
   if (!D){ el.innerHTML = head + `<p class="small muted">Loading…</p>`; return; }
   if (D.err){ el.innerHTML = head + `<p class="small muted">${esc(D.err)}</p>`; return; }
   const P = D.price, dp = 0, px = v => fmt(v, dp);
@@ -2050,7 +2050,11 @@ function lbRender(){
     return `<b>${o.type === "call" ? "CE" : "PE"} ${fxK(o.oi)}</b>${o.strikes ? ` <span class="small faint">@${o.strikes[0]}–${o.strikes[o.strikes.length-1]}</span>` : ""} <span class="small" style="color:${(o.pct30||0)>=0?"var(--bull)":"var(--bear)"}">${(o.pct30||0)>0?"+":""}${fmt(o.pct30,1)}% 30m</span><br><span class="small" style="color:${c}" title="${esc(o.read||"")}">${esc(SC(rd))}</span>`; };
   const TR = {growing:"↑ growing", shrinking:"↓ shrinking", steady:"steady"};
   const wall = r => { const w = r.wall; if (!w) return `<span class="faint">none</span>`;
-    return `<b style="color:${w.side==="sell"?"var(--bear)":"var(--bull)"}">${w.side==="sell"?"Sell":"Buy"} ${fmt(w.x,1)}×</b><br><span class="small faint">fut ${px(w.fut)} · ${TR[w.trend]||""} · ${w.age >= 60 ? "60+" : w.age} min</span>`; };
+    return `<b style="color:${w.side==="sell"?"var(--bear)":"var(--bull)"}">${w.side==="sell"?"Sell":"Buy"} ${fmt(w.x,1)}×</b><br><span class="small faint">${fxK(w.qty)} qty · fut ${px(w.fut)}</span>`; };
+  // 2026-11-09 (Nikhil): Standing and Trend as their own columns, as on the Big Walls card
+  const stand = r => { const w = r.wall; return w ? `<b>${w.age >= 60 ? "60+" : w.age} min</b>` : `<span class="faint">–</span>`; };
+  const trend = r => { const w = r.wall; if (!w) return `<span class="faint">–</span>`; const c = w.trend === "growing" ? "var(--bull)" : w.trend === "shrinking" ? "var(--bear)" : "var(--muted)";
+    return `<b style="color:${c}">${TR[w.trend]||w.trend}</b>`; };
   const book = r => { const b = r.book; if (b === undefined) return `<span class="faint">–</span>`; if (b === null) return `<span class="faint">beyond book</span>`;
     const tot = Math.max(b.bid_lots + b.ask_lots, 1), bw = Math.round(60 * b.bid_lots / tot), aw = 60 - bw;
     return `<div style="display:flex;height:6px;width:60px;border-radius:3px;overflow:hidden;margin-bottom:3px;background:var(--line)"><span style="width:${bw}px;background:var(--bull)"></span><span style="width:${aw}px;background:var(--bear)"></span></div>`
@@ -2069,16 +2073,16 @@ function lbRender(){
     const lab = live ? `<b style="color:#E8A33C">breaking · ${B.held_s}s / 30s</b>` : `<span class="small" style="color:${DIRC(B.dir)}">${B.dir ? "if broken · " + B.dir : "–"}</span>`;
     return `<div style="white-space:nowrap">${dot(B.through, "closed through the far edge")}${dot(B.stay, "stayed beyond 30 s")}${dot(B.lean, "book lean ≥ " + (LBRD.D[LBRD.k].dom||{}).imb_break)}${dot(B.delta, "60-s delta ≥ " + (LBRD.D[LBRD.k].dom||{}).delta_break + "% of volume")}</div>${lab}${f ? "<br>" + f : ""}`; };
   const act = r => `<span style="display:inline-block;border-left:3px solid ${TONE[r.tone]||"var(--muted)"};padding-left:7px"><b style="color:${r.tone==="neutral"?"var(--muted)":"var(--ink)"}">${esc(r.action)}</b><br><span class="small faint" title="score ${r.score}">score ${r.score}: ${esc(r.score_why.join(" · "))}</span></span>`;
-  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${book(r)}</td><td>${holdC(r)}</td><td>${brkC(r)}</td><td style="min-width:230px">${act(r)}</td></tr>`;
+  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${stand(r)}</td><td>${trend(r)}</td><td>${book(r)}</td></tr>`;
   const FARP = 0.7, showFar = LBRD.far === true;
   const R0 = D.rows.filter(r => r.side === "R"), S0 = D.rows.filter(r => r.side === "S"), I = D.rows.filter(r => r.side === "inside");
   const R = showFar ? R0 : R0.filter(r => Math.abs(r.dist_pct) <= FARP), S = showFar ? S0 : S0.filter(r => Math.abs(r.dist_pct) <= FARP);
   const hid = (R0.length - R.length) + (S0.length - S.length);
-  const farRow = hid ? `<tr><td colspan="9" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=true;lbRender()">${hid} level${hid>1?"s":""} beyond ${FARP}% hidden · show</td></tr>` : (showFar ? `<tr><td colspan="9" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=false;lbRender()">hide far levels</td></tr>` : "");
+  const farRow = hid ? `<tr><td colspan="8" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=true;lbRender()">${hid} level${hid>1?"s":""} beyond ${FARP}% hidden · show</td></tr>` : (showFar ? `<tr><td colspan="8" class="small faint" style="text-align:center;cursor:pointer" onclick="LBRD.far=false;lbRender()">hide far levels</td></tr>` : "");
   const X = D.dom || {}, sg = (v, d) => v == null ? "–" : `<b style="color:${v>0?"var(--bull)":v<0?"var(--bear)":"var(--muted)"}">${v>0?"+":""}${fmt(v,d)}</b>`;
-  const prow = `<tr><td colspan="9" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Spot now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}${D.spot_src === "engine tick" ? "" : ` · spot = ${esc(D.spot_src||"")} until the engine's spot feed starts`}</span>`
+  const prow = `<tr><td colspan="8" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Spot now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}${D.spot_src === "engine tick" ? "" : ` · spot = ${esc(D.spot_src||"")} until the engine's spot feed starts`}</span>`
     + `<span class="small" style="margin-left:14px">Book lean ${sg(X.lean,2)} <span class="faint">(hold ±${X.imb_hold ?? "–"}, break ±${X.imb_break ?? "–"})</span> · 60-s delta ${X.delta60 == null ? "–" : sg(X.delta60,0) + "%"} <span class="faint">(break ±${X.delta_break ?? "–"}%)</span>${X.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(X.gate)}</span>` : ""}${X.err ? ` · <span class="faint">${esc(X.err)}</span>` : ""}</span>${X.basis_warn ? `<br><span class="small" style="color:#E8A33C">⚠ ${esc(X.basis_warn)}</span>` : ""}</td></tr>`;
-  const empty = t => `<tr><td colspan="9" class="small faint">${t}</td></tr>`;
+  const empty = t => `<tr><td colspan="8" class="small faint">${t}</td></tr>`;
   // 2026-11-09 (Nikhil: "make it more impactful and actionable ... manual trading for the day" -> "YES"): Trade Plan cards for the 3
   // nearest levels, written as the DOM v4 engine would trade them; day limits line; a short beep when a level starts testing or a trade opens.
   const STC2 = {"far":["var(--muted)","Far"], "approaching":["#E8A33C","Approaching"], "near":["#E8A33C","Near"], "price in zone":["#E8A33C","Price in zone"], "testing now":["var(--accent)","Testing now"], "in trade":["var(--bull)","In trade"]};
@@ -2093,18 +2097,18 @@ function lbRender(){
       <div class="small" style="margin-top:2px">${c.side==="R"?"Resistance":c.side==="S"?"Support":"Price inside"} · ${c.dist>0?"+":""}${fmt(c.dist,0)} pts (${c.dist_pct>0?"+":""}${fmt(c.dist_pct,2)}%) · fut ${esc(c.fut)}${c.dom ? ` · DOM hold: ${esc(c.dom.hold||"–")} · break: ${esc(c.dom.brk||"–")}` : ""}</div>
       ${c.open ? `<div class="small" style="margin-top:4px"><b>Engine is in a ${c.open.setup.toUpperCase()} ${c.open.side} from ${esc(c.open.at)} @ ${px(c.open.entry)}</b> - manage it: stop / target / 60 min</div>` : ""}
       ${legHtml(c.hold, "HOLD")}${legHtml(c.brk, "BREAK")}
-      <div class="small faint" style="margin-top:6px">Board read: ${esc(c.action)}</div></div>`; };
+      </div>`; };
   const T = D.today || {};
   const kill = `<div class="small" style="margin:8px 0 2px;padding:6px 10px;border-radius:8px;background:var(--surface-2)"><b>Day limits (DOM v4, ${D.key==="NIFTY"?"Nifty":"Bank Nifty"}):</b> trades ${T.n ?? 0} of ${T.limit ?? 4} · closed ${(T.r_closed ?? 0) > 0 ? "+" : ""}${fmt(T.r_closed ?? 0, 2)} R (₹${fmt(T.pnl ?? 0, 0)}) · plan stops the day at ${T.plan_stop ?? -2} R · entries ${esc(T.window||"09:30–15:00")} · flat ${esc(T.flat||"15:20")}${T.open ? ` · <b>open: ${esc(T.open)}</b>` : ""}${T.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(T.gate)}</span>` : ""}${(T.r_closed ?? 0) <= (T.plan_stop ?? -2) ? ` · <b style="color:var(--bear)">DAY STOP HIT - no more trades</b>` : ""}</div>`;
   const mute = `<label class="small faint" style="margin-left:10px;cursor:pointer"><input type="checkbox" ${LBRD.mute?"checked":""} onchange="LBRD.mute=this.checked;try{localStorage.setItem('mp.lb.mute',this.checked?'1':'0')}catch(e){}"> mute alerts</label>`;
   const planHtml = (D.plan||[]).length ? `<div class="spread" style="margin-top:8px"><h3 style="margin:0">Trade Plan <span class="small muted">3 nearest levels · how DOM v4 would trade them · indications, untested as a manual plan</span></h3>${mute}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-top:6px">${D.plan.map(card).join("")}</div>` + kill : "";
   lbAlert(D);
-  el.innerHTML = head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Resting Orders</th><th title="DOM HOLD: fresh touch · held · book lean · absorption">DOM Hold</th><th title="DOM BREAK: through · 30 s beyond · book lean · delta">DOM Break</th><th>Action</th></tr></thead><tbody>`
+  el.innerHTML = head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + farRow + `</tbody></table></div>`
     + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
     + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). <b>Every price is the spot index</b> (DOM Index v4 trades in spot; the futures figure under each level is for reference; walls and the book are futures data moved to spot). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
-    + `Big wall = ≥4× normal size for 70% of the last 15 min. Action = level strength + option writers + big wall + resting orders on the level's side, a fixed rule that is <b>untested</b>: an indication, never an order. Walls can be pulled any second.</p></details><p class="small faint" style="margin:6px 0 0">DOM Hold / Break dots = the DOM Index engine's entry conditions at that level right now (filled = met, ring = not yet, grey = n/a; hover for names); the engine trades when all four are met.</p>`;
+    + `Big wall = a single price inside the zone holding ≥4× the normal size for 70% of the last 15 min; Standing = how long it has stood; Trend = growing / steady / shrinking over that window. Walls can be pulled any second.</p></details><p class="small faint" style="margin:6px 0 0;display:none">DOM Hold / Break dots = the DOM Index engine's entry conditions at that level right now (filled = met, ring = not yet, grey = n/a; hover for names); the engine trades when all four are met.</p>`;
 }
 async function bigwLoad(){
   const el = $("#bwCard"); if (!el) return;
@@ -2975,6 +2979,7 @@ function showView(v){
     const lv = $("#lvlCard"), pm = $("#prepMini"), n = $("#nliveNote"), d = $("#nliveDesk"), ag = $("#agentCard"), st = $("#stkCard"), top = $("#viewNLive").firstElementChild;
     // 2026-11-04 (Nikhil): order-flow chart first, Levels & blocks below it
     if (top && st) top.after(st); if (st && n) st.after(n); if (n && d) n.after(d); if (d && lv) d.after(lv); if (lv && pm) lv.after(pm); if (pm && ag) pm.after(ag);
+    { const lb = $("#lbCard"); if (lb && d) d.before(lb); }      // 2026-11-09 (Nikhil): Level Board on top of the order-flow chart
     const more = $("#lvlMore"); if (more) more.open = true; } } catch(e){}   // trade cards + order flow chart just above Strategy recommendations
   try { if (v==="india") indApply(); else document.body.classList.remove("ind-stock"); } catch(e){}
   if (hasM){
@@ -3125,7 +3130,7 @@ function smxRender(g){
       ${REG.map(k=>`<th style="position:sticky;top:0;background:var(--surface)">${esc(XR_NAME[k]||k)}</th>`).join("")}
       <th style="position:sticky;top:0;background:var(--surface)" title="profit factor = money won / money lost, every trade taken">Profit factor<div class="small faint" style="font-weight:400">always trade</div></th>
       <th style="position:sticky;top:0;background:var(--surface)" title="profit factor when each trade follows its regime cell (Trade / ½ / ¼ / Don't)">Profit factor<div class="small faint" style="font-weight:400">follow regime</div></th>
-      <th style="position:sticky;top:0;background:var(--surface)" title="tested on May 2025 onwards with regime cells set on the earlier period">Regime?</th></tr></thead><tbody>${body || `<tr><td colspan="9" class="small muted">No strategy matches.</td></tr>`}</tbody></table></div>
+      <th style="position:sticky;top:0;background:var(--surface)" title="tested on May 2025 onwards with regime cells set on the earlier period">Regime?</th></tr></thead><tbody>${body || `<tr><td colspan="8" class="small muted">No strategy matches.</td></tr>`}</tbody></table></div>
     <p class="small faint" style="margin:6px 0 0">Each strategy is judged on the regime of its own timeframe at entry: intraday → 15-minute regime, swing (1-10 days) → daily regime, positional → weekly regime. The current regime of each timeframe is in the header line (and in the cell tooltip); the green outline with ★ is the strongest regime for that strategy (highest average among Trade and ½ size cells; none if no cell has an edge). Profit factors before costs, after costs below (where the backtest has costs). Strategies that lose in every regime are not shown. Strategies without trade logs use their weekly P&L. Backtest evidence only - not a live signal; many cells are tested, so single cells near the line can be luck.</p>`;
   $("#smxQ").oninput = e => { SMX.q = e.target.value; clearTimeout(smxRender.t); smxRender.t = setTimeout(() => { smxRender(g); const i = $("#smxQ"); if (i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
   $("#smxF").onchange = e => { SMX.fam = e.target.value; smxRender(g); };
@@ -3156,7 +3161,7 @@ async function domLoad(){
   c.innerHTML = `<div class="spread"><h2>DOM Ladder · ${esc(nm)}</h2><span class="small muted">${esc(D.contract||"")} · ${esc(String(D.at||"").slice(11,19))} ${age>10?`<span class="pill p-wait">${Math.round(age)} s old</span>`:""}</span></div>
     <div class="small" style="margin:4px 0 2px">${D.last!=null?`Last <b>${fmt(D.last,2)}</b> · `:""}spread ${sp==null?"–":fmt(sp,2)} · book lean (20 levels) <b class="${imb>=0.15?"pos":imb<=-0.15?"neg":""}">${imb==null?"–":(imb>0?"+":"")+fmt(imb,2)}</b> · total bid ${k(tb)} vs ask ${k(ta)}</div>
     <div class="tscroll"><table class="dom"><tr class="muted small"><td>orders</td><td>bid qty</td><td>10 s</td><td class="px">price</td><td>10 s</td><td style="text-align:left">ask qty</td><td>orders</td></tr>
-      ${askRows}<tr class="sprd"><td colspan="9">spread ${sp==null?"–":fmt(sp,2)}</td></tr>${bidRows}</table></div>
+      ${askRows}<tr class="sprd"><td colspan="8">spread ${sp==null?"–":fmt(sp,2)}</td></tr>${bidRows}</table></div>
     <p class="small faint" style="margin:6px 0 0">Dhan 20-level book, refreshed every 2 s (Dhan sends snapshots, not every order). Outlined = wall (≥3× the median level; walls often get pulled). "10 s" = change in waiting quantity: rising qty at a level price is trading into = refilling (possible iceberg). Context for timing only - untested as a signal.</p>`;
 }
 function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.body.dataset.tab === "intraday" && document.body.dataset.sub === "india"){   // 2026-11-09: DOM Ladder card removed - no ladder polling; DOM setups still refresh
