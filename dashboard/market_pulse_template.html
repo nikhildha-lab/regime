@@ -2030,7 +2030,7 @@ function lbRender(){
   const TONE = {bull:"var(--bull)", bear:"var(--bear)", wait:"#E8A33C", neutral:"var(--muted)"};
   const STC = {strong:"var(--ink)", medium:"var(--ink)", weak:"var(--muted)", ref:"var(--muted)", wall:"var(--muted)"};
   const typ = r => { const s = r.side === "R" ? "Resistance" : r.side === "S" ? "Support" : "Price inside";
-    const k = r.kind === "block" ? `${r.strength[0].toUpperCase()+r.strength.slice(1)} block` : r.kind === "ref" ? "Reference" : "Wall only";
+    const k = r.kind === "block" ? `${r.strength[0].toUpperCase()+r.strength.slice(1)} block` : r.kind === "ref" ? "Reference" : r.kind === "dom" ? "DOM level" : "Wall only";
     return `<b style="color:${STC[r.strength]||"var(--ink)"}">${k}${r.star?" ★":""}</b><br><span class="small faint">${s}${r.tags.length?" · "+r.tags.map(esc).join(" "):""}</span>`; };
   const lvl = r => { const one = Math.abs(r.hi - r.lo) < 25 && r.kind !== "block";
     return `<b>${one ? px((r.lo + r.hi) / 2) : px(r.lo) + "–" + px(r.hi)}</b><br><span class="small faint" title="futures price">fut ${one ? px((r.fut_lo + r.fut_hi) / 2) : px(r.fut_lo) + "–" + px(r.fut_hi)}</span>`; };
@@ -2046,16 +2046,31 @@ function lbRender(){
     const tot = Math.max(b.bid_lots + b.ask_lots, 1), bw = Math.round(60 * b.bid_lots / tot), aw = 60 - bw;
     return `<div style="display:flex;height:6px;width:60px;border-radius:3px;overflow:hidden;margin-bottom:3px;background:var(--line)"><span style="width:${bw}px;background:var(--bull)"></span><span style="width:${aw}px;background:var(--bear)"></span></div>`
       + `<span class="small"><span style="color:var(--bull)">B ${fmt(b.bid_lots,0)}</span> · <span style="color:var(--bear)">A ${fmt(b.ask_lots,0)}</span> lots</span>`; };
+  // 2026-11-09 (Nikhil: "add new sleek columns for these indicators: DOM HOLD or BREAK signal"): live checklist from the DOM engine
+  const dot = (ok, lab) => `<span title="${esc(lab)}: ${ok === true ? "yes" : ok === false ? "not yet" : "n/a"}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;${ok === true ? "background:var(--bull)" : ok === false ? "border:1.5px solid var(--muted)" : "background:var(--line)"}"></span>`;
+  const DIRC = d => d === "long" ? "var(--bull)" : d === "short" ? "var(--bear)" : "var(--muted)";
+  const fired = (z, setup) => (z.fired||[]).filter(f => f.setup === setup).map(f => `<span class="pill p-${f.status==="open"?"wait":(f.r||0)>0?"bull":"bear"}" style="font-size:11px;padding:1px 6px">${f.side} ${esc(f.at)} ${f.status==="open"?"open":(f.r>0?"+":"")+fmt(f.r,1)+"R"}</span>`).join(" ");
+  const holdC = r => { const z = r.dom; if (!z) return `<span class="faint small">not a DOM level</span>`; const H = z.hold || {};
+    const live = H.state === "testing", f = fired(z, "hold");
+    const lab = live ? `<b style="color:#E8A33C">testing · ${H.left}s</b>` : H.state === "armed" ? `<span class="small" style="color:${DIRC(H.dir)}">armed${H.dir?" · "+H.dir:""}</span>`
+      : H.state === "resetting" ? `<span class="small faint">resets in ${H.reset_left}s</span>` : `<span class="small faint">${esc(H.state||"")}</span>`;
+    return `<div style="white-space:nowrap">${dot(H.fresh, "fresh touch (away 120 s+)")}${dot(H.held, "held (not 2 bands through)")}${dot(H.lean, "book lean ≥ " + (LBRD.D[LBRD.k].dom||{}).imb_hold)}${dot(H.absorbed, "absorption" + (H.abs_txt ? " · " + H.abs_txt : ""))}</div>${lab}${f ? "<br>" + f : ""}`; };
+  const brkC = r => { const z = r.dom; if (!z) return `<span class="faint small">not a DOM level</span>`; const B = z.brk || {};
+    const live = B.state === "breaking", f = fired(z, "break");
+    const lab = live ? `<b style="color:#E8A33C">breaking · ${B.held_s}s / 30s</b>` : `<span class="small" style="color:${DIRC(B.dir)}">${B.dir ? "if broken · " + B.dir : "–"}</span>`;
+    return `<div style="white-space:nowrap">${dot(B.through, "closed through the far edge")}${dot(B.stay, "stayed beyond 30 s")}${dot(B.lean, "book lean ≥ " + (LBRD.D[LBRD.k].dom||{}).imb_break)}${dot(B.delta, "60-s delta ≥ " + (LBRD.D[LBRD.k].dom||{}).delta_break + "% of volume")}</div>${lab}${f ? "<br>" + f : ""}`; };
   const act = r => `<span style="display:inline-block;border-left:3px solid ${TONE[r.tone]||"var(--muted)"};padding-left:7px"><b style="color:${r.tone==="neutral"?"var(--muted)":"var(--ink)"}">${esc(r.action)}</b><br><span class="small faint" title="score ${r.score}">score ${r.score}: ${esc(r.score_why.join(" · "))}</span></span>`;
-  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${book(r)}</td><td style="min-width:230px">${act(r)}</td></tr>`;
+  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${book(r)}</td><td>${holdC(r)}</td><td>${brkC(r)}</td><td style="min-width:230px">${act(r)}</td></tr>`;
   const R = D.rows.filter(r => r.side === "R"), I = D.rows.filter(r => r.side === "inside"), S = D.rows.filter(r => r.side === "S");
-  const prow = `<tr><td colspan="7" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Price now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}</span></td></tr>`;
-  const empty = t => `<tr><td colspan="7" class="small faint">${t}</td></tr>`;
-  el.innerHTML = head + `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Resting Orders</th><th>Action</th></tr></thead><tbody>`
+  const X = D.dom || {}, sg = (v, d) => v == null ? "–" : `<b style="color:${v>0?"var(--bull)":v<0?"var(--bear)":"var(--muted)"}">${v>0?"+":""}${fmt(v,d)}</b>`;
+  const prow = `<tr><td colspan="9" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Price now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}</span>`
+    + `<span class="small" style="margin-left:14px">Book lean ${sg(X.lean,2)} <span class="faint">(hold ±${X.imb_hold ?? "–"}, break ±${X.imb_break ?? "–"})</span> · 60-s delta ${X.delta60 == null ? "–" : sg(X.delta60,0) + "%"} <span class="faint">(break ±${X.delta_break ?? "–"}%)</span>${X.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(X.gate)}</span>` : ""}${X.err ? ` · <span class="faint">${esc(X.err)}</span>` : ""}</span>${X.basis_warn ? `<br><span class="small" style="color:#E8A33C">⚠ ${esc(X.basis_warn)}</span>` : ""}</td></tr>`;
+  const empty = t => `<tr><td colspan="9" class="small faint">${t}</td></tr>`;
+  el.innerHTML = head + `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Resting Orders</th><th title="DOM HOLD: fresh touch · held · book lean · absorption">DOM Hold</th><th title="DOM BREAK: through · 30 s beyond · book lean · delta">DOM Break</th><th>Action</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + `</tbody></table></div>`
     + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
     + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). Levels are index prices (futures below each). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
-    + `Big wall = ≥4× normal size for 70% of the last 15 min. Action = level strength + option writers + big wall + resting orders on the level's side, a fixed rule that is <b>untested</b>: an indication, never an order. Walls can be pulled any second.</p>`;
+    + `Big wall = ≥4× normal size for 70% of the last 15 min. Action = level strength + option writers + big wall + resting orders on the level's side, a fixed rule that is <b>untested</b>: an indication, never an order. Walls can be pulled any second. DOM Hold / Break dots = the DOM Index engine's entry conditions at that level right now (filled = met, ring = not yet, grey = n/a; hover for names); the engine trades when all four are met.</p>`;
 }
 async function bigwLoad(){
   const el = $("#bwCard"); if (!el) return;
@@ -3107,7 +3122,7 @@ async function domLoad(){
   c.innerHTML = `<div class="spread"><h2>DOM Ladder · ${esc(nm)}</h2><span class="small muted">${esc(D.contract||"")} · ${esc(String(D.at||"").slice(11,19))} ${age>10?`<span class="pill p-wait">${Math.round(age)} s old</span>`:""}</span></div>
     <div class="small" style="margin:4px 0 2px">${D.last!=null?`Last <b>${fmt(D.last,2)}</b> · `:""}spread ${sp==null?"–":fmt(sp,2)} · book lean (20 levels) <b class="${imb>=0.15?"pos":imb<=-0.15?"neg":""}">${imb==null?"–":(imb>0?"+":"")+fmt(imb,2)}</b> · total bid ${k(tb)} vs ask ${k(ta)}</div>
     <div class="tscroll"><table class="dom"><tr class="muted small"><td>orders</td><td>bid qty</td><td>10 s</td><td class="px">price</td><td>10 s</td><td style="text-align:left">ask qty</td><td>orders</td></tr>
-      ${askRows}<tr class="sprd"><td colspan="7">spread ${sp==null?"–":fmt(sp,2)}</td></tr>${bidRows}</table></div>
+      ${askRows}<tr class="sprd"><td colspan="9">spread ${sp==null?"–":fmt(sp,2)}</td></tr>${bidRows}</table></div>
     <p class="small faint" style="margin:6px 0 0">Dhan 20-level book, refreshed every 2 s (Dhan sends snapshots, not every order). Outlined = wall (≥3× the median level; walls often get pulled). "10 s" = change in waiting quantity: rising qty at a level price is trading into = refilling (possible iceberg). Context for timing only - untested as a signal.</p>`;
 }
 function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.body.dataset.tab === "intraday" && document.body.dataset.sub === "india"){ domLoad(); DOM.t = setInterval(() => { if (!document.hidden) domLoad(); }, 2000);

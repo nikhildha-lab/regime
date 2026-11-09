@@ -38,6 +38,74 @@ def _book(BW, key):
         return None, None
 
 
+def _dom(hot, key, basis):
+    """Live HOLD / BREAK checklist per DOM-engine zone (domcards keeps per-zone state in memory; read-only, the engine is not touched).
+    Zones are futures prices. Returns (zones, ctx) - each zone with the state of every entry condition right now."""
+    DC = hot("domcards"); S = DC.S; P = DC.P
+    I = (S.get("inst") or {}).get(key)
+    if not I or not I.get("h"):
+        return [], {"err": "DOM engine has no data for " + key + " yet"}
+    h = list(I["h"]); t, mid = h[-1][0], h[-1][1]
+    base = I.get("base")
+    w30 = [x[2] for x in h if x[0] >= t - 30]
+    lean = (sum(w30) / len(w30) - base) if (w30 and base is not None) else None
+    w60 = [x for x in h if x[0] >= t - 60]
+    vol = sum(x[3] + x[4] for x in w60); dl = sum(x[3] - x[4] for x in w60)
+    dpct = dl / vol if vol else None
+    hm = DC._hm(t); b = mid * DC.BAND["index"]
+    gate = None
+    if hm < P["first"]:
+        gate = f"engine starts {P['first']}"
+    elif hm >= P["last"]:
+        gate = f"no new trades after {P['last']}"
+    elif I.get("n", 0) >= P["per_day"]:
+        gate = f"day limit reached ({P['per_day']} trades)"
+    zones = list(((S.get("lv") or {}).get(key) or {}).get("zones") or []) + list(I.get("extra") or [])
+    trades = [x for x in S.get("trades") or [] if x.get("key") == key and x.get("day") == S.get("day")]
+    out = []
+    for z in zones:
+        zid = f"{z['lo']}-{z['hi']}"; st = (I.get("lv") or {}).get(zid) or {}
+        lo, hi = z["lo"], z["hi"]
+        pos = "above" if mid > hi else "below" if mid < lo else "in"
+        hold_dir = "long" if pos == "above" else "short" if pos == "below" else None    # price above a zone -> it is support -> HOLD long
+        brk_dir = "short" if pos == "above" else "long" if pos == "below" else None     # breaking it goes the other way
+        tc = st.get("touch"); o = st.get("out")
+        # HOLD checklist
+        H = {"state": "waiting", "dir": hold_dir}
+        if tc:
+            long_ = tc["from"] == "above"; sd = 1 if long_ else -1; far = lo if long_ else hi
+            H.update(dir="long" if long_ else "short", state="testing", left=max(0, int(P["hold_s"] - (t - tc["t"]))),
+                     fresh=True, held=(tc["ext"] - (far - sd * 2 * b)) * sd > 0,
+                     lean=lean is not None and lean * sd >= P["imb_hold"],
+                     absorbed=(tc["sell"] >= tc["buy"]) if long_ else (tc["buy"] >= tc["sell"]),
+                     abs_txt=f"sells {tc['sell']:.0f} / buys {tc['buy']:.0f}", rejected=pos == tc["from"])
+        else:
+            sd = 1 if hold_dir == "long" else -1
+            armed = pos != "in" and t - st.get("since", t) >= P["away_s"] if st else pos != "in"
+            H.update(state="armed" if armed else ("in zone" if pos == "in" else "resetting"),
+                     reset_left=max(0, int(P["away_s"] - (t - st.get("since", t)))) if st and not armed and pos != "in" else None,
+                     fresh=False, held=None, absorbed=None, lean=(lean is not None and hold_dir is not None and lean * sd >= P["imb_hold"]))
+        # BREAK checklist
+        B = {"state": "waiting", "dir": brk_dir}
+        if o and o.get("from") and o["from"] != o["side"] and t - o["t"] < P["break_s"] + 20:
+            long_ = o["side"] == "above"; sd = 1 if long_ else -1; edge = hi if long_ else lo
+            B.update(dir="long" if long_ else "short", state="breaking", through=True, held_s=int(t - o["t"]),
+                     stay=all((x[1] - edge) * sd > 0 for x in h if x[0] >= o["t"]),
+                     lean=lean is not None and lean * sd >= P["imb_break"], delta=dpct is not None and dpct * sd >= P["delta_break"])
+        else:
+            sd = 1 if brk_dir == "long" else -1
+            B.update(through=False, stay=None, lean=(lean is not None and brk_dir is not None and lean * sd >= P["imb_break"]),
+                     delta=(dpct is not None and brk_dir is not None and dpct * sd >= P["delta_break"]))
+        fired = [{"setup": x["setup"], "side": x["side"], "at": x["opened"][11:16], "status": x["status"], "r": x.get("r"),
+                  "why_out": x.get("exit_reason"), "entry": x["entry"]}
+                 for x in trades if x.get("zone") and abs(x["zone"][0] - lo) < 0.6 and abs(x["zone"][1] - hi) < 0.6]
+        out.append({"lo": lo, "hi": hi, "name": z.get("name"), "pos": pos, "hold": H, "brk": B, "fired": fired})
+    bo = ((S.get("lv") or {}).get(key) or {}).get("basis")
+    return out, {"basis_open": bo, "lean": None if lean is None else round(lean, 2), "delta60": None if dpct is None else round(100 * dpct), "gate": gate,
+                 "at": time.strftime("%H:%M:%S", time.localtime(t)), "fut": round(mid, 1), "imb_hold": P["imb_hold"], "imb_break": P["imb_break"],
+                 "delta_break": round(100 * P["delta_break"])}
+
+
 def build(key, prep, oi, flv, hot):
     key = (key or "NIFTY").upper()
     P = (prep or {}).get(key) or {}
@@ -95,13 +163,40 @@ def build(key, prep, oi, flv, hot):
             n = max(len(inz), 1); qb = sum(b for _, b, _ in inz); qa = sum(a for _, _, a in inz)
             x["book"] = {"bid_lots": round(qb / lot), "ask_lots": round(qa / lot), "bid_x": round(qb / n / mb, 1) if mb and qb else None,
                          "ask_x": round(qa / n / ma, 1) if ma and qa else None, "buckets": len(inz)}
+    try:
+        DZ, dctx = _dom(hot, key, basis)
+    except Exception as e:
+        DZ, dctx = [], {"err": f"DOM state: {type(e).__name__}: {str(e)[:80]}"}
+    dbas = dctx.get("basis_open")
+    dbas = basis if dbas is None else dbas
+    if dctx.get("basis_open") is not None and abs(dctx["basis_open"] - basis) > 15:
+        dctx["basis_warn"] = (f"DOM engine set its levels with a {dctx['basis_open']:+.0f} pt basis at the open; live basis is {basis:+.0f} - "
+                              f"its zones sit about {abs(dctx['basis_open'] - basis):.0f} pts away from where those levels trade in futures now")
+    for z in DZ:                                              # engine zone (futures, set with ITS 09:15 basis) -> index prices; blocks match by name
+        zl, zh = z["lo"] - dbas, z["hi"] - dbas
+        import re as _re
+        m = _re.search(r"block (\d+)-(\d+)", str(z.get("name") or ""))
+        hit = None
+        if m:
+            hit = next((x for x in rows if x["kind"] == "block" and int(x["lo"]) == int(m.group(1)) and int(x["hi"]) == int(m.group(2))), None)
+        if hit is None:
+            hit = next((x for x in rows if x["kind"] != "wall" and x["lo"] <= zh + px * TOL / 100 and zl - px * TOL / 100 <= x["hi"] and not x.get("dom")), None)
+        if hit is not None and not m:
+            hit["tags"].append(str(z.get("name")))
+        if hit is None:
+            hit = {"lo": zl, "hi": zh, "kind": "dom", "strength": "dom", "star": False, "why": "DOM engine level: " + str(z["name"]), "tags": [str(z["name"])]}
+            rows.append(hit)
+            if book:
+                inz = [(p, bq, aq) for p, bq, aq in book if zl - 2 <= p - basis <= zh + 2]
+                hit["book"] = {"bid_lots": round(sum(q for _, q, _ in inz) / lot), "ask_lots": round(sum(q for _, _, q in inz) / lot), "buckets": len(inz)} if inz else None
+        hit["dom"] = z
     out = []
     for x in rows:
         mid = (x["lo"] + x["hi"]) / 2; inside = x["lo"] <= px <= x["hi"]
         side = "inside" if inside else "R" if mid > px else "S"
         dist = 0.0 if inside else (x["lo"] - px if side == "R" else x["hi"] - px)
         dp = abs(dist) / px * 100
-        sc = STR.get(x["strength"], 0); why = [f"{x['strength']} level" if x["kind"] == "block" else ("reference level" if x["kind"] == "ref" else "wall only")]
+        sc = STR.get(x["strength"], 0); why = [f"{x['strength']} level" if x["kind"] == "block" else {"ref": "reference level", "dom": "DOM engine level"}.get(x["kind"], "wall only")]
         o = x.get("oi")
         if o and o.get("tone") == "hold":
             sc += 1; why.append("option writers defending")
@@ -130,13 +225,22 @@ def build(key, prep, oi, flv, hot):
             tone = "bull" if side == "R" else "bear"
         else:
             act, tone = ("Watch - react only with order-book confirmation", "wait") if dp <= NEAR else ("On the radar", "neutral")
+        dz = x.get("dom") or {}
+        for f in dz.get("fired") or []:
+            if f["status"] == "open":
+                act, tone = f"In a DOM {f['setup'].upper()} {f['side']} since {f['at']} - manage it (stop / target / 60 min)", "bull" if f["side"] == "long" else "bear"
+        hs, bs = dz.get("hold") or {}, dz.get("brk") or {}
+        if hs.get("state") == "testing" and not any(f["status"] == "open" for f in dz.get("fired") or []):
+            act, tone = f"Testing now - HOLD {hs['dir']} needs {', '.join(k for k in ('held', 'lean', 'absorbed') if not hs.get(k)) or 'the bounce'}", "wait"
+        elif bs.get("state") == "breaking" and not any(f["status"] == "open" for f in dz.get("fired") or []):
+            act, tone = f"Breaking now - BREAK {bs['dir']} needs {', '.join(k for k in ('stay', 'lean', 'delta') if not bs.get(k)) or '30 s beyond'}", "wait"
         out.append({"lo": round(x["lo"], 1), "hi": round(x["hi"], 1), "fut_lo": round(x["lo"] + basis, 1), "fut_hi": round(x["hi"] + basis, 1), "kind": x["kind"],
                     "strength": x["strength"], "star": x["star"], "why": x["why"], "tags": x["tags"], "side": side, "dist": round(dist, 1), "dist_pct": round(dist / px * 100, 2),
-                    "oi": x.get("oi"), "wall": x.get("wall"), "book": x.get("book"), "score": sc, "action": act, "tone": tone, "score_why": why})
+                    "oi": x.get("oi"), "wall": x.get("wall"), "book": x.get("book"), "score": sc, "action": act, "tone": tone, "score_why": why, "dom": x.get("dom")})
     out.sort(key=lambda r: -r["hi"])
     return {"key": key, "price": round(px, 1), "fut": W.get("price"), "basis": round(basis, 1), "at": time.strftime("%H:%M"), "oi_at": (oi or {}).get("at"),
             "walls_at": W.get("as_of"), "walls_src": W.get("source"), "book": binfo, "rows": out, "pulled": W.get("pulled") or [],
-            "note": "Action is a fixed rule (level strength + option writers + big wall + resting orders), untested - an indication, never an order."}
+            "dom": dctx, "note": "Action is a fixed rule (level strength + option writers + big wall + resting orders), untested - an indication, never an order."}
 
 
 def api(key, prep, oi, flv, hot):
