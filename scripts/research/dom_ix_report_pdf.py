@@ -104,7 +104,7 @@ opt_prem = (U.opt_in * lotm)
 
 story = []
 story += [Paragraph("DOM Index — Strategy Logic &amp; Paper Results", TI),
-          Paragraph("Nifty and Bank Nifty intraday · order-book (DOM) confirmation at pre-marked levels · paper trades 4–9 Nov 2026 · prepared 9 Nov 2026", SM),
+          Paragraph("Nifty and Bank Nifty intraday · order-book (DOM) confirmation at pre-marked levels · paper trades 4–9 Nov 2026 · prepared 9 Nov 2026 · v2: re-run after the basis fix", SM),
           Spacer(1, 6)]
 kp = [["", "Futures", "Synthetic future", "0.6-delta option buy"],
       ["Net P&amp;L, 17 trades, 1 lot", money(S["pnl_fut"]["tot"]), money(S["pnl_syn"]["tot"]), money(S["pnl_opt"]["tot"])],
@@ -113,10 +113,21 @@ kp = [["", "Futures", "Synthetic future", "0.6-delta option buy"],
 story.append(table(kp, [62 * mm, 37 * mm, 37 * mm, 40 * mm], zebra=False, font=9))
 story.append(Spacer(1, 6))
 story.append(Paragraph(
-    "<b>Short answer.</b> The signal made money in paper trading (+9.4 R gross over 17 trades), but almost all of it came from one session "
-    "(Fri 6 Nov). The <b>synthetic future</b> is the best way to trade it — same move as futures at about a quarter of the cost. "
-    "Plain futures lose a large share to STT. The 0.6-delta option keeps about 60% of the move with a much smaller capital outlay, but "
-    "it never beats the synthetic in rupees per lot. Four sessions is far too few to call this an edge: keep paper trading to 30–40 trades.", B))
+    f"<b>Short answer.</b> With correctly placed levels the signal <b>lost money</b> in paper trading ({U.r_gross.sum():+.1f} R gross over 17 trades, "
+    "11 stops, 3 real winners). The first version of this report showed +9.4 R; that result came from levels that had been moved to futures "
+    "prices with a wrong basis at 09:15 (see the box below), so it is withdrawn. On the instrument question the answer is unchanged: the "
+    "<b>synthetic future</b> keeps the most of each move, plain futures lose a large share to STT, and the 0.6-delta option loses the least "
+    "when the signal is wrong. Four sessions is far too few to judge either way: keep paper trading to 30–40 trades with the fixed levels.", B))
+story.append(Spacer(1, 4))
+story.append(table([["What was wrong, and what changed (9 Nov)"],
+    ["The engine moves the Level Map blocks and option walls from index prices to futures prices by adding the basis (futures − spot). It read that "
+     "basis once at 09:15 from the price tracker's quotes, which are stale at the open: it stored Nifty −7 / −58 / −88 / −17 pts and Bank Nifty "
+     "+139 / −402 / −277 / −234 pts on 4–9 Nov, while the real premium was roughly +20 to +50 (Nifty) and −20 to +160 (Bank Nifty). So the zones "
+     "sat 40–400 pts away from the real level and the trades were taken at places that were not the level at all. The IB high / low were not "
+     "affected (they come from futures prices directly). <b>Fix:</b> the basis is now measured — the median of futures-minus-option-chain-spot "
+     "pairs over the whole previous session until 20 pairs exist today (about 10:15), then over today — re-checked every minute, zones moving "
+     "only on a ≥10 pt change. The same code was re-run on the stored per-second data for 3–6 Nov and today, and this report uses those trades."]],
+    [176 * mm], head=1, zebra=False, font=8))
 
 story.append(Paragraph("1. What the strategy does", H1))
 story.append(Paragraph(
@@ -127,7 +138,7 @@ story.append(Paragraph(
 
 story.append(Paragraph("1.1 Levels (fixed for the day)", H2))
 story += bullets([
-    "<b>Level-map blocks</b> (medium and strong) from the Level Map, moved from spot to futures by that day's basis (futures − spot).",
+    "<b>Level-map blocks</b> (medium and strong) from the Level Map, moved from index to futures prices by a measured basis (median of futures − option-chain spot; previous session until 10:15, then today), re-checked every minute.",
     "<b>Option walls</b>: the strikes with the biggest call OI (resistance) and put OI (support), each turned into a zone ± 0.04%.",
     "<b>Initial balance</b>: the 09:15–10:15 high and low, added once 10:15 has passed.",
     "Each level is a zone (low–high), not a single price. One <i>band</i> = the width of that zone; stops are measured in bands."])
@@ -183,9 +194,8 @@ for m, (a, b) in nm.items():
     tr.append([a, b, money(s.sum()), f"{r:+.2f}", f"{(s > 0).mean()*100:.0f}%"])
 story.append(table(tr, [24 * mm, 88 * mm, 26 * mm, 18 * mm, 20 * mm]))
 story.append(Paragraph(
-    "None of the trails beats the fixed stop. Trades either hit the stop fast (6 stops, most within 1–10 minutes, before ever reaching +1 R) or "
-    "ran cleanly to target / time. Breakeven changed one trade; Trail 1 R saved one flat trade but cut the biggest winner early (6 Nov Bank Nifty 10:20: +316 pts → +187); "
-    "the Runner helped two late-day trades but lost on others. <b>Keep the fixed stop.</b> Revisit after 40+ trades.", B))
+    "None of the trails beats the fixed stop. 11 of 17 trades hit the stop before ever reaching +1 R, so no trail could help them; the trails "
+    "only cut the two big winners early. <b>Keep the fixed stop.</b> Revisit after 40+ trades.", B))
 
 story.append(PageBreak())
 story.append(Paragraph("4. Which instrument", H1))
@@ -216,9 +226,9 @@ story.append(table(cmp, [50 * mm, 40 * mm, 42 * mm, 44 * mm]))
 story.append(Spacer(1, 6))
 story.append(Image(os.path.join(H, "equity.png"), width=176 * mm, height=176 * mm * 2.3 / 7.2))
 story.append(Paragraph(
-    f"Gross, before any costs, the signal made {U.pts.mul(lotm).sum():,.0f} rupees per lot ({U.r_gross.sum():+.1f} R). "
-    "Futures give up nearly 60% of that to costs; the synthetic gives up under 20%. The option keeps roughly 0.6 of each move on both winners and losers, "
-    "so it smooths the curve (smallest drawdown) but earns less.", B))
+    f"Gross, before any costs, the signal made {U.pts.mul(lotm).sum():+,.0f} rupees per lot ({U.r_gross.sum():+.1f} R) — a loss already. Costs then take "
+    f"about ₹{(U.pts.mul(lotm).sum() - U.pnl_fut.sum()):,.0f} more on futures and ₹{(U.pts.mul(lotm).sum() - U.pnl_syn.sum()):,.0f} on the synthetic. "
+    "The option loses least in rupees because it carries only ~0.6 of each losing move, but it would also earn least if the signal worked.", B))
 by = [["Split", "Trades", "Futures", "Synthetic", "Option"]]
 for lab, m in (("Nifty", U.key == "NIFTY"), ("Bank Nifty", U.key == "BANKNIFTY"), ("HOLD setup", U.setup == "hold"), ("BREAK setup", U.setup == "break")):
     by.append([lab, int(m.sum())] + [money(U[m][c].sum()) for c in ("pnl_fut", "pnl_syn", "pnl_opt")])
@@ -227,9 +237,10 @@ story.append(table(by, [40 * mm, 20 * mm, 38 * mm, 38 * mm, 40 * mm]))
 story.append(PageBreak())
 story.append(Paragraph("6. Every trade (3–9 Nov)", H1))
 story.append(Paragraph(
-    "Prices are the near-month futures mid. P&amp;L is for 1 lot (Nifty 65, Bank Nifty 30) after costs. The six 3 Nov trades are shown greyed: the morning levels "
-    "were saved late that day, so they could have used information not available at 09:15 — they are kept out of every total, as in Paper Trades. "
-    "* = counted in the plan account. BNF = Bank Nifty. Option column shows the modelled strike and premium in → out. Sun 8 Nov had no session. One Nifty short from 11:12 on 9 Nov was still open and is not included.", SM))
+    "Prices are the near-month futures mid. P&amp;L is for 1 lot (Nifty 65, Bank Nifty 30) after costs. All trades are from the 9 Nov re-run with the "
+    "measured basis. The five 3 Nov trades are shown greyed: the morning levels were saved late that day, so they could have used information not "
+    "available at 09:15 — they are kept out of every total, as in Paper Trades. "
+    "* = counted in the plan account. BNF = Bank Nifty. Option column shows the modelled strike and premium in → out. Sun 8 Nov had no session. 9 Nov covers the session up to about 13:00.", SM))
 rows = [["Day", "Idx", "Setup", "Level", "Time in–out", "Entry", "Exit", "Out by", "Pts", "R", "Futures", "Synth.", "0.6Δ option"]]
 for _, r in D.iterrows():
     mo = (lambda v: rs(v)) if r.late_levels else money
@@ -260,20 +271,16 @@ story.append(KeepTogether([Paragraph("Day by day", H2), table(dd, [40 * mm, 20 *
 
 story.append(Paragraph("7. Conclusion on performance", H1))
 story += bullets([
-    f"<b>The signal is positive so far but not proven.</b> 17 clean trades over 4 sessions, {U.r_gross.sum():+.1f} R gross, 9 winners. "
-    "One session (Fri 6 Nov) made more than the total; take it out and every instrument is flat to negative. That is normal for a 2 R-target system, "
-    "but it means the sample can't tell skill from one good day.",
-    "<b>HOLD carries the results; BREAK has only 2 trades</b> (one target on 6 Nov, one fast stop on 9 Nov) — nothing can be said about it yet.",
-    "<b>Stops are fast.</b> All 6 stops hit within ~20 minutes, most within 10. Winners mostly ran to the 60-minute time exit or the target.",
-    "<b>Instrument: use the synthetic future.</b> It keeps over 80% of the gross move. Futures keep only about 40% because of STT on the full contract value, "
-    "and with doubled costs futures turn negative while the synthetic stays clearly positive.",
-    "<b>The 0.6-delta option is the choice if capital or gap risk matters more than rupees:</b> a small fraction of the futures margin, loss capped at the premium, "
-    "smallest drawdown — but about 40% less profit than the synthetic in this sample.",
-    "<b>Trailing stop: don't add one yet.</b> Breakeven, 1 R trail and runner versions all did the same or worse than the fixed stop.",
-    "<b>Plan account</b> (first 3 a day, −2 R daily stop) made less (synthetic "
-    f"{rs(SP['pnl_syn']['tot'])} on {len(P)} trades) because the best 6 Nov trades came after the first three.",
-    "<b>Next step:</b> no rule changes. Keep paper trading; judge again at 30–40 trades (about 2–3 more weeks), checking net R per trade, HOLD vs BREAK, "
-    "and whether results still depend on one day."])
+    f"<b>No edge shown.</b> 17 clean trades over 4 sessions, {U.r_gross.sum():+.1f} R gross, 3 real winners against 11 stops. The earlier +9.4 R was an "
+    "artefact of mis-placed levels and is withdrawn.",
+    "<b>The replay over 14 sessions (21 Oct – 9 Nov, 68 trades) agrees:</b> −0.27 R per trade after costs, negative in both halves, 35 stops against "
+    "2 targets. HOLD at Level Map blocks is the weak part; the few IB-level and BREAK trades are too few to judge.",
+    "<b>Stops are fast.</b> Most stops hit within 1–10 minutes, before the trade ever reached +1 R, so no trailing stop can help — keep the fixed stop.",
+    "<b>Instrument (if the signal is ever traded):</b> the synthetic future keeps the most of each move; futures give up nearly 60% of the gross "
+    "to STT and charges; the 0.6-delta option loses least when wrong and would earn least when right.",
+    f"<b>Plan account</b> (first 3 a day, −2 R daily stop): synthetic {rs(SP['pnl_syn']['tot'])} on {len(P)} trades — the daily stop limited the damage on 4 Nov.",
+    "<b>Next step:</b> no rule changes from this (forward results never auto-change rules). Keep paper trading with the fixed levels and judge again at "
+    "30–40 trades. If HOLD at blocks is still negative then, the candidates to test separately are HOLD at the IB levels and BREAK."])
 story.append(Spacer(1, 8))
 story.append(Paragraph(
     "Paper results and modelled option prices only — no live orders. Futures cost assumes STT 0.05% on the sell side, exchange / SEBI / stamp / GST, "

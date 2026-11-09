@@ -93,6 +93,7 @@ def rebuilt_levels(day, rows):
 
 
 def replay(day, lv, rows):
+    lv = D._prep_lv(json.loads(json.dumps(lv)))      # 2026-11-09: index-price zones + measured basis, exactly as live
     D.S.clear()
     D.S.update(day=day, off={}, inst={}, lv=lv, changed=False, err={}, trades=[], lv_ts=0, flat_done=False)
     for r in rows:

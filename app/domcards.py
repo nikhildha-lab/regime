@@ -37,7 +37,7 @@ from datetime import datetime
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "data_store", "livedesk", "domcards")
 TRADES = os.path.join(OUT, "trades.json")
-OFD = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data")
+OFD = os.path.join(os.path.expanduser("~"), "Documents", "dhan", "orderflow", "data")
 EOD = os.path.join(ROOT, "data_store", "market_data", "nse_stocks_eod.csv")
 INDEX = ("NIFTY", "BANKNIFTY")
 # 2026-11-04 (Nikhil trades the index with 0.6-delta next-week options, not futures): index cost = option round trip in index-point
@@ -137,6 +137,103 @@ def _index_levels(hot, views):
     return out
 
 
+# 2026-11-09 (Nikhil: "Yes fix everywhere which was impacted"): the basis used to move the index-price blocks / option walls to futures
+# came from the tracker's spot and futures quotes at 09:15, which are stale at the open (stored: Nifty -7 / -58 / -88 / -17 pts, Bank
+# Nifty +139 / -402 / -277 / -234 on 4-9 Nov, while the real near-month premium was positive), so those zones sat 40-400 pts away from
+# the real level. Now: zones are kept in INDEX prices ("zones_spot") and moved to futures with a measured basis = median of the last
+# <= 10 option-chain snapshots of (futures 1-sec mid in that minute - chain spot), needing >= 3 snapshots (~09:22, before the 09:30
+# start). Re-checked every minute; zones move only when the basis drifts >= BASIS_MOVE pts. Uses only data up to that second, so a
+# rebuild / replay gives the same zones. Zone state is keyed by the level name so a move does not reset it. IB levels are futures-native.
+OCD = os.path.join(ROOT, "data_store", "flow", "option_chain")
+BASIS_MOVE = 10.0
+
+
+def _prep_lv(lv):
+    """Index keys of a levels dict -> index-price zones + no futures zones until a measured basis exists (old files converted with
+    their stored basis, which is how their futures zones were made)."""
+    for k in INDEX:
+        v = (lv or {}).get(k)
+        if not isinstance(v, dict):
+            continue
+        if "zones_spot" not in v:
+            b0 = float(v.get("basis") or 0.0)
+            v["zones_spot"] = [[round(z["lo"] - b0, 2), round(z["hi"] - b0, 2), z["name"]] for z in v.get("zones") or []]
+            v["basis_tracker"] = round(b0, 1)
+        v.update(zones=[], basis=None, basis_hist=[])
+    return lv
+
+
+def _chain_spot(day, k):
+    p = os.path.join(OCD, f"{day}.csv.gz")
+    try:
+        mt = os.path.getmtime(p)
+    except OSError:
+        return []
+    c = S.setdefault("chain", {})
+    if c.get("mt") != mt or c.get("day") != day:
+        import pandas as pd
+        o = pd.read_csv(p, usecols=["ts", "symbol", "underlying"]).dropna()
+        o = o[o.symbol.isin(INDEX) & (o.underlying > 0)]
+        c.clear()
+        c.update(mt=mt, day=day, spot={sym: [(int(datetime.fromisoformat(str(ts)).timestamp()), float(u)) for ts, u in g.groupby("ts").underlying.first().items()]
+                                       for sym, g in o.groupby("symbol")})
+    return c["spot"].get(k, [])
+
+
+def _pairs(day, k, mm, t=None):
+    """futures 1-min mid - option-chain spot for every chain snapshot of the day (up to t)."""
+    return [mm[ts // 60] - u for ts, u in _chain_spot(day, k) if (t is None or ts <= t) and ts // 60 in mm]
+
+
+def _prev_basis(day, k):
+    """Median basis over the whole previous session (known before the open)."""
+    try:
+        d = sorted(x for x in os.listdir(os.path.join(OFD, "of")) if len(x) == 10 and x < day and os.path.exists(os.path.join(OFD, "of", x, f"sec_{k}.csv"))
+                   and os.path.exists(os.path.join(OCD, f"{x}.csv.gz")))
+        if not d:
+            return None
+        mm = {}
+        for l in open(os.path.join(OFD, "of", d[-1], f"sec_{k}.csv")):
+            c = l.split(",")
+            if c[0] != "t" and len(c) > 4 and _f(c[4]):
+                mm[int(c[0]) // 60] = _f(c[4])
+        keep = S.get("chain")
+        S["chain"] = {}
+        try:
+            pr = sorted(_pairs(d[-1], k, mm))
+        finally:
+            S["chain"] = keep or {}
+        return round(pr[len(pr) // 2], 1) if len(pr) >= 20 else None
+    except Exception as e:
+        S.setdefault("err", {})["basis_prev"] = str(e)[:100]
+        return None
+
+
+def _rebase(k, t, I):
+    """2026-11-09 v2: a single snapshot pair is noisy (the chain's spot is taken a few seconds off the futures tick; std ~10-40 pts),
+    so the basis is a MEDIAN over many pairs: the whole previous session until today has 20 pairs (~10:15), then every pair so far
+    today. Zones move only when that median moves >= BASIS_MOVE pts."""
+    lv = (S.get("lv") or {}).get(k)
+    if not isinstance(lv, dict) or "zones_spot" not in lv:
+        return
+    if "basis_prev" not in lv:
+        lv["basis_prev"] = _prev_basis(S["day"], k)
+    pr = sorted(_pairs(S["day"], k, I.get("mm") or {}, t))
+    if len(pr) >= 20:
+        b, src = pr[len(pr) // 2], f"today {len(pr)}"
+    elif lv.get("basis_prev") is not None:
+        b, src = lv["basis_prev"], "prev session"
+    elif len(pr) >= 3:
+        b, src = pr[len(pr) // 2], f"today {len(pr)}"
+    else:
+        return
+    if lv.get("basis") is None or abs(b - lv["basis"]) >= BASIS_MOVE:
+        lv["basis"] = round(b, 1)
+        lv["zones"] = _merge([(lo + b, hi + b, nm) for lo, hi, nm in lv["zones_spot"]])
+        lv.setdefault("basis_hist", []).append([_hm(t), round(b, 1), src])
+        S["lv_save"] = True
+
+
 def levels(hot=None, views=None):
     """Today's fixed levels (computed once, then read from disk)."""
     day = S["day"]
@@ -144,14 +241,14 @@ def levels(hot=None, views=None):
     if S.get("lv") is not None:
         return S["lv"]
     if os.path.exists(p):
-        S["lv"] = json.load(open(p))
+        S["lv"] = _prep_lv(json.load(open(p)))
         return S["lv"]
     if hot is None or not views or not all((views.get(k) or {}).get("fut") for k in INDEX):
         return None                                        # wait until the tracker has spot + futures for both indices
     lv = {**_stock_levels(day), **_index_levels(hot, views)}
     os.makedirs(OUT, exist_ok=True)
     json.dump({"at": datetime.now().isoformat(timespec="seconds"), **lv}, open(p, "w"), indent=1)
-    S["lv"] = json.load(open(p))
+    S["lv"] = _prep_lv(json.load(open(p)))
     return S["lv"]
 
 
@@ -282,6 +379,11 @@ def _step(k, t, mid, imb, buy, sell, bq, aq):
     I = S["inst"].setdefault(k, {"h": deque(), "lv": {}, "or": [None, None], "n": 0, "ih": deque(), "base": None, "base_t": 0})
     h = I["h"]
     h.append((t, mid, imb, buy, sell, bq, aq))
+    if k in INDEX:                                   # 2026-11-09: measured basis (see _rebase)
+        I.setdefault("mm", {})[t // 60] = mid
+        if t - I.get("bchk", 0) >= 60:
+            I["bchk"] = t
+            _rebase(k, t, I)
     while h and h[0][0] < t - 300:
         h.popleft()
     ih = I["ih"]                                   # the book's own normal lean (median of the last 30 min): Nifty's book is
@@ -327,7 +429,7 @@ def _step(k, t, mid, imb, buy, sell, bq, aq):
         w30 = [x[2] for x in h if x[0] >= t - 30]
         imb30 = (sum(w30) / len(w30) if w30 else 0.0) - I["base"]          # lean vs this book's normal
     for z in zones:
-        zid = f"{z['lo']}-{z['hi']}"
+        zid = z["name"]                              # 2026-11-09: by name (zones move with the basis), was lo-hi
         st = I["lv"].setdefault(zid, {"side": None, "since": t, "touch": None, "fired": set(), "out": None, "was": None})
         lo, hi = z["lo"], z["hi"]
         pos = "above" if mid > hi else "below" if mid < lo else "in"
@@ -425,9 +527,9 @@ def tick(hot=None, views=None):
     if now.weekday() >= 5 or not ("09:15" <= now.strftime("%H:%M") <= "15:35"):
         return
     day = now.strftime("%Y-%m-%d")
-    if S.get("day") != day or S.get("ver") != 3:
+    if S.get("day") != day or S.get("ver") != 5:
         _new_day(day)
-        S["ver"] = 3                                   # v2 (3 Nov): skip empty / wide stock books -> today is rebuilt once
+        S["ver"] = 5                                   # v2 (3 Nov): skip empty / wide stock books; v4 (9 Nov): measured basis -> today rebuilt once
     if levels(hot, views) is None:
         return
     S["lv_ts"] = S.get("lv_ts") or _lv_ts()
@@ -438,6 +540,11 @@ def tick(hot=None, views=None):
     S["at"] = now.isoformat(timespec="seconds")
     if S.get("changed"):
         _save()
+    if S.pop("lv_save", False):                    # 2026-11-09: keep the day's basis moves in the levels file (display only; a reload recomputes)
+        try:
+            json.dump(S["lv"], open(os.path.join(OUT, f"levels_{day}.json"), "w"), indent=1)
+        except Exception:
+            pass
 
 
 def plan_ix_fill(T):

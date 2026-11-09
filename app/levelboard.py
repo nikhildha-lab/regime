@@ -64,7 +64,7 @@ def _dom(hot, key, basis):
     trades = [x for x in S.get("trades") or [] if x.get("key") == key and x.get("day") == S.get("day")]
     out = []
     for z in zones:
-        zid = f"{z['lo']}-{z['hi']}"; st = (I.get("lv") or {}).get(zid) or {}
+        zid = z["name"]; st = (I.get("lv") or {}).get(zid) or {}
         lo, hi = z["lo"], z["hi"]
         pos = "above" if mid > hi else "below" if mid < lo else "in"
         hold_dir = "long" if pos == "above" else "short" if pos == "below" else None    # price above a zone -> it is support -> HOLD long
