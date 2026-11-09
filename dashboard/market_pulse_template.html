@@ -314,6 +314,7 @@ body[data-tab="india"] #nliveDesk, body[data-tab="india"] #agentCard{display:non
 #agentCard, #domCard{display:none!important}
 /* 2026-11-09 (Nikhil): "Now · verdict" moves from the Intraday desk to the market tabs (Indian, US, Crypto, Metals, Commodities), following each tab's market drop-down */
 body[data-tab="intraday"] #hvCard{display:none!important}
+body:not([data-tab="india"]) #cplCard, body[data-tab="india"].ind-stock #cplCard{display:none!important}   /* 2026-11-09: Global Coupling on the Indian market tab (index) only */
 body[data-tab="intraday"] #prepMini{display:none!important}   /* 2026-11-04: block map + outlook now inside the Now card */
 /* 2026-10-31 (Nikhil): US and Crypto tabs follow the Indian tab: regime box, timeframes, strategy x regime matrix, today's plan,
    regime history. Desk analyst, verdict, live cards, order flow and paper trades live on the Intraday desk / trading platform. */
@@ -575,6 +576,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 
   <section class="decision" id="decision" aria-live="polite"></section>
   <section class="card" id="hvCard" hidden></section>
+  <section class="card" id="cplCard" hidden></section>   <!-- 2026-11-09 (Nikhil): Global Coupling - Indian market tab -->
 
 <div class="pair">
   <section class="card" id="tfCard">
@@ -2962,7 +2964,7 @@ function showView(v){
   try {
     const dec = $("#decision"), rail = $("#rail"), md = $("#mktDeskCard"), lv = LIVETAB[v] && document.getElementById("view" + LIVEVIEW[LIVETAB[v]]);
     const tf = $("#tfCard");                         // 2026-10-25: timeframes at a glance right under the decision
-    if (lv && hasM){ const head = lv.querySelector("section"); const at = head || lv.firstChild; at.after(rail); rail.after($("#stkCard")); $("#stkCard").after(dec); dec.after(tf); tf.after($("#hvCard")); $("#hvCard").after(md);
+    if (lv && hasM){ const head = lv.querySelector("section"); const at = head || lv.firstChild; at.after(rail); rail.after($("#stkCard")); $("#stkCard").after(dec); dec.after(tf); tf.after($("#hvCard")); $("#hvCard").after($("#cplCard") || md); if ($("#cplCard")) $("#cplCard").after(md);
       { const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }   // 2026-11-03 (Nikhil): picker top-left inside Timeframe at Glance
       const b4 = v==="crypto" ? $("#b4Crypto") : v==="metals" ? $("#b4Metals") : null;      // 2026-10-30 audit: the passed edge first
       if (b4) at.after(b4);
@@ -2970,7 +2972,7 @@ function showView(v){
       { const lb = $("#lbCard"); if (lb && v === "india") ($("#csCard") || at).after(lb); }      // 2026-11-09: Level Board under the score
       { const bw = $("#bwCard"); if (bw && v === "india") ($("#lbCard") || $("#csCard") || at).after(bw); }      // 2026-11-07: big walls under the score      // 2026-11-07: rise / fall score near the top
       const pt = lv.querySelector(".ptCard"); if (pt) (b4 || at).after(pt); }       // 2026-10-30: paper trades high on the tab
-    else { const mv = $("#viewMarkets"), pl = $("#planCard"); if (pl && pl.parentElement === mv){ pl.before(dec); pl.before(tf); pl.before($("#hvCard")); pl.before(md); }
+    else { const mv = $("#viewMarkets"), pl = $("#planCard"); if (pl && pl.parentElement === mv){ pl.before(dec); pl.before(tf); pl.before($("#hvCard")); if ($("#cplCard")) pl.before($("#cplCard")); pl.before(md); }
       const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }
   } catch(e){}
   // 2026-10-25 (Nikhil): "Trade plan" card (swing / entry timing / intraday / live OI) removed from every market tab.
@@ -3709,9 +3711,53 @@ async function deskFacts(){
 
 // 2026-10-25 (Nikhil): Verdict (every 15 min) under the regime box - oriented on 5m / 15m, against nearby blocks. Context only, logged + graded.
 let HV = {t:0, d:null};
+// 2026-11-09 (Nikhil: "add coupling relation of index vs global indices"): app/coupling.py. The 2016-26 test said: the overnight sets
+// the GAP, not the session; decoupled days get no catch-up; low coupling = calmer market with smaller gaps. The card says exactly that.
+const CPL = {t: 0, d: {}, busy: false};
+async function cplLoad(){
+  const c = $("#cplCard"); if (!c) return;
+  const k = IDX_ALL.includes(state.market) ? state.market : null;
+  if (!k || document.body.dataset.tab !== "india"){ c.hidden = true; return; }
+  if (!CPL.d[k] || Date.now() - (CPL.d[k].t || 0) > 300000){
+    try { const d = await fetch(`/api/livedesk/coupling?key=${k}`).then(r => r.json()); CPL.d[k] = {t: Date.now(), d}; } catch(e){ return; } }
+  cplRender(CPL.d[k].d);
+}
+function cplRender(D){
+  const c = $("#cplCard"); if (!c) return;
+  if (!D || D.err){ c.hidden = true; return; }
+  c.hidden = false;
+  const sg = (v, d = 2, unit = "%") => v == null ? "–" : `<b style="color:${v > 0 ? "var(--bull)" : v < 0 ? "var(--bear)" : "var(--muted)"}">${v > 0 ? "+" : ""}${fmt(v, d)}${unit}</b>`;
+  const NH = D.night_hist || {}, A = D.actual, ST = D.state_hist || {}, cur = ST[D.state] || {};
+  const nightLab = {"strong up": "strong US up-night", "strong down": "strong US down-night", "quiet": "quiet US night"}[D.night] || D.night;
+  const chase = D.night === "strong up" ? "Gap up is the normal outcome; the session then faded −0.10% on average (53% of the time). Don't chase the gap."
+    : D.night === "strong down" ? "Gap down is the normal outcome; the session after it was flat on average. No fade edge either way."
+    : "Small gap expected; the overnight says nothing about the session.";
+  const stateLab = {low: "DECOUPLED", normal: "normally coupled", high: "TIGHTLY COUPLED"}[D.state] || "–";
+  const stateCol = {low: "#E8A33C", normal: "var(--muted)", high: "var(--bear)"}[D.state] || "var(--muted)";
+  const expect = {low: "History after low coupling: normal returns (next 20 sessions avg " + sg(cur.n20_avg) + ", up " + cur.n20_up + "%), LOWER volatility (" + cur.vol + "% vs " + (ST.high||{}).vol + "% when tightly coupled) and SMALLER overnight gaps (" + cur.gap_abs + "% vs " + (ST.high||{}).gap_abs + "%). Coupling drifts back to about +0.2 within 60 sessions - its return usually comes with bigger gaps.",
+                  normal: "History: next 20 sessions avg " + sg(cur.n20_avg) + " (up " + cur.n20_up + "%), realised vol " + cur.vol + "%, average |gap| " + cur.gap_abs + "%.",
+                  high: "History after tight coupling: these are the risk-off phases - bigger overnight gaps (" + cur.gap_abs + "%), higher volatility (" + cur.vol + "%), weaker returns (next 20 sessions avg " + sg(cur.n20_avg) + "). Nifty trades on the US night; watch the US close."}[D.state] || "";
+  const ov = (D.overnight || []).map(o => `<span class="pill p-neutral" style="font-size:12px">${esc(o.market)} ${sg(o.ret, 2, o.unit === "pts" ? " pts" : "%")} <span class="faint">${esc(o.as_of)}</span></span>`).join(" ");
+  const rows = (D.coupling || []).map(r => `<tr><td>${esc(r.market)}</td><td class="num">${sg(r.c20, 2, "")}</td><td class="num">${sg(r.c60, 2, "")}</td><td class="num">${sg(r.beta60, 2, "")}</td><td class="num">${sg(r.c250, 2, "")}</td></tr>`).join("");
+  const dec = D.decoupled_yesterday ? `<div class="small" style="margin-top:6px"><b>${esc(D.decoupled_yesterday.date)} was a decoupled day</b> (${NM_IDX(D.key)} ${sg(D.decoupled_yesterday.day)} against a US ${sg(D.decoupled_yesterday.us)} night). History: no catch-up follows - the next day went the US's way only 45–52% of the time; the index kept its own path (next 5 sessions avg +0.4%, 60% up).</div>` : "";
+  c.innerHTML = `<div class="spread"><h2>Global Coupling <span class="small muted">${NM_IDX(D.key)} vs the world · overnight read + how tightly it is trading with others</span></h2><span class="small muted">closes to ${esc(D.as_of)} · ${D.sessions} sessions since ${esc(D.since)}</span></div>
+    <div class="two" style="margin-top:8px;gap:14px">
+      <div><div class="eyebrow">Overnight (before 09:15)</div><div class="row" style="gap:6px;flex-wrap:wrap;margin:4px 0">${ov}</div>
+        <div class="small" style="margin-top:6px"><b>${esc(nightLab)}</b> · implied gap ${sg(D.implied_gap)} <span class="faint">(60-session beta of the gap to the S&amp;P ${fmt(D.beta_gap60,2)}; long-run ~0.4)</span>${A ? ` · actual gap ${sg(A.gap)} · session so far ${sg(A.sess_so_far)}` : ""}</div>
+        <div class="small faint" style="margin-top:4px">After a ${esc(nightLab)} (${NH.n} cases since 2016): gap ${sg(NH.gap_avg)} on average, up ${NH.gap_up}% of the time; session ${sg(NH.sess_avg)}, up ${NH.sess_up}%. ${esc(chase)}</div>${dec}</div>
+      <div><div class="eyebrow">Coupling state</div>
+        <div style="margin:4px 0"><span class="pill" style="background:${stateCol};color:#fff;font-size:13px">${stateLab}</span> <span class="small muted">60-session correlation with the US night ${sg(D.c60, 2, "")} · usual range ${fmt(D.c60_lo,2)} to ${fmt(D.c60_hi,2)}</span></div>
+        <div class="small" style="margin-top:6px">${expect}</div></div>
+    </div>
+    <details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">Coupling table · correlation of the ${NM_IDX(D.key)} day with each market (20 / 60 / 250 sessions) and 60-session beta</summary>
+      <div class="tscroll"><table class="ld-tbl small" style="margin-top:6px"><thead><tr><th>Market</th><th>Corr 20d</th><th>Corr 60d</th><th>Beta 60d</th><th>Corr 250d</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="small faint" style="margin:4px 0 0">US, Europe and commodities = their previous session (known before our open). Asia = the same day, for description only (those sessions overlap ours).</p></details>
+    <p class="small faint" style="margin:8px 0 0">What the 2016–26 test found: the overnight explains the <b>gap</b> (corr +0.47) and <b>not the session</b> (−0.05) - by 09:15 the US move is in the price. This card gives an open read and a coupling state, never a session direction. Context only, not a signal.</p>`;
+}
+function NM_IDX(k){ return {NIFTY: "Nifty", BANKNIFTY: "Bank Nifty", SENSEX: "Sensex"}[k] || k; }
 async function hvLoad(force){
   try { if (force || !HV.d || Date.now()-HV.t > 120000){ HV.d = await (await fetch("/api/livedesk/hourverdict")).json(); Object.assign(HV.d.markets||{}, STK_HV); HV.t = Date.now(); } } catch(e){}
-  hvRender();
+  hvRender(); try { cplLoad(); } catch(e){}
 }
 // 2026-11-03 (Nikhil): "Now" strip on every tab - regime and size, where price sits against the blocks, open paper trades,
 // next event. Everything here comes from data already on the page; no new signal.

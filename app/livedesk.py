@@ -1009,6 +1009,8 @@ def handle_get(path: str, q: dict):
     if path == "/api/livedesk/break4h":
         B4 = _hot("break4h")
         return B4.api()
+    if path == "/api/livedesk/coupling":               # 2026-11-09 (Nikhil): Nifty vs global markets - overnight read + coupling table (app/coupling.py)
+        return _hot("coupling").api(q.get("key") or "NIFTY")
     if path == "/api/livedesk/levelboard":             # 2026-11-09 (Nikhil): levels x (blocks, OI, big walls, resting orders, action) in one table
         k = (q.get("key") or "NIFTY").upper(); LB = _hot("levelboard")
         c = LB.S["cache"].get(k)
