@@ -307,18 +307,20 @@ select,input[type=search]{font:inherit;font-size:13px;color:var(--ink);backgroun
 /* 2026-10-31: Intraday desk vs Indian market tab (same engine, different sections); Block verdict and Trade setup now removed */
 body:not([data-tab="intraday"]) #domCard, body[data-tab="intraday"]:not([data-sub="india"]) #domCard,
 body:not([data-tab="intraday"]) #domSetups, body[data-tab="intraday"]:not([data-sub="india"]) #domSetups,
-body[data-tab="india"] #hvCard, body[data-tab="india"] #lvlCard, body[data-tab="india"] #prepMini, body[data-tab="india"] #nliveNote,
+body[data-tab="india"] #lvlCard, body[data-tab="india"] #prepMini, body[data-tab="india"] #nliveNote,
 body[data-tab="india"] #nliveDesk, body[data-tab="india"] #agentCard{display:none!important}
 #idBar,#idTop{display:none}
+/* 2026-11-09 (Nikhil): "Now · verdict" moves from the Intraday desk to the market tabs (Indian, US, Crypto, Metals, Commodities), following each tab's market drop-down */
+body[data-tab="intraday"] #hvCard{display:none!important}
 body[data-tab="intraday"] #prepMini{display:none!important}   /* 2026-11-04: block map + outlook now inside the Now card */
 /* 2026-10-31 (Nikhil): US and Crypto tabs follow the Indian tab: regime box, timeframes, strategy x regime matrix, today's plan,
    regime history. Desk analyst, verdict, live cards, order flow and paper trades live on the Intraday desk / trading platform. */
-body[data-tab="us"] #hvCard, body[data-tab="us"] #mktDeskCard,
-body[data-tab="crypto"] #hvCard, body[data-tab="crypto"] #mktDeskCard, body[data-tab="crypto"] #b4Crypto, body[data-tab="crypto"] .ptCard,
+body[data-tab="us"] #mktDeskCard,
+body[data-tab="crypto"] #mktDeskCard, body[data-tab="crypto"] #b4Crypto, body[data-tab="crypto"] .ptCard,
 body[data-tab="crypto"] #cliveDesk, body[data-tab="crypto"] #viewCLive > section:first-child,
-body[data-tab="metals"] #hvCard, body[data-tab="metals"] #mktDeskCard, body[data-tab="metals"] #b4Metals, body[data-tab="metals"] .ptCard,
+body[data-tab="metals"] #mktDeskCard, body[data-tab="metals"] #b4Metals, body[data-tab="metals"] .ptCard,
 body[data-tab="metals"] #mliveDesk, body[data-tab="metals"] #viewMLive > section:first-child,
-body[data-tab="global"] #hvCard, body[data-tab="global"] #mktDeskCard, body[data-tab="global"] #b4Metals, body[data-tab="global"] .ptCard,
+body[data-tab="global"] #mktDeskCard, body[data-tab="global"] #b4Metals, body[data-tab="global"] .ptCard,
 body[data-tab="global"] #mliveDesk, body[data-tab="global"] #viewMLive > section:first-child{display:none!important}
 /* 2026-11-03 (Nikhil): market picker sits top-left inside Timeframe at Glance on every market tab */
 #tfCard > .spread{justify-content:flex-start;gap:12px;flex-wrap:wrap} #tfCard > .spread > #tfSum{margin-left:auto}
@@ -3851,6 +3853,26 @@ function blockAxis(lo, hi, X, dp, y){
   for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step){ const x = X(v);
     g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 5}" stroke="currentColor" opacity="0.4"/><text x="${x}" y="${y + 19}" text-anchor="middle" font-size="13" fill="var(--muted, #8a97a3)" font-family="IBM Plex Mono,monospace">${fmt(v, step < 1 ? Math.max(dp, String(step).split(".")[1]?.length || 0) : dp)}</text>`; }
   return g; }
+// 2026-11-09 (Nikhil): richer price axis for the block maps - round ticks on the baseline, then every block edge and reference level
+// as a coloured tick with its price, laid out on up to 3 rows so labels never overlap; "now" is the bold mark
+function blockAxisRich(lo, hi, X, dp, y, marks, spot){
+  const raw = (hi - lo) / 6, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))), step = [1, 2, 2.5, 5, 10].map(k => k * mag).find(k => k >= raw) || raw;
+  let g = `<line x1="20" x2="980" y1="${y}" y2="${y}" stroke="currentColor" opacity="0.3"/>`;
+  let all = [{px: spot, c: "currentColor", w: 800, k: "now"}].concat(marks || []).filter(m => m.px >= lo && m.px <= hi).sort((a, b) => a.px - b.px);
+  all = all.filter((m, i) => m.k === "now" || !all.some((o, j) => j !== i && Math.abs(X(o.px) - X(m.px)) < 5 && (o.k === "now" || o.w > m.w || (o.w === m.w && j < i))));   // one label per spot
+  const taken = all.map(m => X(m.px));
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step){ const x = X(v);
+    if (taken.some(t => Math.abs(t - x) < 26)) { g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 4}" stroke="currentColor" opacity="0.3"/>`; continue; }
+    g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 5}" stroke="currentColor" opacity="0.4"/><text x="${x}" y="${y + 17}" text-anchor="middle" font-size="11.5" fill="var(--muted, #8a97a3)" font-family="IBM Plex Mono,monospace">${fmt(v, step < 1 ? Math.max(dp, String(step).split(".")[1]?.length || 0) : dp)}</text>`; }
+  const rows = [];                                   // right edge of the last label on each row
+  all.forEach(m => { const x = X(m.px), txt = (m.k === "now" ? "now " : "") + fmt(m.px, dp), w = txt.length * 7.4 + 8;
+    let r = rows.findIndex(end => end < x - w / 2);
+    if (r < 0){ if (rows.length < 5) r = rows.length; else { r = 0; rows.forEach((e, i) => { if (e < rows[r]) r = i; }); } }   // 5 rows; then the emptiest
+    rows[r] = x + w / 2;
+    const ty = y + 17 + (r + 1) * 14;
+    g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${ty - 10}" stroke="${m.c}" stroke-width="${m.k === "now" ? 2 : 1.2}" opacity="${m.k === "now" ? 0.9 : 0.6}"/>`
+       + `<text x="${x}" y="${ty}" text-anchor="middle" font-size="${m.k === "now" ? 12.5 : 11.5}" font-weight="${m.w}" fill="${m.c}" font-family="IBM Plex Mono,monospace">${txt}</text>`; });
+  return g; }
 // 2026-10-25: block map SVG shared by Overnight prep and the Nifty 50 stock view
 function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !(M.levels||[]).length)) return ""; const dp = M.spot > 2000 ? 0 : M.spot > 200 ? 1 : 2;
     const all = ["strong","medium","weak"].flatMap(st => ((M.blocks||{})[st]||[]).map(b => Object.assign({st}, b))).filter(b => b.lo && b.hi);
@@ -3868,7 +3890,8 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
     refs.slice().sort((a,b) => a.px - b.px).forEach(x => { const g = grp[grp.length-1]; if (g && X(x.px) - X(g[0].px) < 6) g.push(x); else grp.push([x]); });
     const rows = [];                                    // labels on up to 3 rows so they do not overlap
     // 2026-11-07 (Nikhil: "mention the price for each level or give x axis, for all tabs"): each label carries its price, plus a price axis below
-    const refSvg = grp.map(g => { const x = X(g[0].px), lab = g.map(e => e.short).join("·") + " " + fmt(g[0].px, dp), w = lab.length * 7.6 + 10;
+    // 2026-11-09 (Nikhil: "don't show the price over the line, enrich the x axis"): names only above; every price moves to the axis below
+    const refSvg = grp.map(g => { const x = X(g[0].px), lab = g.map(e => e.short).join("·"), w = lab.length * 7.6 + 10;
       let r = rows.findIndex(end => end < x - w / 2); if (r < 0) r = rows.length < 3 ? rows.length : 2; rows[r] = x + w / 2;
       const ly = 14 + r * 17, c = RC(g[0]);
       return `<g><title>${esc(g.map(e => `${e.name} ${fmt(e.px,dp)}`).join("\n"))}</title><line x1="${x}" x2="${x}" y1="${ly + 3}" y2="${Y + 22}" stroke="${c}" stroke-width="1.4" stroke-dasharray="4 3" opacity=".9"/>
@@ -3877,15 +3900,18 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
     const th = {strong: 22, medium: 14, weak: 7}, op = {strong: 0.85, medium: 0.6, weak: 0.4};
     const bands = all.map(b => { const x1 = X(b.lo), x2 = Math.max(X(b.hi), x1 + 3);
       return `<rect x="${x1}" y="${Y - th[b.st]/2}" width="${x2 - x1}" height="${th[b.st]}" rx="2" fill="${col(b)}" opacity="${op[b.st]}"><title>${esc(b.st)} ${b.side==="R"?"resistance":b.side==="IN"?"price inside":"support"} ${esc(b.range)} · ${esc(b.why)}</title></rect>`; }).join("");
-    // labels: strong + medium only, alternate above / below to avoid overlap
-    const lab = all.filter(b => b.st !== "weak").sort((a,b)=>a.lo-b.lo).map((b,i) => { const x = (X(b.lo)+X(b.hi))/2, up = i % 2 === 0;
-      return `<text x="${x}" y="${up ? Y - 20 : Y + 30}" text-anchor="middle" font-size="12" fill="${col(b)}" font-weight="${b.st==="strong"?700:400}">${b.star?"★ ":""}${esc(b.range)}</text>`; }).join("");
+    // block labels (strong / medium): the star only, above the band; the range is read off the axis
+    const lab = all.filter(b => b.st !== "weak" && b.star).map(b => `<text x="${(X(b.lo)+X(b.hi))/2}" y="${Y - 16}" text-anchor="middle" font-size="12" fill="${col(b)}">★</text>`).join("");
+    // axis marks: block edges (coloured, bold for strong) + reference levels (their colour) + round ticks, spread over 3 rows so nothing overlaps
+    const marks = [];
+    all.filter(b => b.st !== "weak").forEach(b => { marks.push({px: b.lo, c: col(b), w: b.st === "strong" ? 700 : 500, k: "edge"}); marks.push({px: b.hi, c: col(b), w: b.st === "strong" ? 700 : 500, k: "edge"}); });
+    grp.forEach(g => marks.push({px: g[0].px, c: RC(g[0]), w: 600, k: "ref"}));
     const rng = r5 ? `<rect x="${X(r5.lo)}" y="${Y-3}" width="${X(r5.hi)-X(r5.lo)}" height="6" rx="3" fill="var(--accent)" opacity="0.35"/><text x="${X(r5.lo)}" y="${Y+52}" font-size="10.5" fill="var(--muted, #8a97a3)">5-day ${fmt(r5.lo,dp)}</text><text x="${X(r5.hi)}" y="${Y+52}" font-size="10.5" text-anchor="end" fill="var(--muted, #8a97a3)">${fmt(r5.hi,dp)}</text>` : "";
     return `<div style="margin-top:6px"><div class="eyebrow">${esc(name)} · blocks around ${fmt(spot,dp)}</div>
-      <svg viewBox="0 0 ${W} 188" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(name)} block map">${blockAxis(lo, hi, X, dp, 160)}
+      <svg viewBox="0 0 ${W} 252" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(name)} block map">${blockAxisRich(lo, hi, X, dp, 150, marks, spot)}
         <line x1="20" x2="${W-20}" y1="${Y}" y2="${Y}" stroke="currentColor" opacity="0.15" stroke-width="2"/>${refSvg}${rng}${bands}${lab}
         <circle cx="${X(spot)}" cy="${Y}" r="7" fill="#fff" stroke="#000" stroke-width="1"/><line x1="${X(spot)}" x2="${X(spot)}" y1="${Y+10}" y2="${Y+40}" stroke="currentColor" opacity="0.35" stroke-dasharray="2 3"/>
-        <text x="${X(spot)}" y="${Y+55}" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">now ${fmt(spot,dp)}</text>
+        
       </svg></div>`; }
 
 // 2026-10-25 (Nikhil): Indian tab is driven by ONE drop-down: Nifty, Bank Nifty or any Nifty 50 stock. Default Nifty.
