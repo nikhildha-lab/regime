@@ -2111,7 +2111,7 @@ function prepRender(){
       <table class="small" style="width:100%"><tbody>${["intraday","weekly","monthly"].map(h => `<tr><td style="width:78px;padding:4px 0"><b>${h[0].toUpperCase()+h.slice(1)}</b></td>
         <td style="width:84px"><span class="pill p-${W[(v[h]||{}).word]||"neutral"}">${esc((v[h]||{}).word||"–")}</span></td><td>${blkLine(v[h])}</td></tr>`).join("")}</tbody></table></div>`; };
   const chart = (k) => blockChartSvg(S[k], SU_NAME[k]||k);
-  const legend = `<div class="small faint" style="margin:2px 0 6px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near) · teal = likely 5-day range</div>`;
+  const legend = `<div class="small faint" style="margin:2px 0 6px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near) · teal = likely 5-day range</div>`;
   const m = $("#prepMini");
   if (m){ m.hidden = false; m.innerHTML = `<div class="spread"><h2 style="font-size:15px">Overnight prep · ${esc(S.for_day||"")}</h2></div>
     ${IK().map(chart).join("")}${legend}
@@ -4113,7 +4113,7 @@ function hvRender(){
   const P = prepOf(hk), RF = refOf(hk), map = blockChartSvg(Object.assign({}, P, {spot: P.spot || r.price, levels: [...(P.levels||[]), ...((RF||{}).levels||[])]}), SHORT[hk]||mk.name||hk);
   const isIdx = ["NIFTY","BANKNIFTY"].includes(hk), PO = ((SU.prep||{}).full||{}).open || {};
   const openLine = isIdx && SU.prep && !SU.prep.error ? `<div class="small" style="margin:2px 0 0">Nifty open ~<b>${fmt(PO.open_est,0)}</b> (${PO.gap_pct>0?"+":""}${fmt(PO.gap_pct,2)}%) · ${(SU.prep.rules||[]).map(esc).join(" · ")}</div>` : "";
-  const mapHtml = (map ? `<div class="vmap">${map}<div class="small faint" style="margin:0 0 2px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)${P.range5?" · teal = likely 5-day range":""}${RF?` · ${esc(SHORT[hk]||hk)}: UTC days, from ${esc(RF.source||"")}`:""}</div>${openLine}</div>` : openLine ? `<div class="vmap">${openLine}</div>` : "");
+  const mapHtml = (map ? `<div class="vmap">${map}<div class="small faint" style="margin:0 0 2px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)${P.range5?" · teal = likely 5-day range":""}${RF?` · ${esc(SHORT[hk]||hk)}: UTC days, from ${esc(RF.source||"")}`:""}</div>${openLine}</div>` : openLine ? `<div class="vmap">${openLine}</div>` : "");
   c.innerHTML = `<div class="vhead">
       <div class="vid"><div class="eyebrow">Now · verdict</div><div class="vname">${esc(SHORT[hk]||mk.name||hk)} <span class="vpx">${fmt(r.price, dp(r.price))}</span></div>
         <div class="small faint">${r.ref==="spot"?"index":esc(r.ref||"price")} · ${r.closed?"market closed · last read ":"read "}${esc((r.at||"").slice(11))} · 5m / 15m, every 15 min</div></div>
@@ -4171,7 +4171,7 @@ function blockAxisRich(lo, hi, X, dp, y, marks, spot){
     if (taken.some(t => Math.abs(t - x) < 26)) { g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 4}" stroke="currentColor" opacity="0.3"/>`; continue; }
     g += `<line x1="${x}" x2="${x}" y1="${y}" y2="${y + 5}" stroke="currentColor" opacity="0.4"/><text x="${x}" y="${y + 17}" text-anchor="middle" font-size="11.5" fill="var(--muted, #8a97a3)" font-family="IBM Plex Mono,monospace">${fmt(v, step < 1 ? Math.max(dp, String(step).split(".")[1]?.length || 0) : dp)}</text>`; }
   const rows = [];                                   // right edge of the last label on each row
-  all.forEach(m => { const x = X(m.px), txt = (m.k === "now" ? "now " : "") + fmt(m.px, dp), w = txt.length * 7.4 + 8;
+  all.forEach(m => { const x = X(m.px), txt = (m.k === "now" ? "now " : m.k === "ref" && m.nm ? m.nm + " " : "") + fmt(m.px, dp), w = txt.length * 7.4 + 8;
     let r = rows.findIndex(end => end < x - w / 2);
     if (r < 0){ if (rows.length < 5) r = rows.length; else { r = 0; rows.forEach((e, i) => { if (e < rows[r]) r = i; }); } }   // 5 rows; then the emptiest
     rows[r] = x + w / 2;
@@ -4187,7 +4187,8 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
     // 2026-11-04 (Nikhil): reference levels as dashed lines - 5-day value area + IB (within 4 %), previous day / week / month only when near (2 %)
     const near = x => Math.abs(x.px / spot - 1) * 100 <= (/^(VAH|VAL|POC|VWAP|IBH|IBL)$/.test(x.short) ? 4 : 2);
     // 2026-11-09 (Nikhil: "Remove IB high and IB low from all block line charts"): IBH / IBL never drawn on the block maps
-    const refs = (M.levels||[]).filter(x => x.px && near(x) && !/^IB/.test(x.short||""));
+    // 2026-11-10 (Nikhil: "remove POC, VAH, VAL"): value-area levels no longer drawn on the block maps either
+    const refs = (M.levels||[]).filter(x => x.px && near(x) && !/^(IB|VAH|VAL|POC)/.test(x.short||""));
     let lo = Math.min(spot, ...all.map(b=>b.lo), ...refs.map(x=>x.px), r5 ? r5.lo : spot), hi = Math.max(spot, ...all.map(b=>b.hi), ...refs.map(x=>x.px), r5 ? r5.hi : spot);
     const pad = (hi - lo) * 0.03; lo -= pad; hi += pad;
     const W = 1000, X = v => 20 + (v - lo) / (hi - lo) * (W - 40), Y = 86;
@@ -4206,13 +4207,20 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
     const th = {strong: 22, medium: 14, weak: 7}, op = {strong: 0.85, medium: 0.6, weak: 0.4};
     const bands = all.map(b => { const x1 = X(b.lo), x2 = Math.max(X(b.hi), x1 + 3);
       return `<rect x="${x1}" y="${Y - th[b.st]/2}" width="${x2 - x1}" height="${th[b.st]}" rx="2" fill="${col(b)}" opacity="${op[b.st]}"><title>${esc(b.st)} ${b.side==="R"?"resistance":b.side==="IN"?"price inside":"support"} ${esc(b.range)} · ${esc(b.why)}</title></rect>`; }).join("");
-    // block labels (strong / medium): the star only, above the band; the range is read off the axis
-    const lab = all.filter(b => b.st !== "weak" && b.star).map(b => `<text x="${(X(b.lo)+X(b.hi))/2}" y="${Y - 16}" text-anchor="middle" font-size="12" fill="${col(b)}">★</text>`).join("");
+    // 2026-11-10 (Nikhil): block labels (strong / medium) = the price range ON the line - resistance blocks above the band, support blocks
+    // below it, pushed to a second row when two labels would overlap; the star marks a weekly / monthly high-low block
+    const lab = (() => { const rowsA = [], rowsB = []; let out = "";
+      all.filter(b => b.st !== "weak").sort((a, b) => a.lo - b.lo).forEach(b => { const xc = (X(b.lo) + X(b.hi)) / 2, txt = `${b.star ? "★ " : ""}${fmt(b.lo, dp)}–${fmt(b.hi, dp)}`, w = txt.length * 7 + 6;
+        const up = b.side === "R" || (b.side === "IN" && b.hi >= spot), rows = up ? rowsA : rowsB;
+        let r = rows.findIndex(end => end < xc - w / 2); if (r < 0) r = Math.min(rows.length, 1); rows[r] = xc + w / 2;
+        const yy = up ? Y - 17 - r * 14 : Y + 24 + r * 14;
+        out += `<text x="${xc}" y="${yy}" text-anchor="middle" font-size="${b.st === "strong" ? 12.5 : 11.5}" font-weight="${b.st === "strong" ? 700 : 500}" fill="${col(b)}" font-family="IBM Plex Mono,monospace"><title>${esc(b.st)} ${b.side==="R"?"resistance":b.side==="IN"?"price inside":"support"} · ${esc(b.why||"")}</title>${esc(txt)}</text>`; });
+      return out; })();
     // axis marks: block edges (coloured, bold for strong) + reference levels (their colour) + round ticks, spread over 3 rows so nothing overlaps
     const marks = [];
-    all.filter(b => b.st !== "weak").forEach(b => { marks.push({px: b.lo, c: col(b), w: b.st === "strong" ? 700 : 500, k: "edge"}); marks.push({px: b.hi, c: col(b), w: b.st === "strong" ? 700 : 500, k: "edge"}); });
-    grp.forEach(g => marks.push({px: g[0].px, c: RC(g[0]), w: 600, k: "ref"}));
-    const rng = r5 ? `<rect x="${X(r5.lo)}" y="${Y-3}" width="${X(r5.hi)-X(r5.lo)}" height="6" rx="3" fill="var(--accent)" opacity="0.35"/><text x="${X(r5.lo)}" y="${Y+52}" font-size="10.5" fill="var(--muted, #8a97a3)">5-day ${fmt(r5.lo,dp)}</text><text x="${X(r5.hi)}" y="${Y+52}" font-size="10.5" text-anchor="end" fill="var(--muted, #8a97a3)">${fmt(r5.hi,dp)}</text>` : "";
+    // 2026-11-10 (Nikhil: "price range of the cluster should be on the line, not on the axis"): block edges are no longer axis marks
+    grp.forEach(g => marks.push({px: g[0].px, c: RC(g[0]), w: 600, k: "ref", nm: g.map(e => e.short).join("·")}));
+    const rng = r5 ? `<rect x="${X(r5.lo)}" y="${Y-3}" width="${X(r5.hi)-X(r5.lo)}" height="6" rx="3" fill="var(--accent)" opacity="0.35"/><text x="${X(r5.lo)}" y="${Y+58}" font-size="10.5" fill="var(--muted, #8a97a3)">5-day ${fmt(r5.lo,dp)}</text><text x="${X(r5.hi)}" y="${Y+58}" font-size="10.5" text-anchor="end" fill="var(--muted, #8a97a3)">${fmt(r5.hi,dp)}</text>` : "";
     return `<div style="margin-top:6px"><div class="eyebrow">${esc(name)} · blocks around ${fmt(spot,dp)}</div>
       <svg viewBox="0 0 ${W} 252" style="width:100%;height:auto;display:block" role="img" aria-label="${esc(name)} block map">${blockAxisRich(lo, hi, X, dp, 150, marks, spot)}
         <line x1="20" x2="${W-20}" y1="${Y}" y2="${Y}" stroke="currentColor" opacity="0.15" stroke-width="2"/>${refSvg}${rng}${bands}${lab}
@@ -4328,7 +4336,7 @@ function stkRender(A){
     <div class="eyebrow" style="margin-top:12px">Timeframes</div>
     <div class="row" style="gap:6px;flex-wrap:wrap">${(A.timeframes||[]).map(t=>`<span class="pill ${tp(t.trend)}" title="score ${t.score} · last bar ${esc(t.bar||"")}">${esc(t.tf)} ${t.trend?esc(t.trend)+" "+t.score:"–"}</span>`).join("")}</div>
     <div style="margin-top:10px">${blockChartSvg(M, A.sym)}</div>
-    <div class="small faint" style="margin:0 0 4px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ last week / month high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)</div>
+    <div class="small faint" style="margin:0 0 4px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ last week / month high-low · amber = price inside · dashed: <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)</div>
     <table class="small" style="width:100%;margin-top:4px"><tbody>${["intraday","weekly","monthly"].map(h => `<tr><td style="width:78px;padding:4px 0"><b>${h[0].toUpperCase()+h.slice(1)}</b></td>
       <td style="width:84px"><span class="pill p-${W[(A.verdicts[h]||{}).word]||"neutral"}">${esc((A.verdicts[h]||{}).word||"–")}</span></td><td class="muted">${esc((A.verdicts[h]||{}).line||"")}</td></tr>`).join("")}</tbody></table>
     <details style="margin-top:6px"><summary class="small muted">All blocks with reasons</summary>${blist}</details>
