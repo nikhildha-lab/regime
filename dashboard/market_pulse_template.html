@@ -310,6 +310,8 @@ body:not([data-tab="intraday"]) #domSetups, body[data-tab="intraday"]:not([data-
 body[data-tab="india"] #lvlCard, body[data-tab="india"] #prepMini, body[data-tab="india"] #nliveNote,
 body[data-tab="india"] #nliveDesk, body[data-tab="india"] #agentCard{display:none!important}
 #idBar,#idTop{display:none}
+/* 2026-11-09 (Nikhil: "remove Desk Analyst and DOM Ladder from all tabs"): both cards gone everywhere; the code and the /api/livedesk/dom data stay (the Level Board reads the same book) */
+#agentCard, #domCard{display:none!important}
 /* 2026-11-09 (Nikhil): "Now · verdict" moves from the Intraday desk to the market tabs (Indian, US, Crypto, Metals, Commodities), following each tab's market drop-down */
 body[data-tab="intraday"] #hvCard{display:none!important}
 body[data-tab="intraday"] #prepMini{display:none!important}   /* 2026-11-04: block map + outlook now inside the Now card */
@@ -3157,7 +3159,7 @@ async function domLoad(){
       ${askRows}<tr class="sprd"><td colspan="9">spread ${sp==null?"–":fmt(sp,2)}</td></tr>${bidRows}</table></div>
     <p class="small faint" style="margin:6px 0 0">Dhan 20-level book, refreshed every 2 s (Dhan sends snapshots, not every order). Outlined = wall (≥3× the median level; walls often get pulled). "10 s" = change in waiting quantity: rising qty at a level price is trading into = refilling (possible iceberg). Context for timing only - untested as a signal.</p>`;
 }
-function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.body.dataset.tab === "intraday" && document.body.dataset.sub === "india"){ domLoad(); DOM.t = setInterval(() => { if (!document.hidden) domLoad(); }, 2000);
+function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.body.dataset.tab === "intraday" && document.body.dataset.sub === "india"){   // 2026-11-09: DOM Ladder card removed - no ladder polling; DOM setups still refresh
   dsLoad(); DOM.s = setInterval(() => { if (!document.hidden) dsLoad(); }, 2000); } }   // 2026-11-06 (Nikhil: speed up cheap ones): 10 s -> 2 s
 /* 2026-11-03 (Nikhil: Live trackers v2 -> new cards on the DOM setups): hold / break at a level, paper only (app/domcards.py) */
 // 2026-11-06 (Nikhil: "'62 more trades today' collapsed section unable to open as DOM refreshes every 2 seconds"): sections that refresh
