@@ -668,6 +668,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <section class="card" id="b4Crypto" hidden></section>   <!-- 2026-11-09 (Nikhil): "4H block-break trades" card removed from all tabs (the rule keeps recording; trades stay in All Paper Trades) -->
   <section class="card" id="csCard" hidden></section>   <!-- 2026-11-09 (Nikhil): section removed - the score is the Level Board's Next Day column -->
   <section class="card" id="lbCard"></section>
+  <section class="card" id="lb2Card" hidden></section>   <!-- 2026-11-09 (Nikhil): Level Board for Crypto / Metals / Commodities (app/levelboard2.py) -->
   <section class="card" id="bwCard"></section>
   <section class="card ptCard" data-keys="BTC,ETH" data-title="Crypto paper trades · BTC / ETH"></section>
   <div id="cliveDesk"></div>
@@ -690,8 +691,8 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 let DATA = __DATA__;
 let M = DATA ? DATA.markets : null;
 const LIVE = DATA === null;   // served by app/server.py: data comes from /api/pulse and refreshes itself
-const ORDER = ["NIFTY","BANKNIFTY","BTC","ETH","SOL","BNB","XRP","UNI","ZEC","LINK","DASH","GOLD","SILVER","COPPER","ALUMINUM","CRUDE","NATGAS","ES","NQ","US_STOCKS"];
-const SHORT = {NIFTY:"Nifty",BANKNIFTY:"Bank Nifty",SENSEX:"Sensex",BTC:"BTC",ETH:"ETH",SOL:"SOL",BNB:"BNB",XRP:"XRP",UNI:"UNI",ZEC:"ZEC",LINK:"LINK",DASH:"DASH",GOLD:"Gold",SILVER:"Silver",COPPER:"Copper",CRUDE:"Crude",ALUMINUM:"Aluminium",NATGAS:"Natural gas",ES:"S&P 500",NQ:"Nasdaq",US_STOCKS:"US stocks"};
+const ORDER = ["NIFTY","BANKNIFTY","BTC","ETH","SOL","BNB","XRP","UNI","ZEC","LINK","DASH","AVAX","GOLD","SILVER","COPPER","ALUMINUM","CRUDE","NATGAS","ES","NQ","US_STOCKS"];
+const SHORT = {NIFTY:"Nifty",BANKNIFTY:"Bank Nifty",SENSEX:"Sensex",BTC:"BTC",ETH:"ETH",SOL:"SOL",BNB:"BNB",XRP:"XRP",UNI:"UNI",ZEC:"ZEC",LINK:"LINK",DASH:"DASH",AVAX:"AVAX",GOLD:"Gold",SILVER:"Silver",COPPER:"Copper",CRUDE:"Crude",ALUMINUM:"Aluminium",NATGAS:"Natural gas",ES:"S&P 500",NQ:"Nasdaq",US_STOCKS:"US stocks"};
 const REGIME_TONE = {"Strong uptrend":"bull","Grinding uptrend":"bull","Calm range":"neutral","Choppy range":"wait","Downtrend":"bear","Panic":"bear"};
 const REGIME_COLOR = {"Strong uptrend":"var(--bull)","Grinding uptrend":"var(--bull)","Calm range":"var(--neutral)","Choppy range":"var(--wait)","Downtrend":"var(--bear)","Panic":"var(--bear)"};
 const TF_LABEL = {"5m":"5m","15m":"15m","30m":"30m","1h":"1h","4h":"4h","daily":"Daily","weekly":"Weekly","monthly":"Monthly"};
@@ -728,7 +729,7 @@ function renderStamp(){
 }
 let VIEW = "desk";
 // 2026-10-24: every market tab has the same structure; these are the markets each tab covers
-const TAB_MARKETS = {india:["NIFTY","BANKNIFTY","SENSEX"], crypto:["BTC","ETH","SOL","BNB","XRP","UNI","ZEC","LINK","DASH"], us:["ES","NQ","US_STOCKS"],
+const TAB_MARKETS = {india:["NIFTY","BANKNIFTY","SENSEX"], crypto:["BTC","ETH","SOL","BNB","XRP","UNI","ZEC","LINK","DASH","AVAX"], us:["ES","NQ","US_STOCKS"],
                      metals:["GOLD","SILVER","COPPER","ALUMINUM"], global:["CRUDE","NATGAS"]};
 const TAB_LABEL = {india:"Indian market", crypto:"Crypto", us:"US market", metals:"Metals", global:"Commodities"};
 const MKT_TABS = ["india","crypto","us","metals","global"];
@@ -1724,10 +1725,11 @@ async function ldLoad2(desk){
     if (!$("#"+pre+"Fx")) el.innerHTML = `<div id="${pre}Fx"></div><div id="${pre}BW" style="margin-top:12px"></div>`;   // 2026-11-04 (Nikhil): block watch BELOW the order-flow chart
     // 2026-11-03 (Nikhil): always open at the right edge (latest bars). Only keep an older position for 60 s after the user scrolled it left.
     const ofx = $("#"+pre+"Fx .fx-scroll"), keep = ofx && Date.now() - (FX.userScroll||0) < 60000 && ofx.scrollLeft + ofx.clientWidth < ofx.scrollWidth - 30, osl = ofx ? ofx.scrollLeft : 0;
-    $("#"+pre+"Fx").innerHTML = fx;
+    morph($("#"+pre+"Fx"), fx);                                   // 2026-11-09: in place - the chart no longer flashes / resets every 2 s
     const nfx = $("#"+pre+"Fx .fx-scroll");
     if (nfx){ const toEnd = () => { if (!keep) nfx.scrollLeft = nfx.scrollWidth; else nfx.scrollLeft = osl; };
       toEnd(); requestAnimationFrame(toEnd);
+      if (nfx.dataset.wired) return; nfx.dataset.wired = "1";
       nfx.addEventListener("wheel", e => { if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) FX.userScroll = Date.now(); }, {passive: true});
       nfx.addEventListener("pointerdown", () => { FX.userScroll = Date.now(); }, {passive: true}); }
   }
@@ -1974,12 +1976,12 @@ function ptlRender(){
       <td class="small">${r.status==="open" ? "" : esc(r.exit_reason||"")}</td><td class="num">${num(r.r) != null && !isNaN(num(r.r)) && r.status !== "open" ? `<span class="${num(r.r)>0?"pos":"neg"}">${num(r.r)>0?"+":""}${fmt(num(r.r),2)}</span>` : "–"}</td>
       <td class="num" style="white-space:nowrap">${pnl}</td><td class="small" style="min-width:200px">${rv(r)}</td><td class="small" style="min-width:180px">${imp(r)}</td></tr>${flash}`; };   // 2026-11-09 (Nikhil): Why column removed (it is in the flash card)
   const TV = PTL.topvol, uni = !TV ? "" : `<div class="small" style="margin:2px 0 4px"><b>Today's stock universe</b> <span class="muted">(top ${TV.n || 10} F&amp;O stocks by 09:15–09:30 traded value - the intraday stock rules trade only these):</span> ${(TV.top||[]).length ? TV.top.map(esc).join(", ") : `<span class="faint">${esc(TV.note || "not ranked yet")}</span>`}</div>`;
-  el.innerHTML = `<div class="spread"><h2>All Paper Trades <span class="small muted">every rule · paper only, never orders</span></h2></div>${uni}${bar}
+  morph(el, `<div class="spread"><h2>All Paper Trades <span class="small muted">every rule · paper only, never orders</span></h2></div>${uni}${bar}
     <div class="small" style="margin:2px 0 6px">${tot || '<span class="faint">No closed trade in this selection.</span>'}</div>
     <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th title="the trade's own review from its price path">Right / Wrong</th><th>Improve</th></tr></thead>
       <tbody>${rows.length ? rows.map(tr).join("") : `<tr><td colspan="12" class="small faint">No trades match.</td></tr>`}</tbody></table></div>
     ${byRule ? `<details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">By strategy in this selection</summary><div class="tscroll"><table class="ld-tbl small" style="margin-top:4px"><thead><tr><th>Strategy</th><th>Closed</th><th>Won</th><th>P&amp;L</th></tr></thead><tbody>${byRule}</tbody></table></div></details>` : ""}
-    <p class="small faint" style="margin:6px 0 0">Click a row for its chart (candles around the trade, entry / stop / target / exit, why it was taken). Hover a strategy, Right / Wrong or Improve cell for the full text. Right / Wrong and Improve are the trade's own review, written from its price path after it closed (best / worst point, what followed). Open trades show live P&amp;L when the engine has a price. Source: the paper trade log, refreshed every 5 minutes.</p>`;
+    <p class="small faint" style="margin:6px 0 0">Click a row for its chart (candles around the trade, entry / stop / target / exit, why it was taken). Hover a strategy, Right / Wrong or Improve cell for the full text. Right / Wrong and Improve are the trade's own review, written from its price path after it closed (best / worst point, what followed). Open trades show live P&amp;L when the engine has a price. Source: the paper trade log, refreshed every 5 minutes.</p>`);
 }
 // 2026-11-09 (Nikhil: "new section Strategy Performance, measuring all strategies with standard industry metrics"): computed in the
 // browser from the paper trade log (closed trades only). Per strategy and currency: trades, win rate, profit factor, payoff ratio,
@@ -2036,10 +2038,10 @@ function perfRender(){
       <span class="small muted">Market</span> ${sel("grp", [["tab","This tab"],["","All markets"],["india","India"],["crypto","Crypto"],["metals","Metals"],["global","Commodities"],["us","US"]], F.grp)}
       <span class="small muted">Sort by</span> ${sel("by", [["pnl","Net P&L"],["pf","Profit factor"],["sqn","SQN"],["exp","Avg R"],["win","Win rate"],["n","Trades"]], F.by)}
       <span class="small faint" style="margin-left:auto">${rows.length} closed trades · ${groups.length} strategies</span></div>`;
-  el.innerHTML = `<div class="spread"><h2>Strategy Performance <span class="small muted">standard metrics · closed paper trades · indications, not advice</span></h2></div>${bar}
+  morph(el, `<div class="spread"><h2>Strategy Performance <span class="small muted">standard metrics · closed paper trades · indications, not advice</span></h2></div>${bar}
     <div class="tscroll"><table class="ld-tbl small" style="width:100%;white-space:nowrap"><thead><tr><th>Strategy</th><th>Trades</th><th>Win Rate</th><th title="gross profit ÷ gross loss">Profit Factor</th><th title="average win ÷ average loss">Payoff</th><th>Expectancy</th><th>Avg R</th><th>Net P&amp;L</th><th>Max Drawdown</th><th title="net ÷ max drawdown">Recovery</th><th title="System Quality Number (on R)">SQN</th><th>t-stat</th><th title="longest run of losing trades">Worst Run</th><th>Avg Hold</th><th>Verdict</th></tr></thead>
       <tbody>${groups.length ? groups.map(row).join("") : `<tr><td colspan="15" class="small faint">No closed trade in this selection.</td></tr>`}</tbody></table></div>
-    <p class="small faint" style="margin:6px 0 0">Profit factor = gross profit ÷ gross loss (above 1.3 is healthy, below 1 loses). Payoff = average win ÷ average loss. Expectancy = average P&amp;L per trade; Avg R = the same in risk units (1 R = the planned stop). Max drawdown = the biggest fall of the running P&amp;L, trade by trade; Recovery = net ÷ that drawdown. SQN = √n × mean R ÷ std R (under 1.6 poor, 2–3 good, over 3 excellent). t-stat = how far the average is from zero in noise units (2 or more = unlikely to be luck). Verdict needs 30 closed trades; before that every number is a small-sample reading. Paper results after modelled costs; the forward record never changes a rule on its own.</p>`;
+    <p class="small faint" style="margin:6px 0 0">Profit factor = gross profit ÷ gross loss (above 1.3 is healthy, below 1 loses). Payoff = average win ÷ average loss. Expectancy = average P&amp;L per trade; Avg R = the same in risk units (1 R = the planned stop). Max drawdown = the biggest fall of the running P&amp;L, trade by trade; Recovery = net ÷ that drawdown. SQN = √n × mean R ÷ std R (under 1.6 poor, 2–3 good, over 3 excellent). t-stat = how far the average is from zero in noise units (2 or more = unlikely to be luck). Verdict needs 30 closed trades; before that every number is a small-sample reading. Paper results after modelled costs; the forward record never changes a rule on its own.</p>`);
 }
 async function ptLoad(){
   for (const el of document.querySelectorAll(".ptCard")){ if (el.offsetParent===null) continue;   // skip hidden cards
@@ -2160,7 +2162,9 @@ function b4Render(){
       : `<p class="small muted" style="margin:6px 0">The 4H break rule does not run on ${esc(sel||"this coin")}${sel==="SOL"?" (stopped on 30 Oct)":""}. It runs on ${Object.keys(D.markets||{}).filter(k=>k!=="GOLD").join(", ")}.</p>`) + foot;
   const m = $("#b4Metals"); if (m) m.innerHTML = head("4H block-break trade · Gold") + `<div style="margin-top:6px">${card("GOLD")}</div>` + foot.replace("(crypto: taker volume with the break) ", "");
 }
-function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearInterval(b4Start.w);
+function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearInterval(b4Start.w); clearInterval(b4Start.l2);
+  { const c2 = $("#lb2Card"); const on = document.body.dataset.tab === "intraday" && ["crypto","metals","global"].includes(v); if (c2) c2.hidden = !on;
+    if (on){ lb2Load(); b4Start.l2 = setInterval(() => { if (!document.hidden) lb2Load(); }, 30000); } }
   if (document.body.dataset.tab === "intraday" && v === "india"){ bigwLoad(); lbLoad(); b4Start.w = setInterval(() => { if (!document.hidden){ bigwLoad(); lbLoad(); } }, 60000); }
   if (document.body.dataset.tab === "intraday" && ["crypto","india","metals","global"].includes(v)){ csLoad(); b4Start.c = setInterval(() => { if (!document.hidden) csLoad(); }, 60000); }
   if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
@@ -2276,11 +2280,53 @@ function lbRender(){
   const mute = `<label class="small faint" style="margin-left:10px;cursor:pointer"><input type="checkbox" ${LBRD.mute?"checked":""} onchange="LBRD.mute=this.checked;try{localStorage.setItem('mp.lb.mute',this.checked?'1':'0')}catch(e){}"> mute alerts</label>`;
   const planHtml = (D.plan||[]).length ? `<div class="spread" style="margin-top:8px"><h3 style="margin:0">Trade Plan <span class="small muted">3 nearest levels · how DOM v4 would trade them · indications, untested as a manual plan</span></h3>${mute}</div>` + planTable + kill : "";
   lbAlert(D);
-  el.innerHTML = head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall Score, India 1D model">Next Day</th></tr></thead><tbody>`
+  morph(el, head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall Score, India 1D model">Next Day</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + farRow + `</tbody></table></div>`
     + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
     + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). <b>Every price is the spot index</b> (DOM Index v4 trades in spot; the futures figure under each level is for reference; walls and the book are futures data moved to spot). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
-    + `Big wall = a single price inside the zone holding ≥4× the normal size for 70% of the last 15 min; Standing = how long it has stood; Trend = growing / steady / shrinking over that window. Walls can be pulled any second.</p></details><p class="small faint" style="margin:6px 0 0;display:none">DOM Hold / Break dots = the DOM Index engine's entry conditions at that level right now (filled = met, ring = not yet, grey = n/a; hover for names); the engine trades when all four are met.</p>`;
+    + `Big wall = a single price inside the zone holding ≥4× the normal size for 70% of the last 15 min; Standing = how long it has stood; Trend = growing / steady / shrinking over that window. Walls can be pulled any second.</p></details><p class="small faint" style="margin:6px 0 0;display:none">DOM Hold / Break dots = the DOM Index engine's entry conditions at that level right now (filled = met, ring = not yet, grey = n/a; hover for names); the engine trades when all four are met.</p>`);
+}
+// 2026-11-09 (Nikhil: "level board for all other tabs with whatever data we have"): Crypto / Metals / Commodities Level Board.
+// Levels = reference levels + tracker swing clusters; walls / resting orders = aggregated order books (Binance + Bybit + OKX for coins,
+// Hyperliquid for metals / energy); Next Day = the 4h Rise / Fall score. No OI column (no option chain on these markets).
+const LB2 = {D: {}, cs: {}, k: null, far: false};
+function lb2Key(){ const v = VIEW, desk = v === "crypto" ? "crypto" : "metals"; const keys = TAB_MARKETS[v] || []; const k = (FX.pick||{})[desk] || FX.sel[desk] || state.market; return keys.includes(k) ? k : keys[0]; }
+async function lb2Load(){
+  const el = $("#lb2Card"); if (!el || el.hidden) return; const k = lb2Key(); LB2.k = k;
+  try { const [a, b] = await Promise.all([fetch(`/api/livedesk/levelboard2?key=${k}`).then(r => r.json()),
+      fetch(VIEW === "crypto" ? "/api/livedesk/cryptoscore" : `/api/livedesk/marketscore?view=${VIEW}`).then(r => r.json()).catch(() => null)]);
+    LB2.D[k] = a; if (b && b.scores) LB2.cs[VIEW] = b; } catch(e){ return; }
+  lb2Render();
+}
+function lb2Render(){
+  const el = $("#lb2Card"); if (!el) return; const k = LB2.k, D = LB2.D[k];
+  const keys = TAB_MARKETS[VIEW] || [], tabs = keys.map(x => `<button class="chip" aria-pressed="${x===k}" onclick="FX.pick=FX.pick||{};FX.pick['${VIEW==="crypto"?"crypto":"metals"}']='${x}';FX.sel['${VIEW==="crypto"?"crypto":"metals"}']='${x}';lb2Load()">${esc(SHORT[x]||x)}</button>`).join(" ");
+  const head = `<div class="spread"><h2>Level Board <span class="small muted">${VIEW === "crypto" ? "Binance + Bybit + OKX books" : "Hyperliquid book"} · reference levels · swing levels · resting orders · next-day score</span></h2><div class="row" style="gap:6px;flex-wrap:wrap">${tabs}</div></div>`;
+  if (!D){ morph(el, head + `<p class="small muted">Loading…</p>`); return; }
+  if (D.err){ morph(el, head + `<p class="small muted">${esc(D.err)}</p>`); return; }
+  const P = D.price, dp = P < 1 ? 4 : P < 10 ? 3 : P < 1000 ? 2 : P < 20000 ? 1 : 0, px = v => fmt(v, dp), usd = v => v == null ? "–" : v >= 1e6 ? "$" + fmt(v/1e6, 1) + "M" : "$" + fmt(v/1e3, 0) + "k";
+  const CSX = LB2.cs[VIEW] || {}, CS = ((CSX.scores||{})[k]||{})["4h"] || null, CT = (CSX.tested||{})["4h"] || {};
+  const csv = (() => { if (!CS || CS.p_fall == null) return null; const p = CS.p_fall, fall = p >= 0.5, pct = Math.round(100 * (fall ? p : 1 - p)), weak = Math.abs(p - 0.5) < 0.05;
+    return {dir: weak ? null : (fall ? "short" : "long"), lab: weak ? "No view" : (fall ? "Fall " : "Rise ") + pct + "%", col: weak ? "var(--muted)" : fall ? "var(--bear)" : "var(--bull)", why: (CS.drivers||[]).map(d => `${d.name} → ${d.push}`).join(" · ")}; })();
+  const nd = r => { if (!csv) return `<span class="faint small">no score</span>`; const inPath = !csv.dir ? null : (r.side === "R" && csv.dir === "long") || (r.side === "S" && csv.dir === "short");
+    return `<b style="color:${csv.col}" title="${esc(csv.why)}">${csv.lab}</b><br><span class="small faint">${inPath == null ? "no lean" : inPath ? "in the path of the view" : "away from the view"}</span>`; };
+  const typ = r => `<b>${esc(r.kind)}</b><br><span class="small faint">${r.side === "R" ? "Resistance" : r.side === "S" ? "Support" : "Price inside"}${r.why ? " · " + esc(r.why) : ""}</span>`;
+  const dist = r => r.side === "inside" ? `<span style="color:#E8A33C"><b>at price</b></span>` : `<b>${r.dist>0?"+":""}${px(r.dist)}</b><br><span class="small faint">${r.dist_pct>0?"+":""}${fmt(r.dist_pct,2)}%</span>`;
+  const wall = r => { const w = r.wall; if (!w) return `<span class="faint">none</span>`; return `<b style="color:${w.side==="sell"?"var(--bear)":"var(--bull)"}">${w.side==="sell"?"Sell":"Buy"} ${fmt(w.x,1)}×</b><br><span class="small faint">${usd(w.usd)} · ${w.n_ex} of ${(D.exchanges||[]).length} venue${w.n_ex>1?"s":""}</span>`; };
+  const stand = r => r.wall ? `<b>${r.wall.age_min >= 20 ? "20+" : r.wall.age_min} min</b>` : `<span class="faint">–</span>`;
+  const TR = {growing:"↑ growing", shrinking:"↓ shrinking", steady:"steady"};
+  const trend = r => { const w = r.wall; if (!w) return `<span class="faint">–</span>`; const c = w.trend === "growing" ? "var(--bull)" : w.trend === "shrinking" ? "var(--bear)" : "var(--muted)"; return `<b style="color:${c}">${TR[w.trend]||w.trend}</b>`; };
+  const book = r => { const b = r.book; if (!b) return `<span class="faint" title="the exchanges send only the top of the book (BTC: about ±0.15%) - this level is beyond it">beyond book</span>`; const tot = Math.max(b.bid_usd + b.ask_usd, 1), bw = Math.round(60 * b.bid_usd / tot), aw = 60 - bw;
+    return `<div style="display:flex;height:6px;width:60px;border-radius:3px;overflow:hidden;margin-bottom:3px;background:var(--line)"><span style="width:${bw}px;background:var(--bull)"></span><span style="width:${aw}px;background:var(--bear)"></span></div><span class="small"><span style="color:var(--bull)">B ${usd(b.bid_usd)}</span> · <span style="color:var(--bear)">A ${usd(b.ask_usd)}</span></span>`; };
+  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap"><b>${px(r.px)}</b></td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td style="white-space:nowrap">${wall(r)}</td><td>${stand(r)}</td><td>${trend(r)}</td><td>${book(r)}</td><td style="white-space:nowrap">${nd(r)}</td></tr>`;
+  const FARP = 0.7, R0 = D.rows.filter(r => r.side === "R"), S0 = D.rows.filter(r => r.side === "S"), I = D.rows.filter(r => r.side === "inside");
+  const R = LB2.far ? R0 : R0.filter(r => Math.abs(r.dist_pct) <= FARP), S = LB2.far ? S0 : S0.filter(r => Math.abs(r.dist_pct) <= FARP), hid = (R0.length - R.length) + (S0.length - S.length);
+  const farRow = hid ? `<tr><td colspan="8" class="small faint" style="text-align:center;cursor:pointer" onclick="LB2.far=true;lb2Render()">${hid} level${hid>1?"s":""} beyond ${FARP}% hidden · show</td></tr>` : (LB2.far ? `<tr><td colspan="8" class="small faint" style="text-align:center;cursor:pointer" onclick="LB2.far=false;lb2Render()">hide far levels</td></tr>` : "");
+  const prow = `<tr><td colspan="8" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>${esc(SHORT[k]||k)} now ${px(P)}</b> <span class="small muted">· ${D.n_walls} big wall${D.n_walls===1?"":"s"} within 1.5% · books: ${(D.exchanges||[]).join(", ") || "none yet"}${D.coverage ? ` (reach ${D.coverage.down_pct}% / +${D.coverage.up_pct}%)` : ""}${Object.keys(D.book_err||{}).length ? ` · not reachable: ${Object.keys(D.book_err).join(", ")}` : ""}</span>${csv ? `<br><span class="small"><b>Next 24 h (Rise / Fall 4h score):</b> <b style="color:${csv.col}">${csv.lab}</b> <span class="faint">· ${esc(csv.why)} · test AUC ${CT.auc ?? "–"}</span></span>` : ""}</td></tr>`;
+  const empty = t => `<tr><td colspan="8" class="small faint">${t}</td></tr>`;
+  morph(el, head + `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Away</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall 4h score">Next Day</th></tr></thead><tbody>`
+    + (R.length ? R.map(row).join("") : empty("No level above within 1.5%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.5%")) + farRow + `</tbody></table></div>`
+    + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · levels ${esc(D.levels_src||"")} ${esc(D.levels_at||"")} · books ${esc(D.walls_at||"–")}. Big wall = one price bin holding ≥4× the normal resting size on its side, within 0.6% of price, present in 70% of the last 15 minutes; "2 of 3 venues" = the same wall sits on two exchanges' books (one venue alone can be a single player). Resting orders = bid / ask notional within ±0.1% of the level, all venues. ${D.note ? esc(D.note) + ". " : ""}Context only - on Nifty, walls did not hold better than ordinary levels.</p>`);
 }
 async function bigwLoad(){
   const el = $("#bwCard"); if (!el) return;
@@ -2299,10 +2345,10 @@ async function bigwLoad(){
       + `</tbody></table>`
       + (D.sym === "BANKNIFTY" && D.day < "2026-11-09" ? `<p class="small faint" style="margin:4px 0">Bank Nifty had only the 20-level book until now; the 200-level book starts Monday 9 Nov.</p>` : "")
       + ((D.pulled||[]).length ? `<p class="small muted" style="margin:4px 0">Pulled in the last 30 min: ${D.pulled.map(p => `${p.side} ${ldPx(p.price)} at ${esc(p.at)} (stood ${p.stood_min} min)`).join(" · ")}</p>` : "") + `</div>`; };
-  el.innerHTML = `<div class="spread"><h3 style="margin:0">Big Walls · Order Book</h3><span class="small faint">refreshes every minute</span></div>`
+  morph(el, `<div class="spread"><h3 style="margin:0">Big Walls · Order Book</h3><span class="small faint">refreshes every minute</span></div>`
     + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">${R.map(one).join("")}</div>`
     + `<p class="small faint" style="margin:6px 0 0">${esc((R[0]||{}).rule||"")}. Futures prices. Context only, not a signal: on 9 days of Nifty data walls held 47% of the time vs 52% for ordinary levels, and the biggest usually broke. `
-    + `Best read at about 09:30 (after the opening book settles), then every 15–30 min and just before any entry; a wall that keeps shrinking or gets pulled is weaker than one that is growing. Paper only, never orders.</p>`;
+    + `Best read at about 09:30 (after the opening book settles), then every 15–30 min and just before any entry; a wall that keeps shrinking or gets pulled is weaker than one that is growing. Paper only, never orders.</p>`);
 }
 // 2026-11-08 (Nikhil: "create a new tab for this" + "add all of this"): F&O Flow - every NSE F&O name read from its futures
 // (app/fnoflow.py). Layout idea from github.com/MrChartist/order-flow; drawn here from scratch (no code from that project).
@@ -3152,6 +3198,7 @@ function showView(v){
     // 2026-11-04 (Nikhil): order-flow chart first, Levels & blocks below it
     if (top && st) top.after(st); if (st && n) st.after(n); if (n && d) n.after(d); if (d && lv) d.after(lv); if (lv && pm) lv.after(pm); if (pm && ag) pm.after(ag);
     { const lb = $("#lbCard"); if (lb && d) d.before(lb); }      // 2026-11-09 (Nikhil): Level Board on top of the order-flow chart
+    { const l2 = $("#lb2Card"), dk = v === "crypto" ? $("#cliveDesk") : ["metals","global"].includes(v) ? $("#mliveDesk") : null; if (l2 && dk) dk.before(l2); }   // 2026-11-09: crypto / metals Level Board above their chart
     const more = $("#lvlMore"); if (more) more.open = true; } } catch(e){}   // trade cards + order flow chart just above Strategy recommendations
   try { if (v==="india") indApply(); else document.body.classList.remove("ind-stock"); } catch(e){}
   if (hasM){
@@ -3342,12 +3389,42 @@ function domStart(){ clearInterval(DOM.t); clearInterval(DOM.s); if (document.bo
 // 2026-11-06 (Nikhil: "'62 more trades today' collapsed section unable to open as DOM refreshes every 2 seconds"): sections that refresh
 // every few seconds rebuild their HTML, which closed any <details> the user had opened and reset table scroll. setKeep() re-applies the
 // open state (keyed by the summary text with numbers removed, so "62 more trades" = "63 more trades") and each table's scroll position.
+// 2026-11-09 (Nikhil: "intraday desk is totally refreshing every few seconds .. fix the body and sections and just refresh the numbers"):
+// morph(el, html) updates the page IN PLACE: it walks the new HTML against what is on screen and changes only the text and attributes
+// that differ, so cards, tables, open folds, scroll positions and the text you are selecting stay put while the numbers change.
+// A focused input / select keeps its value. Elements are only replaced when their tag changes.
+function morph(el, html){
+  if (!el) return;
+  if (!el.firstChild){ el.innerHTML = html; return; }
+  const tpl = document.createElement("template"); tpl.innerHTML = html;
+  morphKids(el, tpl.content);
+}
+function morphKids(a, b){
+  const bn = [...b.childNodes];
+  for (let i = 0; i < bn.length; i++){
+    const y = bn[i], x = a.childNodes[i];
+    if (!x){ a.appendChild(y.cloneNode(true)); continue; }
+    if (x.nodeType !== y.nodeType || (x.nodeType === 1 && x.nodeName !== y.nodeName)){ a.replaceChild(y.cloneNode(true), x); continue; }
+    if (x.nodeType === 3 || x.nodeType === 8){ if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue; continue; }
+    if (x.nodeType !== 1) continue;
+    // attributes
+    const keepOpen = x.nodeName === "DETAILS";
+    for (const at of [...x.attributes]){ if (!y.hasAttribute(at.name) && !(keepOpen && at.name === "open")) x.removeAttribute(at.name); }
+    for (const at of [...y.attributes]){ if (keepOpen && at.name === "open") continue; if (x.getAttribute(at.name) !== at.value) x.setAttribute(at.name, at.value); }
+    if (keepOpen && !x.hasAttribute("data-morph-seen")){ x.toggleAttribute("open", y.hasAttribute("open")); x.setAttribute("data-morph-seen", "1"); }
+    if ((x.nodeName === "INPUT" || x.nodeName === "SELECT" || x.nodeName === "TEXTAREA") && document.activeElement === x) continue;
+    if (x.nodeName === "SELECT" && y.querySelector("option[selected]")){ morphKids(x, y); const v = y.querySelector("option[selected]").value; if (x.value !== v) x.value = v; continue; }
+    if (x.nodeName === "svg" || x.nodeName === "SVG" || x.nodeName === "CANVAS"){ if (x.outerHTML !== y.outerHTML) a.replaceChild(y.cloneNode(true), x); continue; }   // drawings: swap whole (cheap, no state)
+    morphKids(x, y);
+  }
+  while (a.childNodes.length > bn.length) a.removeChild(a.lastChild);
+}
 function setKeep(el, html){
   if (!el) return;
   const k = d => ((d.querySelector("summary")||{}).textContent||"").replace(/[0-9.,]+/g, "#").trim();
   const open = new Set([...el.querySelectorAll("details")].filter(d => d.open).map(k));
   const sc = [...el.querySelectorAll(".tscroll, .fx-scroll")].map(x => [x.scrollLeft, x.scrollTop]);
-  el.innerHTML = html;
+  morph(el, html);                                    // 2026-11-09: in-place update instead of a full rebuild
   el.querySelectorAll("details").forEach(d => { if (open.has(k(d))) d.open = true; });
   el.querySelectorAll(".tscroll, .fx-scroll").forEach((x, i) => { if (sc[i]) { x.scrollLeft = sc[i][0]; x.scrollTop = sc[i][1]; } });
 }

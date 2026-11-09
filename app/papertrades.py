@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 NAME = {"BTC": "BTC", "ETH": "ETH", "GOLD": "Gold", "NIFTY": "Nifty", "BANKNIFTY": "Bank Nifty",
-        "SOL": "SOL", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH", "ES": "S&P 500 (ES)", "NQ": "Nasdaq 100 (NQ)", "SPY": "SPY"}   # 2026-11-04: 4H break forward test on more coins
+        "SOL": "SOL", "SILVER": "Silver", "COPPER": "Copper", "ALUMINUM": "Aluminium", "CRUDE": "WTI crude", "NATGAS": "Natural gas", "XRP": "XRP", "BNB": "BNB", "LINK": "LINK", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH", "AVAX": "AVAX", "ES": "S&P 500 (ES)", "NQ": "Nasdaq 100 (NQ)", "SPY": "SPY"}   # 2026-11-04: 4H break forward test on more coins
 # 2026-11-06 (Nikhil: "retire and fully remove"): retired + removed - touch (option buying), touchdom, sbt, dom (mixed plan account), ovn plain + h20,
 # vcy_day_w, vcy_night_ts, vcy_night_tx. Their past trades: _archive/2026-11-03/backups/2026-11-06_retire/retired_trades.csv
 RULES = {
@@ -458,7 +458,7 @@ def _dom_ix(hot):
 
 
 # 2026-11-04 (Nikhil): the "All paper trades" card follows the tab - group = india | crypto | us | metals | global
-GROUPS = {"crypto": {"BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH"}, "us": {"ES", "NQ", "US_STOCKS", "SPY", "QQQ"},
+GROUPS = {"crypto": {"BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX"}, "us": {"ES", "NQ", "US_STOCKS", "SPY", "QQQ"},
           "metals": {"GOLD", "SILVER", "COPPER", "ALUMINUM"}, "global": {"CRUDE", "NATGAS"}}
 
 

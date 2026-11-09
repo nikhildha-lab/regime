@@ -290,8 +290,8 @@ YAHOO_SEED = {"synaptic_daily_extra.csv": [
     "synaptic_us_commod.csv": [("ALI=F", "1d"), ("NG=F", "1d"), ("^BSESN", "1d")],      # 2026-11-04: + Sensex
     "synaptic_intraday_all.csv": [(s_, iv) for s_ in ("ALI=F", "NG=F", "^BSESN") for iv in ("5m", "15m", "30m", "1h")]
                                  # 2026-11-03 (Nikhil): six more coins on the Crypto tab (daily + 1h in the crypto file, 5m / 15m / 30m here)
-                                 + [(s_, iv) for s_ in ("BNB-USD", "XRP-USD", "UNI7083-USD", "ZEC-USD", "LINK-USD", "DASH-USD") for iv in ("5m", "15m", "30m")],
-    "synaptic_crypto_gold.csv": [(s_, iv) for s_ in ("BNB-USD", "XRP-USD", "UNI7083-USD", "ZEC-USD", "LINK-USD", "DASH-USD") for iv in ("1d", "1h")]}
+                                 + [(s_, iv) for s_ in ("BNB-USD", "XRP-USD", "UNI7083-USD", "ZEC-USD", "LINK-USD", "DASH-USD", "AVAX-USD") for iv in ("5m", "15m", "30m")],
+    "synaptic_crypto_gold.csv": [(s_, iv) for s_ in ("BNB-USD", "XRP-USD", "UNI7083-USD", "ZEC-USD", "LINK-USD", "DASH-USD", "AVAX-USD") for iv in ("1d", "1h")]}
 LOCAL_TZ = {"^NSEI": IST, "^NSEBANK": IST, "^BSESN": IST, "^INDIAVIX": IST, "^GSPC": "America/New_York", "^VIX": "America/Chicago",
             "^TNX": "America/Chicago", "DX-Y.NYB": "America/New_York", "BZ=F": "America/New_York", "INR=X": "Europe/London"}
 

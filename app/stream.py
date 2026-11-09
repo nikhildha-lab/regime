@@ -33,7 +33,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OC_LIVE = os.path.join(ROOT, "data_store", "flow", "oc_live.json")
 STATUS = os.path.join(ROOT, "data_store", "flow", "stream_status.json")
 PORT = 8052
-COINS = {k: k + "USDT" for k in ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH")}   # 2026-11-03: + six coins (Crypto tab)
+COINS = {k: k + "USDT" for k in ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX")}   # 2026-11-03: + six coins (Crypto tab)
 YAHOO = ["YM=F", "ES=F", "NQ=F", "^N225", "^HSI", "^KS11", "^STOXX50E", "INR=X", "DX-Y.NYB", "BZ=F", "^TNX", "^VIX",
          "BTC-USD", "GC=F", "^NSEI", "^NSEBANK", "SI=F", "HG=F", "CL=F", "SPY", "ALI=F", "NG=F", "000001.SS", "^GSPC", "^DJI", "^BSESN"]
 YAHOO_EVERY = 20

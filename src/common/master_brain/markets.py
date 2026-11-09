@@ -31,9 +31,9 @@ YAHOO_SYMBOL = {"BTC": "BTC-USD", "ETH": "ETH-USD", "SOL": "SOL-USD", "GOLD": "G
                 "SILVER": "SI=F", "COPPER": "HG=F", "CRUDE": "CL=F", "ES": "ES=F", "NQ": "NQ=F", "US_STOCKS": "SPY",
                 "ALUMINUM": "ALI=F", "NATGAS": "NG=F",
                 # 2026-11-03 (Nikhil): six more coins on the Crypto tab (Yahoo daily / 1h / 5m-30m, like BTC / ETH / SOL)
-                "BNB": "BNB-USD", "XRP": "XRP-USD", "UNI": "UNI7083-USD", "ZEC": "ZEC-USD", "LINK": "LINK-USD", "DASH": "DASH-USD",
+                "BNB": "BNB-USD", "XRP": "XRP-USD", "UNI": "UNI7083-USD", "ZEC": "ZEC-USD", "LINK": "LINK-USD", "DASH": "DASH-USD", "AVAX": "AVAX-USD",
                 "SENSEX": "^BSESN"}                                   # 2026-11-04 (Nikhil): Sensex, third Indian index (Yahoo index bars)
-EXTRA_COINS = ["BNB", "XRP", "UNI", "ZEC", "LINK", "DASH"]
+EXTRA_COINS = ["BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX"]     # 2026-11-09 (Nikhil): + AVAX
 CRYPTO = {"BTC", "ETH", "SOL", *EXTRA_COINS}
 MARKETS = ["NIFTY", "BANKNIFTY", "BTC", "ETH", "SOL", "GOLD", "SILVER", "COPPER", "CRUDE", "ES", "NQ", "US_STOCKS"]
 

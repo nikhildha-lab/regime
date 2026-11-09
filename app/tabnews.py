@@ -107,7 +107,7 @@ US_NAMES = {"AAPL": ["apple"], "MSFT": ["microsoft"], "NVDA": ["nvidia"], "AMZN"
             "SNOW": ["snowflake"], "CRWD": ["crowdstrike"], "PANW": ["palo alto"], "SHOP": ["shopify"], "BABA": ["alibaba"], "F": ["ford"], "GM": ["general motors"],
             "RIVN": ["rivian"], "UPS": ["ups"], "FDX": ["fedex"], "T": ["at&t"], "VZ": ["verizon"], "CMCSA": ["comcast"]}
 COINS = {"BTC": ["bitcoin", "btc"], "ETH": ["ethereum", "ether", "eth"], "SOL": ["solana"], "BNB": ["bnb", "binance coin"], "XRP": ["xrp", "ripple"],
-         "UNI": ["uniswap"], "ZEC": ["zcash"], "LINK": ["chainlink"], "DASH": ["dash"], "CRYPTO": ["crypto", "stablecoin", "digital asset"]}
+         "UNI": ["uniswap"], "ZEC": ["zcash"], "LINK": ["chainlink"], "DASH": ["dash"], "AVAX": ["avalanche", "avax"], "CRYPTO": ["crypto", "stablecoin", "digital asset"]}
 METALS = {"GOLD": ["gold"], "SILVER": ["silver"], "COPPER": ["copper"], "ALUMINIUM": ["aluminium", "aluminum"], "PLATINUM": ["platinum"]}
 ENERGY = {"CRUDE": ["crude", "oil", "brent", "wti", "opec"], "NATGAS": ["natural gas", "lng", "gas prices"]}
 GENERIC = {"india", "indian", "bank", "power", "energy", "finance", "capital", "life", "global", "steel", "cement", "industries", "motors",

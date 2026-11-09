@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-BN = {"BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH"}
+BN = {"BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX"}
 HL = {"GOLD": "xyz:GOLD", "SILVER": "xyz:SILVER", "COPPER": "xyz:COPPER", "CRUDE": "xyz:CL", "NATGAS": "xyz:NATGAS",
       "ALUMINUM": "xyz:ALUMINIUM", "BRENT": "xyz:BRENTOIL"}
 _C: dict = {}

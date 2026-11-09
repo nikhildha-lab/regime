@@ -26,7 +26,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 DEFAULT_CFG = {
     "poll_seconds": 2,                       # live prices / footprint every 2 s (the trackers themselves refresh every 1.5 s)
-    "crypto_coins": ["BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH"],   # 2026-11-03: + drop-down coins (analysis only)
+    "crypto_coins": ["BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX"],   # 2026-11-03: + drop-down coins (analysis only)
 }
 DESKS = {
     "nifty": {"url": "http://127.0.0.1:8899/api/snapshot", "port": 8899, "name": "Nifty & Bank Nifty"},
@@ -506,6 +506,10 @@ def poll_once():
                 _hot("fnobreakfade").tick()
             except Exception as e:
                 _STATE["fnobreakfade_error"] = str(e)[:160]
+            try:                                   # 2026-11-09 (Nikhil): multi-exchange order books for the Crypto / Metals Level Board (app/bookwalls.py)
+                _hot("bookwalls").tick()
+            except Exception as e:
+                _STATE["bookwalls_error"] = str(e)[:160]
             try:                                   # 2026-11-09 (Nikhil: "add to metals and commodities"): Trend 55 record-only rule (app/trend55.py)
                 _hot("trend55").tick()
             except Exception as e:
@@ -738,7 +742,7 @@ def start():
 
 
 _BNK = {}
-BN_CVD = {"BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH"}       # coins traded on Binance in the crypto engine
+BN_CVD = {"BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX"}       # coins traded on Binance in the crypto engine
 
 
 def _bn_cvd(key: str, tf: int, bars: list) -> list:
@@ -996,6 +1000,15 @@ def handle_get(path: str, q: dict):
         return _hot("edgeboard").api()
     if path == "/api/livedesk/tabnews":                   # 2026-11-04: swing catalysts per market tab (app/tabnews.py)
         return _hot("tabnews").api(q.get("tab"))
+    if path == "/api/livedesk/bookwalls":                 # 2026-11-09: aggregated resting-order walls (Binance + Bybit + OKX; Hyperliquid for metals)
+        return _hot("bookwalls").api(q.get("key", "BTC"))
+    if path == "/api/livedesk/levelboard2":               # 2026-11-09 (Nikhil): Level Board for the Crypto / Metals / Commodities tabs (app/levelboard2.py)
+        key = q.get("key", "BTC")
+        view = None
+        for dk in ("crypto", "metals"):
+            v = ((_STATE.get("views") or {}).get(dk) or {}).get(key)
+            if v: view = v; break
+        return _hot("levelboard2").api(key, view, _hot)
     if path == "/api/livedesk/reflevels":                 # 2026-11-04: VAH / VAL, IB, PDH / PDL ... for crypto, metals, energy (app/reflevels.py)
         return _hot("reflevels").get(q.get("key", "BTC"))
     if path == "/api/livedesk/narrative":                 # 2026-11-04: weekly global narrative (app/narrative.py)

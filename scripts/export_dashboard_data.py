@@ -1161,7 +1161,7 @@ MARKET_INFO = {
     "US_STOCKS": ("US", "US stocks (SPY)"),
     "ALUMINUM": ("Commodities", "Aluminium"), "NATGAS": ("Commodities", "Natural gas"),
     "BNB": ("Crypto", "BNB"), "XRP": ("Crypto", "XRP"), "UNI": ("Crypto", "Uniswap"), "ZEC": ("Crypto", "Zcash"),
-    "LINK": ("Crypto", "Chainlink"), "DASH": ("Crypto", "Dash"),          # 2026-11-03 (Nikhil)
+    "LINK": ("Crypto", "Chainlink"), "DASH": ("Crypto", "Dash"), "AVAX": ("Crypto", "Avalanche"),          # 2026-11-03 (Nikhil)
 }
 FEATURE_NAMES = {
     "C.6a_ema21_distance": "Distance from 21-EMA", "C.6b_sma5_8_stack": "SMA 5/8 stack", "C.6c_return_z": "20-bar return",

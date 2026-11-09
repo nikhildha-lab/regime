@@ -25,7 +25,7 @@ import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LOG = os.path.join(ROOT, "data_store", "livedesk", "blockwatch")
-BIN = {k: k + "USDT" for k in ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH")}   # 2026-11-03: + drop-down coins
+BIN = {k: k + "USDT" for k in ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX")}   # 2026-11-03: + drop-down coins
 HL = {"GOLD": "xyz:GOLD", "SILVER": "xyz:SILVER", "COPPER": "xyz:COPPER", "PAXG": "PAXG", "CRUDE": "xyz:CL", "NATGAS": "xyz:NATGAS"}   # + commodities 2026-11-03      # metals perps on Hyperliquid (2026-10-25)
 HL_URL = "https://api.hyperliquid.xyz/info"
 WIN = {"crypto": 0.0035, "nifty": 0.0025, "metals": 0.003}
@@ -154,7 +154,7 @@ def _oi(desk, key):
             hist = []                                            # the tracker's own 15-min OI log for older points
             try:
                 import glob
-                f = sorted(glob.glob(os.path.join(os.environ.get("MP_METALS_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "metals-tracker"), "datasets", "live-*", f"{key}_ctx.csv")))[-1]
+                f = sorted(glob.glob(os.path.join(os.path.expanduser("~"), "Documents", "metals-tracker", "datasets", "live-*", f"{key}_ctx.csv")))[-1]
                 d = pd.read_csv(f).tail(40)
                 hist = [(pd.Timestamp(t), float(v)) for t, v in zip(d.datetime, d.oi)]   # file is UTC (checked against its mtime)
             except Exception:

@@ -244,7 +244,7 @@ def tf_scores(bars: pd.DataFrame, intraday: bool, max_bars: int = 700) -> dict |
     return res
 
 
-BN_SYM = {k: k + "USDT" for k in ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH")}   # 2026-11-03: + six coins
+BN_SYM = {k: k + "USDT" for k in ("BTC", "ETH", "SOL", "BNB", "XRP", "UNI", "ZEC", "LINK", "DASH", "AVAX")}   # 2026-11-03: + six coins
 BN_IV = {"5m": "5m", "15m": "15m", "4h": "4h"}
 
 
