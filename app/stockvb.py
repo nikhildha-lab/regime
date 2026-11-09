@@ -34,6 +34,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "data_store", "livedesk", "stockvb")
 HIST = os.path.join(ROOT, "data_store", "research", "stocks_intraday")
 SPIKE, ADX_MIN, RVOL, STOP_ATR, MIN_STOP = 6.0, 25.0, 2.0, 2.0, 0.0015
+TOPVOL = True             # 2026-11-09: trade only the day's top 10 tracked F&O stocks by 09:15-09:30 traded value (app/topvol.py)
 VERS = {"svb": {"target": 2.0, "trail": None, "label": "target 2R"},
         "svb_tr": {"target": 3.0, "trail": 2.0, "trail_from": 1.0, "label": "trail 2 ATR after +1R, target 3R"}}
 COST_PCT, MARGIN, LEV = 0.12, 20000, 5
@@ -223,6 +224,11 @@ def _work_inner():
                 st.setdefault("signals", []).append({**sg, "at": now.strftime("%H:%M")})
                 if not sg["pass"]:
                     continue
+                if TOPVOL:                                   # 2026-11-09 (Nikhil): day's universe = top 10 by opening traded value (app/topvol.py)
+                    import topvol as TV
+                    ok, note = TV.allowed(sym, day)
+                    if not ok:
+                        st.setdefault("skipped", []).append({**sg, "why": note, "at": now.strftime("%H:%M")}); continue
                 t_in = datetime.fromisoformat(day) + timedelta(minutes=555 + (j + 1) * 5)
                 if now - t_in > timedelta(minutes=10):             # restart / late scan - never enter at a stale price
                     st["missed"].append({**sg, "why": "signal found late"}); continue

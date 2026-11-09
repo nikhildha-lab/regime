@@ -250,6 +250,7 @@ LEVELS = "fut"
 # (lean, absorption, delta). The trade is the synthetic future (ATM call + put): its P&L ~ spot points moved (basis drift over a
 # <= 60 min hold is ignored) minus SYN_PTS. v3 (futures-only) stays selectable with PRICE = "fut"; v1 / v2 code is kept unused.
 PRICE = "spot"
+TOPVOL = True             # 2026-11-09: stock entries only from the day's top 10 tracked F&O stocks by opening traded value (topvol.py)
 DI_FILTER = True          # 2026-11-09: skip index entries when ADX(14, 5-min) > 25 and the DI is against the trade (difilter.py); skipped signals in S["skipped"]
 IX_START = "2026-11-10"   # v4 record starts here (v1-v3 records flushed 9 Nov, archived in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/)
 
@@ -416,6 +417,14 @@ def _close(tr, px, t, why):
 def _open(k, setup, side, entry, stop, zone, zones, t, why):
     if k in INDEX and S["day"] < IX_START:            # 2026-11-09: index record flushed; v4 starts on IX_START
         return
+    if k not in INDEX and TOPVOL:                     # 2026-11-09 (Nikhil): stock trades only in the day's top 10 by opening traded value (app/topvol.py)
+        try:
+            import topvol as TV
+            ok, note = TV.allowed(k, S["day"])
+        except Exception:
+            ok, note = True, "universe check failed - allowed"
+        if not ok:
+            return
     di = None
     if k in INDEX and DI_FILTER:                      # 2026-11-09 (Nikhil: "update the logic"): no entry against a trending 5-min DI (app/difilter.py)
         try:

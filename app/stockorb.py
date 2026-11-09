@@ -29,6 +29,7 @@ HIST = os.path.join(ROOT, "data_store", "research", "stocks_intraday")
 OF_LIVE = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data", "of", "live.json")
 RV_MIN, GAP_MIN, R_HALF, MAX_DAY, COST_PCT = 2.0, 0.005, 1.5, 3, 0.12
 DI_FILTER = True          # 2026-11-09: skip the entry when ADX(14, 5-min) > 25 and the DI is against the trade (app/difilter.py)
+TOPVOL = True             # 2026-11-09: trade only the day's top 10 tracked F&O stocks by 09:15-09:30 traded value (app/topvol.py)
 MARGIN, LEV = 20000, 5
 POS = MARGIN * LEV
 S: dict = {"t": 0}
@@ -165,6 +166,7 @@ def _scan(day, st):
         if not len(o):
             continue
         st["orv"][sym] = float(o.volume.sum())
+        st.setdefault("open_value", {})[sym] = float((o.close * o.volume).sum())     # 2026-11-09: for the top-volume universe (app/topvol.py)
         avg, n = _orv_history(sym, day); pc = _prev_close(sym, day)
         if not avg or n < 10 or not pc:
             continue
@@ -174,6 +176,11 @@ def _scan(day, st):
                          "or_hi": float(o.high.max()), "or_lo": float(o.low.min())})
     st["in_play"] = sorted(rows, key=lambda r: -r["rv"])
     st["scanned_at"] = datetime.now().strftime("%H:%M")
+    try:                                                     # 2026-11-09 (Nikhil: "only top F&O stocks by volume for the day, max 10"): rank once, shared by every intraday stock rule
+        import topvol as TV
+        TV.write(day, st.get("open_value") or {}, st["scanned_at"])
+    except Exception as e:
+        st["err"] = f"topvol: {str(e)[:100]}"
 
 
 def _manage(tr, b):
@@ -236,6 +243,13 @@ def _work_inner():
             continue
         if not open_tr and (len(st["trades"]) >= MAX_DAY or hm > "11:35"):
             continue
+        if not open_tr and TOPVOL:                             # 2026-11-09: day's universe = top 10 by opening traded value
+            import topvol as TV
+            ok, note = TV.allowed(sym, day)
+            if not ok:
+                if sym not in {x["sym"] for x in st.get("skipped", [])}:
+                    st.setdefault("skipped", []).append({"sym": sym, "why": note}); taken.add(sym)
+                continue
         try:
             b = _five(_bars1(sym, day), sym, day); time.sleep(0.2)
         except Exception as e:
