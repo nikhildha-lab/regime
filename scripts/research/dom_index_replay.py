@@ -28,6 +28,7 @@ APP = os.path.abspath(os.path.join(HERE, "..", "..", "app"))
 sys.path.insert(0, APP)
 import domcards as D          # noqa: E402
 import levelmap as LM         # noqa: E402
+D.IX_START = "2000-01-01"     # research replay: the live-record flush (9 Nov) must not block past days
 
 ROOT = os.path.abspath(os.path.join(APP, ".."))
 OCD = os.path.join(ROOT, "data_store", "flow", "option_chain")
