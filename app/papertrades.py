@@ -43,6 +43,7 @@ RULES = {
     "istr_n": {"label": "Index Strangle · NIFTY weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2023-26: +Rs 1,700 a lot a week in positive-gamma weeks, win 78 %, worst week about -Rs 34k; judge after ~20 weeks"},
     "icon_s": {"label": "Index Condor · SENSEX weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2024-26: +Rs 1,870 a lot a week in positive-gamma weeks, win 82 %, risk capped by wings; judge after ~20 weeks"},
     "fsb2": {"label": "BuildUp v2 · v1 minus 'late' shorts (at 60-day low / bullish order block broken)", "edge": "new 9 Nov - from Oct 2024: 210 trades, +0.77 % a trade after costs (t 2.7) vs v1 +0.43 % on the same period; judge after ~30"},
+    "bkf": {"label": "BreakFade · short fresh-OI 20-day breakouts, 1 ATR stop / 3 R / 10 sessions (record only)", "edge": "new 9 Nov - from the 132k-experiment search: 753 trades, +0.51 % a trade after costs, PF 1.30, but the train-only pick made +0.06 % out of sample - PROVISIONAL, record only; judge after 60 closed trades"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -314,6 +315,21 @@ def _fsb(hot):
     return out
 
 
+def _bkf(hot):
+    """2026-11-09: BreakFade (app/fnobreakfade.py) - record-only short of fresh-OI breakouts in stock futures, 1 lot, rupees after 0.10 %."""
+    out = []
+    for x in hot("fnobreakfade").trades():
+        t = {"rule": "bkf", "key": x["sym"], "side": "short", "opened": x.get("opened"), "entry": x.get("entry"), "stop": x.get("stop"), "target": x.get("target"),
+             "how": "stop 1 ATR above entry (day's high) · target 3 R (day's low) · out at the close of the 10th session · record only", "instrument": f"{x['sym']} futures {x.get('expiry','')}, 1 lot ({x.get('lot')})",
+             "size": x.get("lot"), "ccy": "₹", "status": x["status"], "why": x.get("why", "")}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
 def _idx(hot):
     """2026-11-09: index weekly strangle (NIFTY) / condor (SENSEX), gamma filter (app/idxstrangle.py) - rupees per lot after fees at settlement."""
     out = []
@@ -504,7 +520,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -531,7 +547,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
