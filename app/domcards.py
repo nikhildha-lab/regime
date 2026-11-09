@@ -252,6 +252,8 @@ LEVELS = "fut"
 PRICE = "spot"
 TOPVOL = True             # 2026-11-09: stock entries only from the day's top 10 tracked F&O stocks by opening traded value (topvol.py)
 DI_FILTER = True          # 2026-11-09: skip index entries when ADX(14, 5-min) > 25 and the DI is against the trade (difilter.py); skipped signals in S["skipped"]
+ST_START = "2026-11-10"   # 2026-11-09 (Nikhil: "flush out all trades for DOM v2 .. backtest again with 10 top stocks per day"): the DOM Stocks record
+                          # restarts clean with the top-10 universe (396 trades of 3-9 Nov archived in _archive/2026-11-03/backups/2026-11-09_dom_stocks_flush/)
 IX_START = "2026-11-10"   # v4 record starts here (v1-v3 records flushed 9 Nov, archived in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/)
 
 
@@ -415,6 +417,8 @@ def _close(tr, px, t, why):
 
 
 def _open(k, setup, side, entry, stop, zone, zones, t, why):
+    if k not in INDEX and S["day"] < ST_START:        # 2026-11-09: stock record flushed; the top-10 forward test starts on ST_START
+        return
     if k in INDEX and S["day"] < IX_START:            # 2026-11-09: index record flushed; v4 starts on IX_START
         return
     if k not in INDEX and TOPVOL:                     # 2026-11-09 (Nikhil): stock trades only in the day's top 10 by opening traded value (app/topvol.py)
