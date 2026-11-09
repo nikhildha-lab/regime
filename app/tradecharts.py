@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 IST = timezone(timedelta(hours=5, minutes=30))
 SPOT_RULES = {"touchv2", "ovn_h30", "ovn_h30f", "vcy_night", "vcy_day", "vcy_day_sk", "vcy_day_bw", "vcy_day_dh"}
-TAG = {"dom_ix": "DOM", "dom_ix_break": "DOM-B", "dom_ix_hold": "DOM-H", "dom_stocks": "DOM-S", "touchv2": "Touch v2", "sorb": "ORB", "svb": "SVB", "fsb": "BuildUp v1", "fsb2": "BuildUp v2", "bkf": "BreakFade", "t55": "Trend 55", "qph": "30d High", "n5m": "N500 Mom", "istr_n": "Nifty strangle", "icon_s": "Sensex condor", "svb_tr": "SVB trail", "ovn_h30": "Overnight", "ovn_h30f": "Overnight+flow", "vcy_night": "Vol night",
+TAG = {"dom_ix": "DOM", "dom_ix_break": "DOM-B", "dom_ix_hold": "DOM-H", "dom_stocks": "DOM-S", "touchv2": "Touch v2", "sorb": "ORB", "svb": "SVB", "fsb": "BuildUp v1", "fsb2": "BuildUp v2", "bkf": "BreakFade", "t55": "Trend 55", "qph": "30d High", "n5m": "N500 Mom", "n5i": "N500 Ind", "istr_n": "Nifty strangle", "icon_s": "Sensex condor", "svb_tr": "SVB trail", "ovn_h30": "Overnight", "ovn_h30f": "Overnight+flow", "vcy_night": "Vol night",
        "vcy_day": "Vol day", "vcy_day_sk": "Vol skew", "vcy_day_bw": "Vol b-wing", "vcy_day_dh": "Vol hedged", "b4h": "4H break",
        "b4h_v4": "4H v4", "b4h_h2": "4H H2", "b4h_g2": "Gold v2"}
 _C: dict = {}

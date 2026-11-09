@@ -176,3 +176,26 @@ def g5():
 
 if __name__ == "__main__" and "--g5" in sys.argv:
     g5(); open(OUT, "a").write("\n" + "\n".join(L))
+
+
+def g6():
+    """sweep-3 candidate: Nifty 500 industry rotation (equal-weight industries, hold the top k by m-month return), judged as EXCESS over equal weight."""
+    import quantpedia_sweep3 as Q3
+    P("\n#### 6. NIFTY 500 INDUSTRY ROTATION (excess over the equal-weight universe; costs 0.15 %/side)")
+    IN, ind = Q3._n500(); R = IN.pct_change(fill_method=None).clip(-0.5, 1.0); ew = R.mean(axis=1)
+    groups = {g: [s for s in IN.columns if ind.get(s) == g] for g in ind.unique() if pd.notna(g)}
+    IR = pd.DataFrame({g: R[s].mean(axis=1) for g, s in groups.items() if len(s) >= 5}); IP = (1 + IR.fillna(0)).cumprod()
+    me = Q.month_ends(IP.index); M = IP.reindex(me); out = {}
+    for k, m in ((3, 6), (2, 6), (4, 6), (3, 3), (3, 12)):
+        mm = M / M.shift(m) - 1; rk = mm.rank(axis=1, ascending=False); W = (rk <= k).astype(float) / k
+        r, _ = Q.run_weights(W, IR, Q.C_INSTK); ex = (r - ew.reindex(r.index)).dropna()
+        Wd = W.reindex(IR.index).ffill().fillna(0); turn = (Wd - Wd.shift(1).fillna(0)).abs().sum(axis=1).shift(1).fillna(0) * Q.C_INSTK
+        if (k, m) == (3, 6):
+            out["ind_rot"] = gauntlet(f"Industry rotation top {k} by {m}-m return · {IR.shape[1]} industries · EXCESS over equal weight (gross Sharpe {sh(r, 252):+.2f} vs {sh(ew.reindex(r.index), 252):+.2f})", ex, 252, turn, bench=None)
+        else:
+            P(f"   neighbour top {k} / {m} m: excess Sharpe {sh(ex, 252):+.2f} (gross {sh(r, 252):+.2f})")
+    return out
+
+
+if __name__ == "__main__" and "--g6" in sys.argv:
+    g6(); open(OUT, "a").write("\n" + "\n".join(L))
