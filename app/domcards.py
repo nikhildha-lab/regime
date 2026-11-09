@@ -250,6 +250,7 @@ LEVELS = "fut"
 # (lean, absorption, delta). The trade is the synthetic future (ATM call + put): its P&L ~ spot points moved (basis drift over a
 # <= 60 min hold is ignored) minus SYN_PTS. v3 (futures-only) stays selectable with PRICE = "fut"; v1 / v2 code is kept unused.
 PRICE = "spot"
+DI_FILTER = True          # 2026-11-09: skip index entries when ADX(14, 5-min) > 25 and the DI is against the trade (difilter.py); skipped signals in S["skipped"]
 IX_START = "2026-11-10"   # v4 record starts here (v1-v3 records flushed 9 Nov, archived in _archive/2026-11-03/backups/2026-11-09_dom_ix_flush/)
 
 
@@ -413,8 +414,19 @@ def _close(tr, px, t, why):
 
 
 def _open(k, setup, side, entry, stop, zone, zones, t, why):
-    if k in INDEX and S["day"] < IX_START:            # 2026-11-09: index record flushed; v3 starts on IX_START
+    if k in INDEX and S["day"] < IX_START:            # 2026-11-09: index record flushed; v4 starts on IX_START
         return
+    di = None
+    if k in INDEX and DI_FILTER:                      # 2026-11-09 (Nikhil: "update the logic"): no entry against a trending 5-min DI (app/difilter.py)
+        try:
+            import difilter as DF
+            di = DF.check_index(k, side, datetime.fromtimestamp(t))
+        except Exception as e:
+            di = {"ok": True, "note": f"DI check failed ({type(e).__name__}) - allowed"}
+        if not di["ok"]:
+            S.setdefault("skipped", []).append({"key": k, "setup": setup, "side": side, "at": _hm(t), "entry": round(entry, 2), "why": why, "di": di["note"]})
+            S["changed"] = True
+            return
     sd = 1 if side == "long" else -1
     risk = abs(entry - stop)
     if risk <= 0:
@@ -441,7 +453,8 @@ def _open(k, setup, side, entry, stop, zone, zones, t, why):
                         "engine": ("v4 spot" if PRICE == "spot" else "v3 fut") if k in INDEX else None,
                         # 2026-11-03 audit (look-ahead): index levels (blocks, OI walls, basis) are fixed when first read. If that
                         # happened after this trade's time (a restart mid-day), the trade used levels it could not have known.
-                        "late_levels": bool(k in INDEX and t < S.get("lv_ts", 0))})
+                        "late_levels": bool(k in INDEX and t < S.get("lv_ts", 0)),
+                        "di": (di or {}).get("note")})
     S["changed"] = True
 
 

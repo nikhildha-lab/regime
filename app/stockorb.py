@@ -28,6 +28,7 @@ OUT = os.path.join(ROOT, "data_store", "livedesk", "stockorb")
 HIST = os.path.join(ROOT, "data_store", "research", "stocks_intraday")
 OF_LIVE = os.path.join(os.environ.get("MP_DHAN_DIR") or os.path.join(os.path.expanduser("~"), "Documents", "dhan"), "orderflow", "data", "of", "live.json")
 RV_MIN, GAP_MIN, R_HALF, MAX_DAY, COST_PCT = 2.0, 0.005, 1.5, 3, 0.12
+DI_FILTER = True          # 2026-11-09: skip the entry when ADX(14, 5-min) > 25 and the DI is against the trade (app/difilter.py)
 MARGIN, LEV = 20000, 5
 POS = MARGIN * LEV
 S: dict = {"t": 0}
@@ -129,6 +130,7 @@ def _five(d1, sym=None, day=None):
     tp = (b.high + b.low + b.close) / 3
     b["vwap"] = (tp * b.volume).cumsum() / b.volume.cumsum()
     b["hm"] = b.index.strftime("%H:%M")
+    b.attrs["allb"] = allb                                   # 2026-11-09: previous session + today, for the DI filter at entry
     return b
 
 
@@ -255,12 +257,21 @@ def _work_inner():
         stop = st_or if abs(e - st_or) < abs(e - st_atr) else st_atr
         if s * (e - stop) <= 0:
             taken.add(sym); continue
+        di = None
+        if DI_FILTER:                                          # 2026-11-09 (Nikhil: "update the logic"): no entry against a trending 5-min DI
+            try:
+                import difilter as DF
+                allb = b.attrs.get("allb"); di = DF.check_bars("long" if s > 0 else "short", allb[allb.index < t0] if allb is not None else None)
+            except Exception as ex:
+                di = {"ok": True, "note": f"DI check failed ({type(ex).__name__}) - allowed"}
+            if not di["ok"]:
+                st.setdefault("skipped", []).append({"sym": sym, "bar": str(t0), "side": "long" if s > 0 else "short", "di": di["note"]}); taken.add(sym); continue
         ln = _book_lean(sym, s)
         tr = {"sym": sym, "day": day, "s": s, "side": "long" if s > 0 else "short", "bar": str(t0), "opened": f"{day} {t0:%H:%M}",
               "entry": round(e, 2), "stop": round(stop, 2), "risk_pct": round(abs(e - stop) / e * 100, 2), "rv": c["rv"], "gap_pct": c["gap_pct"],
               "or": [c["or_lo"], c["or_hi"]], "book_lean": ln, "book_agrees": ln is not None and ln >= 0.10, "status": "open",
               "qty": int(POS // e), "margin": MARGIN, "leverage": LEV,
-              "why": f"in play: opening volume {c['rv']}x normal, gap {c['gap_pct']:+.2f}% - 5-min close beyond the opening range"}
+              "why": f"in play: opening volume {c['rv']}x normal, gap {c['gap_pct']:+.2f}% - 5-min close beyond the opening range", "di": (di or {}).get("note")}
         st["trades"].append(tr); taken.add(sym)
         _manage(tr, b)
     st["at"] = now.isoformat(timespec="seconds"); _save(day, st)

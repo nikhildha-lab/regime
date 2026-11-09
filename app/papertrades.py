@@ -210,6 +210,20 @@ def _gap_pct(hot, key, day):
     return g
 
 
+_DI_CACHE: dict = {}
+
+
+def _di_card(hot, c):
+    """DI verdict at the card's entry minute (cached); None if the check cannot run."""
+    k = (c["key"], c["day"], c["time"], c["side"])
+    if k not in _DI_CACHE:
+        try:
+            _DI_CACHE[k] = hot("difilter").check_index(c["key"], c["side"], f"{c['day']} {c['time']}")
+        except Exception:
+            _DI_CACHE[k] = None
+    return _DI_CACHE[k]
+
+
 def _touchv2(hot):
     """2026-11-05 (Nikhil: "update the strategy"): touch-minute v2 = the SAME cards, entry, stop, trail and exits as the live touch-minute
     rule, plus ONE filter: if the opening gap is 1 % or more, only trades in the gap direction (no shorts after a big gap up, no longs
@@ -230,11 +244,14 @@ def _touchv2(hot):
         g = _gap_pct(hot, c["key"], c["day"])
         if g is not None and abs(g) >= 1.0 and (1 if g > 0 else -1) != sd:
             continue                                           # against a big opening gap - v2 skips it
+        di = _di_card(hot, c)                                  # 2026-11-09 (Nikhil: "update the logic"): no entry against a trending 5-min DI
+        if di is not None and not di.get("ok", True):
+            continue
         lot = c.get("lot") or TT.LOT[c["key"]]
         t = {"rule": "touchv2", "key": c["key"], "side": c["side"], "opened": f"{c['day']} {c['time']}", "entry": c.get("spot_entry"),
              "stop": c.get("spot_sl"), "target": None,
-             "how": f"gap {g:+.2f}% {'(big - gap direction only)' if g is not None and abs(g) >= 1 else '(normal)'} · stop on spot · +1R breakeven, +2R trail 1R · out by {c.get('exit_by', '')}"
-                    if g is not None else f"gap unknown · stop on spot · out by {c.get('exit_by', '')}",
+             "how": (f"gap {g:+.2f}% {'(big - gap direction only)' if g is not None and abs(g) >= 1 else '(normal)'} · stop on spot · +1R breakeven, +2R trail 1R · out by {c.get('exit_by', '')}"
+                    if g is not None else f"gap unknown · stop on spot · out by {c.get('exit_by', '')}") + (f" · DI: {di['note']}" if di else ""),
              "instrument": f"{NAME.get(c['key'], c['key'])} synthetic future (ATM call + short ATM put), 1 lot", "size": None, "ccy": "₹",
              "status": c["status"], "why": c.get("why", ""), "_src": ("touchsyn", c)}
         if c["status"] == "closed" and c.get("spot_pts") is not None:
