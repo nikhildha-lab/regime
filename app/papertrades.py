@@ -43,6 +43,7 @@ RULES = {
     "istr_n": {"label": "Index Strangle · NIFTY weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2023-26: +Rs 1,700 a lot a week in positive-gamma weeks, win 78 %, worst week about -Rs 34k; judge after ~20 weeks"},
     "icon_s": {"label": "Index Condor · SENSEX weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2024-26: +Rs 1,870 a lot a week in positive-gamma weeks, win 82 %, risk capped by wings; judge after ~20 weeks"},
     "fsb2": {"label": "BuildUp v2 · v1 minus 'late' shorts (at 60-day low / bullish order block broken)", "edge": "new 9 Nov - from Oct 2024: 210 trades, +0.77 % a trade after costs (t 2.7) vs v1 +0.43 % on the same period; judge after ~30"},
+    "qph": {"label": "Crypto 30-Day High · long while the daily close is a 30-day high (record only)", "edge": "Quantpedia idea, gauntlet 10 Nov: BTC Sharpe 0.89 (hold 0.92, a third of the drawdown), SOL 1.23 (hold 1.03), ETH borderline; in the market ~12 % of days; 500 USDT notional - record only"},
     "t55": {"label": "Trend 55 · long 55-session breakouts, 1 ATR stop, 20 sessions (metals / commodities, record only)", "edge": "new 9 Nov - 2012-26 on gold, silver, copper, WTI, natgas + MCX crude: 878 trades, +0.88 % a trade after costs, PF 1.49 both halves, all 6 markets positive, 11 of 15 years; win 27 % (trend-following) - record only"},
     "bkf": {"label": "BreakFade · short fresh-OI 20-day breakouts, 1 ATR stop / 3 R / 10 sessions (record only)", "edge": "new 9 Nov - from the 132k-experiment search: 753 trades, +0.51 % a trade after costs, PF 1.30, but the train-only pick made +0.06 % out of sample - PROVISIONAL, record only; judge after 60 closed trades"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
@@ -346,6 +347,21 @@ def _t55(hot):
     return out
 
 
+def _qph(hot):
+    """2026-11-10: Crypto 30-Day High (app/qphigh.py) - record-only daily rule, 500 USDT notional, $ after 0.05 %/side."""
+    out = []
+    for x in hot("qphigh").trades():
+        t = {"rule": "qph", "key": x["coin"], "side": "long", "opened": x.get("opened"), "entry": x.get("entry"), "stop": None, "target": None,
+             "how": "out at the first UTC daily close that is not a 30-day high · no stop / target (the tested rule) · record only", "instrument": f"{x['coin']} perpetual, 500 USDT notional (100 USDT at 5x)",
+             "size": 500, "ccy": "$", "status": x["status"], "why": (x.get("why", "") + (f" · {x['verdict']}" if x.get("verdict") else "")).strip()}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"))
+        elif x.get("pnl_open") is not None:
+            t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
 def _idx(hot):
     """2026-11-09: index weekly strangle (NIFTY) / condor (SENSEX), gamma filter (app/idxstrangle.py) - rupees per lot after fees at settlement."""
     out = []
@@ -536,7 +552,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -563,7 +579,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
