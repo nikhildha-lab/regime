@@ -356,7 +356,7 @@ body[data-tab="intraday"] #idBar, body[data-tab="intraday"] #idTop{display:block
 body[data-tab="intraday"] #decision, body[data-tab="intraday"] #tfCard, body[data-tab="intraday"] #mktDeskCard, body[data-tab="intraday"] #rail,
 body[data-tab="intraday"] #viewMarkets, body[data-tab="intraday"] #lvlMore > summary, body[data-tab="intraday"] .ptCard:not(#ptAll),
 body[data-tab="intraday"]:not([data-sub="crypto"]) #b4Crypto, body:not([data-tab="intraday"]) #csCard, body[data-tab="intraday"][data-sub="us"] #csCard, body[data-tab="intraday"] #viewCLive > section:first-child,
-body[data-tab="intraday"]:not([data-sub="metals"]) #b4Metals, body:not([data-tab="intraday"]) #bwCard, body[data-tab="intraday"]:not([data-sub="india"]) #bwCard, body[data-tab="intraday"] #viewMLive > section:first-child{display:none!important}
+body[data-tab="intraday"]:not([data-sub="metals"]) #b4Metals, body:not([data-tab="intraday"]) #bwCard, body[data-tab="intraday"]:not([data-sub="india"]) #bwCard, body:not([data-tab="intraday"]) #lbCard, body[data-tab="intraday"]:not([data-sub="india"]) #lbCard, body[data-tab="intraday"] #viewMLive > section:first-child{display:none!important}
 body[data-tab="intraday"]:not(.ind-stock) #stkCard, body[data-tab="intraday"][data-sub="crypto"] #stkCard, body[data-tab="intraday"][data-sub="us"] #stkCard,
 body[data-tab="intraday"][data-sub="metals"] #stkCard, body[data-tab="intraday"][data-sub="global"] #stkCard{display:none!important}
 @media (max-width:1100px){ .deskcols{grid-template-columns:1fr} }
@@ -658,6 +658,7 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <section class="card" hidden data-anchor="1"></section>   <!-- 2026-11-03 audit: placement anchor (old tracker status header removed) -->
   <section class="card" id="b4Crypto"></section>
   <section class="card" id="csCard"></section>
+  <section class="card" id="lbCard"></section>
   <section class="card" id="bwCard"></section>
   <section class="card ptCard" data-keys="BTC,ETH" data-title="Crypto paper trades · BTC / ETH"></section>
   <div id="cliveDesk"></div>
@@ -1945,7 +1946,7 @@ function prepRender(){
       <table class="small" style="width:100%"><tbody>${["intraday","weekly","monthly"].map(h => `<tr><td style="width:78px;padding:4px 0"><b>${h[0].toUpperCase()+h.slice(1)}</b></td>
         <td style="width:84px"><span class="pill p-${W[(v[h]||{}).word]||"neutral"}">${esc((v[h]||{}).word||"–")}</span></td><td>${blkLine(v[h])}</td></tr>`).join("")}</tbody></table></div>`; };
   const chart = (k) => blockChartSvg(S[k], SU_NAME[k]||k);
-  const legend = `<div class="small faint" style="margin:2px 0 6px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · <span style="color:#2F9BD6">IBH / IBL</span> last initial balance · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near) · teal = likely 5-day range</div>`;
+  const legend = `<div class="small faint" style="margin:2px 0 6px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near) · teal = likely 5-day range</div>`;
   const m = $("#prepMini");
   if (m){ m.hidden = false; m.innerHTML = `<div class="spread"><h2 style="font-size:15px">Overnight prep · ${esc(S.for_day||"")}</h2></div>
     ${IK().map(chart).join("")}${legend}
@@ -2001,7 +2002,7 @@ function b4Render(){
   const m = $("#b4Metals"); if (m) m.innerHTML = head("4H block-break trade · Gold") + `<div style="margin-top:6px">${card("GOLD")}</div>` + foot.replace("(crypto: taker volume with the break) ", "");
 }
 function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearInterval(b4Start.w);
-  if (document.body.dataset.tab === "intraday" && v === "india"){ bigwLoad(); b4Start.w = setInterval(() => { if (!document.hidden) bigwLoad(); }, 60000); }
+  if (document.body.dataset.tab === "intraday" && v === "india"){ bigwLoad(); lbLoad(); b4Start.w = setInterval(() => { if (!document.hidden){ bigwLoad(); lbLoad(); } }, 60000); }
   if (document.body.dataset.tab === "intraday" && ["crypto","india","metals","global"].includes(v)){ csLoad(); b4Start.c = setInterval(() => { if (!document.hidden) csLoad(); }, 60000); }
   if (!["crypto","metals"].includes(v)) return; b4Load(); b4Start.t = setInterval(() => { if (!document.hidden) b4Load(); }, 60000); }
 // 2026-11-07 (Nikhil: "for SOL, BTC, ETH ... 15 min, 1 hour, 4 hour ... keep a prediction score increasing or decreasing even though we are
@@ -2009,6 +2010,53 @@ function b4Start(v){ clearInterval(b4Start.t); clearInterval(b4Start.c); clearIn
 // it, and - beside every timeframe - how it did on data it never saw and how it is doing live. An indication, never advice.
 // 2026-11-07 (Nikhil: "can we see this info [big walls] on the dashboard .. how frequently we should observe"): Nifty / Bank Nifty
 // big resting orders from the 200-level book (app/bigwalls.py), refreshed every minute.
+// 2026-11-09 (Nikhil: "combine Levels & Blocks, Big Walls · Order Book, OI at the Blocks, and open limit order in 1 section in a tabular
+// manner ... levels can be rows others can be cols and final action"): Level Board - app/levelboard.py via /api/livedesk/levelboard.
+// One ladder per index: resistance rows above, bold price row, support rows below. Index prices (futures in small type).
+const LBRD = {k: (() => { try { return localStorage.getItem("mp.lb.k") || "NIFTY"; } catch(e){ return "NIFTY"; } })(), D: {}};
+function lbPick(k){ LBRD.k = k; try { localStorage.setItem("mp.lb.k", k); } catch(e){} lbRender(); lbLoad(); }
+async function lbLoad(){
+  const el = $("#lbCard"); if (!el) return;
+  try { LBRD.D[LBRD.k] = await fetch(`/api/livedesk/levelboard?key=${LBRD.k}`).then(r => r.json()); } catch(e){ return; }
+  lbRender();
+}
+function lbRender(){
+  const el = $("#lbCard"); if (!el) return; const D = LBRD.D[LBRD.k];
+  const tabs = ["NIFTY","BANKNIFTY"].map(k => `<button class="chip" aria-pressed="${k===LBRD.k}" onclick="lbPick('${k}')">${k==="NIFTY"?"Nifty":"Bank Nifty"}</button>`).join(" ");
+  const head = `<div class="spread"><h2>Level Board <span class="small muted">levels · OI · big walls · resting orders · action</span></h2><div class="row" style="gap:6px">${tabs}</div></div>`;
+  if (!D){ el.innerHTML = head + `<p class="small muted">Loading…</p>`; return; }
+  if (D.err){ el.innerHTML = head + `<p class="small muted">${esc(D.err)}</p>`; return; }
+  const P = D.price, dp = 0, px = v => fmt(v, dp);
+  const TONE = {bull:"var(--bull)", bear:"var(--bear)", wait:"#E8A33C", neutral:"var(--muted)"};
+  const STC = {strong:"var(--ink)", medium:"var(--ink)", weak:"var(--muted)", ref:"var(--muted)", wall:"var(--muted)"};
+  const typ = r => { const s = r.side === "R" ? "Resistance" : r.side === "S" ? "Support" : "Price inside";
+    const k = r.kind === "block" ? `${r.strength[0].toUpperCase()+r.strength.slice(1)} block` : r.kind === "ref" ? "Reference" : "Wall only";
+    return `<b style="color:${STC[r.strength]||"var(--ink)"}">${k}${r.star?" ★":""}</b><br><span class="small faint">${s}${r.tags.length?" · "+r.tags.map(esc).join(" "):""}</span>`; };
+  const lvl = r => { const one = Math.abs(r.hi - r.lo) < 25 && r.kind !== "block";
+    return `<b>${one ? px((r.lo + r.hi) / 2) : px(r.lo) + "–" + px(r.hi)}</b><br><span class="small faint" title="futures price">fut ${one ? px((r.fut_lo + r.fut_hi) / 2) : px(r.fut_lo) + "–" + px(r.fut_hi)}</span>`; };
+  const dist = r => r.side === "inside" ? `<span style="color:#E8A33C"><b>in zone</b></span>` : `<b>${r.dist>0?"+":""}${fmt(r.dist,0)}</b><br><span class="small faint">${r.dist_pct>0?"+":""}${fmt(r.dist_pct,2)}%</span>`;
+  const oi = r => { const o = r.oi; if (!o) return `<span class="faint">${r.kind === "block" && r.strength !== "weak" ? "–" : "not tracked"}</span>`;
+    const c = o.tone === "hold" ? "var(--bull)" : o.tone === "break" ? "var(--bear)" : "var(--muted)";
+    const rd = String(o.read||"").split(" - ")[0];
+    return `<b>${o.type === "call" ? "CE" : "PE"} ${fxK(o.oi)}</b> <span class="small" style="color:${(o.pct30||0)>=0?"var(--bull)":"var(--bear)"}">${(o.pct30||0)>0?"+":""}${fmt(o.pct30,1)}% 30m</span><br><span class="small" style="color:${c}" title="${esc(o.read||"")}">${esc(SC(rd))}</span>`; };
+  const TR = {growing:"↑ growing", shrinking:"↓ shrinking", steady:"steady"};
+  const wall = r => { const w = r.wall; if (!w) return `<span class="faint">none</span>`;
+    return `<b style="color:${w.side==="sell"?"var(--bear)":"var(--bull)"}">${w.side==="sell"?"Sell":"Buy"} ${fmt(w.x,1)}×</b><br><span class="small faint">fut ${px(w.fut)} · ${TR[w.trend]||""} · ${w.age >= 60 ? "60+" : w.age} min</span>`; };
+  const book = r => { const b = r.book; if (b === undefined) return `<span class="faint">–</span>`; if (b === null) return `<span class="faint">beyond book</span>`;
+    const tot = Math.max(b.bid_lots + b.ask_lots, 1), bw = Math.round(60 * b.bid_lots / tot), aw = 60 - bw;
+    return `<div style="display:flex;height:6px;width:60px;border-radius:3px;overflow:hidden;margin-bottom:3px;background:var(--line)"><span style="width:${bw}px;background:var(--bull)"></span><span style="width:${aw}px;background:var(--bear)"></span></div>`
+      + `<span class="small"><span style="color:var(--bull)">B ${fmt(b.bid_lots,0)}</span> · <span style="color:var(--bear)">A ${fmt(b.ask_lots,0)}</span> lots</span>`; };
+  const act = r => `<span style="display:inline-block;border-left:3px solid ${TONE[r.tone]||"var(--muted)"};padding-left:7px"><b style="color:${r.tone==="neutral"?"var(--muted)":"var(--ink)"}">${esc(r.action)}</b><br><span class="small faint" title="score ${r.score}">score ${r.score}: ${esc(r.score_why.join(" · "))}</span></span>`;
+  const row = r => `<tr style="${r.side==="inside"?"background:rgba(232,163,60,.10)":""}"><td class="num" style="white-space:nowrap">${lvl(r)}</td><td>${typ(r)}</td><td class="num" style="white-space:nowrap">${dist(r)}</td><td>${oi(r)}</td><td>${wall(r)}</td><td>${book(r)}</td><td style="min-width:230px">${act(r)}</td></tr>`;
+  const R = D.rows.filter(r => r.side === "R"), I = D.rows.filter(r => r.side === "inside"), S = D.rows.filter(r => r.side === "S");
+  const prow = `<tr><td colspan="7" style="border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);padding:6px 4px"><b>Price now ${px(P)}</b> <span class="small muted">· fut ${D.fut != null ? px(D.fut) : "–"} · basis ${D.basis>0?"+":""}${fmt(D.basis,0)}</span></td></tr>`;
+  const empty = t => `<tr><td colspan="7" class="small faint">${t}</td></tr>`;
+  el.innerHTML = head + `<div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Resting Orders</th><th>Action</th></tr></thead><tbody>`
+    + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + `</tbody></table></div>`
+    + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
+    + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). Levels are index prices (futures below each). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
+    + `Big wall = ≥4× normal size for 70% of the last 15 min. Action = level strength + option writers + big wall + resting orders on the level's side, a fixed rule that is <b>untested</b>: an indication, never an order. Walls can be pulled any second.</p>`;
+}
 async function bigwLoad(){
   const el = $("#bwCard"); if (!el) return;
   let R; try { R = await Promise.all(["NIFTY","BANKNIFTY"].map(s => fetch(`/api/livedesk/bigwalls?sym=${s}`).then(r => r.json()))); } catch(e){ return; }
@@ -2785,7 +2833,8 @@ async function csLoad(){
     const why = (v.drivers||[]).map(d => `${d.name} → ${d.push}`).join(" · ");
     return `<td title="fall-chance history (last bars): ${esc(hist)}%&#10;biggest pushes: ${esc(why)}"><b style="color:${col}">${weak ? "No view" : (fall ? "Fall " : "Rise ") + pct + "%"}</b><br><span class="small faint">${esc(trend)} · ${esc(hist)}%</span><br><span class="small faint">${esc(why)}</span></td>`; };
   const coins = Object.keys(D.scores || {});
-  const tfs = D.tfs || ["15m","1h","4h"];
+  // 2026-11-09 (Nikhil: "Ignore the 15m and 1h scores"): coin flips in test - only the 4h (crypto / metals / commodities) and 1D (India) rows are shown
+  const tfs = (D.tfs || ["15m","1h","4h"]).filter(tf => !["15m","1h"].includes(tf));
   const NM = {NIFTY:"Nifty fut", BANKNIFTY:"Bank Nifty fut", GOLD:"Gold", SILVER:"Silver", COPPER:"Copper", ALUMINIUM:"Aluminium", CRUDE:"WTI crude", NATGAS:"Natural gas"};
   const sub = isC ? "SOL · BTC · ETH · order flow + positioning" : ({india:"Nifty · Bank Nifty futures · price, volume, OI", metals:"Gold · Silver · Copper · Aluminium · price and volume", global:"WTI crude · Natural gas · price and volume"})[VIEW] || "";
   el.innerHTML = `<div class="spread"><h2>Rise / Fall Score <span class="small muted">${esc(sub)}</span></h2><span class="small muted">${D.at ? "updated " + esc(String(D.at).slice(11,16)) : ""}</span></div>
@@ -2864,7 +2913,8 @@ function showView(v){
       const b4 = v==="crypto" ? $("#b4Crypto") : v==="metals" ? $("#b4Metals") : null;      // 2026-10-30 audit: the passed edge first
       if (b4) at.after(b4);
       { const cs = $("#csCard"); if (cs && ["crypto","india","metals","global"].includes(v)) (b4 || at).after(cs); }
-      { const bw = $("#bwCard"); if (bw && v === "india") ($("#csCard") || at).after(bw); }      // 2026-11-07: big walls under the score      // 2026-11-07: rise / fall score near the top
+      { const lb = $("#lbCard"); if (lb && v === "india") ($("#csCard") || at).after(lb); }      // 2026-11-09: Level Board under the score
+      { const bw = $("#bwCard"); if (bw && v === "india") ($("#lbCard") || $("#csCard") || at).after(bw); }      // 2026-11-07: big walls under the score      // 2026-11-07: rise / fall score near the top
       const pt = lv.querySelector(".ptCard"); if (pt) (b4 || at).after(pt); }       // 2026-10-30: paper trades high on the tab
     else { const mv = $("#viewMarkets"), pl = $("#planCard"); if (pl && pl.parentElement === mv){ pl.before(dec); pl.before(tf); pl.before($("#hvCard")); pl.before(md); }
       const sp = tf.querySelector(".spread"); if (sp) sp.prepend(rail); }
@@ -3710,7 +3760,7 @@ function hvRender(){
   const P = prepOf(hk), RF = refOf(hk), map = blockChartSvg(Object.assign({}, P, {spot: P.spot || r.price, levels: [...(P.levels||[]), ...((RF||{}).levels||[])]}), SHORT[hk]||mk.name||hk);
   const isIdx = ["NIFTY","BANKNIFTY"].includes(hk), PO = ((SU.prep||{}).full||{}).open || {};
   const openLine = isIdx && SU.prep && !SU.prep.error ? `<div class="small" style="margin:2px 0 0">Nifty open ~<b>${fmt(PO.open_est,0)}</b> (${PO.gap_pct>0?"+":""}${fmt(PO.gap_pct,2)}%) · ${(SU.prep.rules||[]).map(esc).join(" · ")}</div>` : "";
-  const mapHtml = (map ? `<div class="vmap">${map}<div class="small faint" style="margin:0 0 2px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · <span style="color:#2F9BD6">IBH / IBL</span> last initial balance · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)${P.range5?" · teal = likely 5-day range":""}${RF?` · ${esc(SHORT[hk]||hk)}: UTC days, IB = 00:00-01:00 UTC, from ${esc(RF.source||"")}`:""}</div>${openLine}</div>` : openLine ? `<div class="vmap">${openLine}</div>` : "");
+  const mapHtml = (map ? `<div class="vmap">${map}<div class="small faint" style="margin:0 0 2px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ weekly / monthly high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)${P.range5?" · teal = likely 5-day range":""}${RF?` · ${esc(SHORT[hk]||hk)}: UTC days, from ${esc(RF.source||"")}`:""}</div>${openLine}</div>` : openLine ? `<div class="vmap">${openLine}</div>` : "");
   c.innerHTML = `<div class="vhead">
       <div class="vid"><div class="eyebrow">Now · verdict</div><div class="vname">${esc(SHORT[hk]||mk.name||hk)} <span class="vpx">${fmt(r.price, dp(r.price))}</span></div>
         <div class="small faint">${r.ref==="spot"?"index":esc(r.ref||"price")} · ${r.closed?"market closed · last read ":"read "}${esc((r.at||"").slice(11))} · 5m / 15m, every 15 min</div></div>
@@ -3763,7 +3813,8 @@ function blockChartSvg(M, name){ if (!M || M.error || !M.spot || (!M.blocks && !
     const r5 = M.range5, spot = M.spot;
     // 2026-11-04 (Nikhil): reference levels as dashed lines - 5-day value area + IB (within 4 %), previous day / week / month only when near (2 %)
     const near = x => Math.abs(x.px / spot - 1) * 100 <= (/^(VAH|VAL|POC|VWAP|IBH|IBL)$/.test(x.short) ? 4 : 2);
-    const refs = (M.levels||[]).filter(x => x.px && near(x));
+    // 2026-11-09 (Nikhil: "Remove IB high and IB low from all block line charts"): IBH / IBL never drawn on the block maps
+    const refs = (M.levels||[]).filter(x => x.px && near(x) && !/^IB/.test(x.short||""));
     let lo = Math.min(spot, ...all.map(b=>b.lo), ...refs.map(x=>x.px), r5 ? r5.lo : spot), hi = Math.max(spot, ...all.map(b=>b.hi), ...refs.map(x=>x.px), r5 ? r5.hi : spot);
     const pad = (hi - lo) * 0.03; lo -= pad; hi += pad;
     const W = 1000, X = v => 20 + (v - lo) / (hi - lo) * (W - 40), Y = 86;
@@ -3900,7 +3951,7 @@ function stkRender(A){
     <div class="eyebrow" style="margin-top:12px">Timeframes</div>
     <div class="row" style="gap:6px;flex-wrap:wrap">${(A.timeframes||[]).map(t=>`<span class="pill ${tp(t.trend)}" title="score ${t.score} · last bar ${esc(t.bar||"")}">${esc(t.tf)} ${t.trend?esc(t.trend)+" "+t.score:"–"}</span>`).join("")}</div>
     <div style="margin-top:10px">${blockChartSvg(M, A.sym)}</div>
-    <div class="small faint" style="margin:0 0 4px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ last week / month high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · <span style="color:#2F9BD6">IBH / IBL</span> last initial balance · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)</div>
+    <div class="small faint" style="margin:0 0 4px">thick = strong · medium · thin = weak · <span class="pos">green = support below</span> · <span class="neg">red = resistance above</span> · ★ last week / month high-low · amber = price inside · dashed: <span style="color:#8B7CF6">VAH / VAL / POC</span> 5-day value area and point of control · <span style="color:#E8A33C">VWAP</span> latest session · PDH / PDL, PWH / PWL, PMH / PML = previous day / week / month high · low (when near)</div>
     <table class="small" style="width:100%;margin-top:4px"><tbody>${["intraday","weekly","monthly"].map(h => `<tr><td style="width:78px;padding:4px 0"><b>${h[0].toUpperCase()+h.slice(1)}</b></td>
       <td style="width:84px"><span class="pill p-${W[(A.verdicts[h]||{}).word]||"neutral"}">${esc((A.verdicts[h]||{}).word||"–")}</span></td><td class="muted">${esc((A.verdicts[h]||{}).line||"")}</td></tr>`).join("")}</tbody></table>
     <details style="margin-top:6px"><summary class="small muted">All blocks with reasons</summary>${blist}</details>

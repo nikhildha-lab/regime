@@ -994,6 +994,12 @@ def handle_get(path: str, q: dict):
     if path == "/api/livedesk/break4h":
         B4 = _hot("break4h")
         return B4.api()
+    if path == "/api/livedesk/levelboard":             # 2026-11-09 (Nikhil): levels x (blocks, OI, big walls, resting orders, action) in one table
+        k = (q.get("key") or "NIFTY").upper(); LB = _hot("levelboard")
+        c = LB.S["cache"].get(k)
+        if c and time.time() - c[0] < 30:
+            return c[1]
+        return LB.api(k, _setups_mod().PREP.prep(), handle_get("/api/livedesk/oiblocks", {"key": k}), fut_levels(k), _hot)
     if path == "/api/livedesk/oiblocks":
         OW = _hot("oiwatch")
         out = OW.blocks_watch(q.get("key", "NIFTY"), q.get("day"), q.get("at"))
