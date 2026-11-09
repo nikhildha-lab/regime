@@ -1895,6 +1895,12 @@ function legsHtml(t){
 // 2026-11-09 (Nikhil: "revamp All Paper Trades for a tabular format - refine columns, clean up, less text, history with dates, drop-downs for
 // strategy and date range"): the all-markets card is a filterable table over data_store/livedesk/trade_log.csv (/api/livedesk/tradelog),
 // with live P&L for open trades from /api/livedesk/papertrades. Per-market cards (crypto / metals) keep the old layout.
+// 2026-11-09 (Nikhil: "suggest short name for each strategy, it's using a lot of space"): short names; the full label stays on hover
+const RULE_SHORT = {b4h: "4H Break", b4h_v4: "4H Break v4", b4h_h2: "4H Break H2", b4h_g2: "4H Break Gold", dom_ix: "DOM Index", dom_ix_break: "DOM Break", dom_ix_hold: "DOM Hold",
+  dom_stocks: "DOM Stocks", touchv2: "Touch v2", ovn_h30: "Overnight", ovn_h30f: "Overnight+OF", vcy_night: "Night Straddle", vcy_day: "Day Straddle", vcy_day_sk: "Day Skew",
+  vcy_day_bw: "Day Wing Fly", vcy_day_dh: "Day Hedged", us_desk: "US Desk", us_manual: "US Manual", svb: "Vol Break", svb_tr: "Vol Break Trail", istr_n: "Nifty Strangle",
+  icon_s: "Sensex Condor", fsb2: "BuildUp v2", fsb: "BuildUp v1", sorb: "Stocks ORB", touch: "Touch v1", touchdom: "Touch+DOM", sbt: "Block Touch"};
+const ruleShort = (r, lab) => RULE_SHORT[r] || String(lab || r).split(" · ")[0].split(" (")[0];
 const PTL = {rows: null, t: 0, f: (() => { try { return JSON.parse(localStorage.getItem("mp.ptl.f") || "{}"); } catch(e){ return {}; } })(), open: {}};
 PTL.f = Object.assign({rule: "all", range: "0", from: "", to: "", status: "all", grp: "tab"}, PTL.f);   // default: today, this tab
 function ptlSet(k, v){ PTL.f[k] = v; try { localStorage.setItem("mp.ptl.f", JSON.stringify(PTL.f)); } catch(e){} ptlRender(); }
@@ -1918,13 +1924,14 @@ function ptlRender(){
   else if (F.range === "0") rows = rows.filter(r => dayOf(r) === todayIST || r.status === "open");
   else if (F.range !== "all") rows = rows.filter(r => dayOf(r) >= since(+F.range) || r.status === "open");
   rows.sort((a, b) => (b.status === "open") - (a.status === "open") || String(b.closed_ist || b.opened_ist).localeCompare(String(a.closed_ist || a.opened_ist)));
-  const rules = [...new Set((grp ? PTL.rows.filter(r => (r.group||"").toLowerCase() === grp) : PTL.rows).map(r => r.rule_label))].sort();
+  const rsrc = grp ? PTL.rows.filter(r => (r.group||"").toLowerCase() === grp) : PTL.rows;
+  const rules = [...new Map(rsrc.map(r => [r.rule_label, ruleShort(r.rule, r.rule_label)])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const num = v => v === "" || v == null ? null : +v;
   const f = v => { v = num(v); return v == null || isNaN(v) ? "–" : fmt(v, Math.abs(v) > 2000 ? 0 : Math.abs(v) > 200 ? 1 : 2); };
   const money = (v, c) => { v = num(v); return v == null || isNaN(v) ? "–" : `<b class="${v>0?"pos":v<0?"neg":""}">${v<0?"−":"+"}${c||""}${fmt(Math.abs(v), c==="₹"?0:2)}</b>`; };
   const sel = (k, opts, cur) => `<select class="mkpick" style="font-size:12px;padding:3px 6px" onchange="ptlSet('${k}', this.value)">${opts.map(([v,l]) => `<option value="${esc(v)}" ${String(v)===String(cur)?"selected":""}>${esc(l)}</option>`).join("")}</select>`;
   const bar = `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">
-      <span class="small muted">Strategy</span> ${sel("rule", [["all","All strategies"]].concat(rules.map(r => [r, r])), F.rule)}
+      <span class="small muted">Strategy</span> ${sel("rule", [["all","All strategies"]].concat(rules), F.rule)}
       <span class="small muted">Period</span> ${sel("range", [["0","Today"],["5","Last 5 days"],["7","Last 7 days"],["30","Last 30 days"],["all","All history"],["custom","Custom range"]], F.range)}
       ${F.range === "custom" ? `<input type="date" value="${esc(F.from)}" onchange="ptlSet('from', this.value)" style="font-size:12px"> <span class="small muted">to</span> <input type="date" value="${esc(F.to)}" onchange="ptlSet('to', this.value)" style="font-size:12px">` : ""}
       <span class="small muted">Status</span> ${sel("status", [["all","Open + closed"],["open","Open"],["closed","Closed"]], F.status)}
@@ -1936,21 +1943,24 @@ function ptlRender(){
   cl.forEach(r => { const z = byC[r.ccy] || (byC[r.ccy] = {n:0, w:0, pnl:0, r:0, nr:0}); const p = num(r.pnl) || 0, rr = num(r.r); z.n++; z.w += p > 0; z.pnl += p; if (rr != null && !isNaN(rr)){ z.r += rr; z.nr++; } });
   const tot = Object.entries(byC).map(([c, z]) => `<span style="margin-right:16px"><b>${c}</b> ${z.n} closed · won ${Math.round(100*z.w/Math.max(z.n,1))}% · ${money(z.pnl, c)}${z.nr ? ` · avg ${(z.r/z.nr)>0?"+":""}${fmt(z.r/z.nr,2)} R` : ""}</span>`).join("");
   const byRule = Object.values(cl.reduce((m, r) => { const k = r.rule_label + "|" + r.ccy, z = m[k] || (m[k] = {rule: r.rule_label, c: r.ccy, n:0, w:0, pnl:0}); z.n++; z.w += (num(r.pnl)||0) > 0; z.pnl += num(r.pnl)||0; return m; }, {}))
-    .sort((a, b) => b.n - a.n).map(z => `<tr><td>${esc(z.rule)}</td><td class="num">${z.n}</td><td class="num">${Math.round(100*z.w/z.n)}%</td><td class="num">${money(z.pnl, z.c)}</td></tr>`).join("");
-  const rv = r => { const parts = []; if (r.went_right) parts.push("✓ " + r.went_right); if (r.went_wrong) parts.push("✗ " + r.went_wrong); if (r.where_to_improve && r.where_to_improve !== "-") parts.push("→ " + r.where_to_improve);
-    return parts.length ? `<span title="${esc(parts.join("\n"))}" style="cursor:help">${r.went_right ? '<span class="pos">✓</span>' : ""}${r.went_wrong ? ' <span class="neg">✗</span>' : ""}${r.where_to_improve && r.where_to_improve !== "-" ? ' <span class="faint">→</span>' : ""}</span>` : '<span class="faint">–</span>'; };
+    .sort((a, b) => b.n - a.n).map(z => `<tr><td title="${esc(z.rule)}">${esc(ruleShort(null, z.rule))}</td><td class="num">${z.n}</td><td class="num">${Math.round(100*z.w/z.n)}%</td><td class="num">${money(z.pnl, z.c)}</td></tr>`).join("");
+  // Right / Wrong = the trade's own review (from its price path): ✓ what went right, ✗ what went wrong. Improve = where to improve.
+  const cut = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+  const rv = r => { const a = r.went_right, b = r.went_wrong; if (!a && !b) return '<span class="faint">–</span>';
+    return `<span title="${esc((a ? "✓ " + a : "") + (a && b ? "\n" : "") + (b ? "✗ " + b : ""))}">${a ? `<span class="pos">✓</span> ${esc(cut(a, 38))}` : ""}${a && b ? "<br>" : ""}${b ? `<span class="neg">✗</span> ${esc(cut(b, 38))}` : ""}</span>`; };
+  const imp = r => { const t = r.where_to_improve; return t && t !== "-" ? `<span title="${esc(t)}">${esc(cut(t, 60))}</span>` : '<span class="faint">–</span>'; };
   const tr = r => { const live = PTL.open[`${r.rule}|${r.key}|${r.opened_ist}`]; const d = dayOf(r), tIn = String(r.opened_ist).slice(11,16), tOut = String(r.closed_ist||"").slice(11,16);
     const pnl = r.status === "open" ? (live && live.pnl_open != null ? money(live.pnl_open, r.ccy) + ' <span class="small faint">live</span>' : (num(r.pnl_open) != null && !isNaN(num(r.pnl_open)) ? money(r.pnl_open, r.ccy) + ' <span class="small faint">open</span>' : '<span class="pill p-accent" style="font-size:11px">open</span>')) : money(r.pnl, r.ccy);
-    return `<tr><td style="white-space:nowrap">${esc(d.slice(5))}</td><td style="white-space:nowrap" class="small">${esc(tIn)}${tOut ? "→" + esc(tOut) : ""}</td><td>${esc(r.rule_label)}</td><td><b>${esc(r.market)}</b></td>
+    return `<tr><td style="white-space:nowrap">${esc(d.slice(5))}</td><td style="white-space:nowrap" class="small">${esc(tIn)}${tOut ? "→" + esc(tOut) : ""}</td><td title="${esc(r.rule_label)}" style="white-space:nowrap">${esc(ruleShort(r.rule, r.rule_label))}</td><td><b>${esc(r.market)}</b></td>
       <td class="${r.side==="long"?"pos":"neg"}">${esc(r.side)}</td><td class="num">${f(r.entry)}</td><td class="num">${r.status==="open" ? (live && live.now != null ? f(live.now) : "–") : f(r.exit)}</td>
       <td class="small">${r.status==="open" ? "" : esc(r.exit_reason||"")}</td><td class="num">${num(r.r) != null && !isNaN(num(r.r)) && r.status !== "open" ? `<span class="${num(r.r)>0?"pos":"neg"}">${num(r.r)>0?"+":""}${fmt(num(r.r),2)}</span>` : "–"}</td>
-      <td class="num" style="white-space:nowrap">${pnl}</td><td class="small" title="${esc(r.legs||r.instrument||"")}">${esc(String(r.instrument||"").slice(0,34))}</td><td title="${esc(r.why_taken||"")}" class="small" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.why_taken||"")}</td><td>${rv(r)}</td></tr>`; };
+      <td class="num" style="white-space:nowrap">${pnl}</td><td title="${esc(r.why_taken||"")}" class="small" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.why_taken||"")}</td><td class="small" style="min-width:200px">${rv(r)}</td><td class="small" style="min-width:180px">${imp(r)}</td></tr>`; };
   el.innerHTML = `<div class="spread"><h2>All Paper Trades <span class="small muted">every rule · paper only, never orders</span></h2></div>${bar}
     <div class="small" style="margin:2px 0 6px">${tot || '<span class="faint">No closed trade in this selection.</span>'}</div>
-    <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th>Instrument</th><th>Why</th><th title="✓ what went right · ✗ what went wrong · → where to improve (hover)">Review</th></tr></thead>
+    <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th>Why</th><th title="the trade's own review from its price path">Right / Wrong</th><th>Improve</th></tr></thead>
       <tbody>${rows.length ? rows.map(tr).join("") : `<tr><td colspan="13" class="small faint">No trades match.</td></tr>`}</tbody></table></div>
     ${byRule ? `<details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">By strategy in this selection</summary><div class="tscroll"><table class="ld-tbl small" style="margin-top:4px"><thead><tr><th>Strategy</th><th>Closed</th><th>Won</th><th>P&amp;L</th></tr></thead><tbody>${byRule}</tbody></table></div></details>` : ""}
-    <p class="small faint" style="margin:6px 0 0">Hover a Why or Review cell for the full text. Open trades show live P&amp;L when the engine has a price. Source: the paper trade log (every rule, every market), refreshed every 5 minutes.</p>`;
+    <p class="small faint" style="margin:6px 0 0">Hover a strategy, Why, Right / Wrong or Improve cell for the full text. Right / Wrong and Improve are the trade's own review, written from its price path after it closed (best / worst point, what followed). Open trades show live P&amp;L when the engine has a price. Source: the paper trade log, refreshed every 5 minutes.</p>`;
 }
 async function ptLoad(){
   for (const el of document.querySelectorAll(".ptCard")){ if (el.offsetParent===null) continue;   // skip hidden cards
