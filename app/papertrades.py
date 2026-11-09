@@ -23,7 +23,9 @@ RULES = {
     "b4h_v4": {"label": "4H break · v4 (ETH / BTC record)", "edge": "new - picked on 2023-26 after a grid; judge on live trades"},
     "b4h_h2": {"label": "4H break · BTC H2 (half at 1R + trail)", "edge": "new - record beside BTC targets; history +0.32 % vs +0.28 % a trade"},
     "b4h_g2": {"label": "4H break · Gold v2 (targets)", "edge": "new - record beside Gold v1; history 32 trades, too few"},
-    "dom_ix": {"label": "DOM Index v4 (spot levels · synthetic future)", "edge": "forward test from 10 Nov - v4 replay 14 sessions PF 0.91 (BREAK 1.49 on 17); v1-v3 records flushed 9 Nov"},
+    # 2026-11-09 (Nikhil: "yes lets judge separately"): DOM Index v4 is one engine but two paper rules - BREAK and HOLD - each judged on its own
+    "dom_ix_break": {"label": "DOM Index v4 · BREAK (spot levels · synthetic future)", "edge": "forward test from 10 Nov - replay 14 sessions: 17 trades, PF 1.49, positive in 18 of 19 settings; judge at 30-40"},
+    "dom_ix_hold": {"label": "DOM Index v4 · HOLD (spot levels · synthetic future)", "edge": "forward test from 10 Nov - replay 14 sessions: 37 trades, PF 0.65 (strong blocks the drag); record only"},
     "dom_stocks": {"label": "DOM Stocks (record only)", "edge": "loss-making (-0.18R a trade, 312 trades) - needs new logic, not traded"},
     "touchv2": {"label": "Touch-minute v2 (gap filter, synthetic, Nifty only from 6 Nov)", "edge": "new 5 Nov - UNPROVEN: in the live records (26 Oct-5 Nov) only 5 Nov had a 1 %+ spot gap, the day the idea came from; forward test only"},
     "ovn_h30": {"label": "Overnight hold · synthetic + 0.3-delta hedge", "edge": "new 6 Nov - record beside plain; recent 12 nights -Rs 40,010"},
@@ -394,8 +396,8 @@ def _dom_ix(hot):
     for x in [t for t in D.plan_ix_fill(D.trades() or []) if t["key"] in D.INDEX and not t.get("late_levels")]:
         if x["status"] == "open" and lpx:
             x = D._with_live(x, lpx)
-        t = {"rule": "dom_ix", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
-             "how": f"{x['setup']} · target {x['target_note']} · out after 60 min or 15:20" + (" · index plan account" if x.get("plan_ix") else ""),
+        t = {"rule": "dom_ix_break" if x.get("setup") == "break" else "dom_ix_hold", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
+             "how": f"{x['setup']} · {x.get('level', '')} · target {x['target_note']} · out after 60 min or 15:20" + (" · index plan account" if x.get("plan_ix") else ""),
              "instrument": NAME.get(x["key"], x["key"]) + " synthetic future, 1 lot", "plan": bool(x.get("plan_ix")),
              "size": None, "ccy": "₹", "status": x["status"], "why": x.get("why", ""), "_src": ("dom", x)}
         if x["status"] == "closed":
@@ -470,7 +472,7 @@ def _add_review(hot, show):
         if t.get("status") != "closed":
             continue
         try:
-            if t.get("rule") in ("dom_ix", "dom_stocks") and (t.get("_src") or (None, None))[0] == "dom":
+            if t.get("rule") in ("dom_ix_break", "dom_ix_hold", "dom_stocks") and (t.get("_src") or (None, None))[0] == "dom":
                 r = hot("domcards")._rev_cached(t["_src"][1])        # DOM trades: the DOM card's own review
             else:
                 r = TR.cached(t, _risk_pts(t))
@@ -494,7 +496,7 @@ def all_rows(hot, px) -> list:
         D = hot("domcards")
         for x in D.plan_ix_fill(D._load() or []):
             ix = x["key"] in D.INDEX
-            t = {"rule": "dom_ix" if ix else "dom_stocks", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
+            t = {"rule": ("dom_ix_break" if x.get("setup") == "break" else "dom_ix_hold") if ix else "dom_stocks", "key": x["key"], "side": x["side"], "opened": x["opened"], "entry": x["entry"], "stop": x["stop"], "target": x["target"],
                  "how": f"{x['setup']} · target {x.get('target_note', '')} · out after 60 min or 15:20", "plan": bool(x.get("plan_ix") if ix else x.get("plan")),
                  "instrument": NAME.get(x["key"], x["key"]) + (" synthetic future, 1 lot" if x["key"] in D.INDEX else " (stock)"),
                  "ccy": "₹", "status": x["status"], "why": x.get("why", ""), "_src": ("dom", x)}
