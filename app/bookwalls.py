@@ -65,7 +65,17 @@ def _okx_ct(key):
 
 
 def _snapshot(key, exch):
-    bids, asks = _book(key, exch)
+    # 2026-11-10: prefer the live WebSocket book (app/bookws.py) - deeper over time and second-accurate; REST only when it is not there
+    try:
+        import bookws as WS
+        WS.start()
+        wb = WS.books().get((key, exch))
+    except Exception:
+        wb = None
+    if wb:
+        bids, asks = wb["bids"], wb["asks"]
+    else:
+        bids, asks = _book(key, exch)
     if not bids or not asks:
         return None
     mid = (bids[0][0] + asks[0][0]) / 2; step = mid * BIN
@@ -82,7 +92,7 @@ def _snapshot(key, exch):
 
 def _work():
     try:
-        jobs = [(k, e) for k in CRYPTO for e in ("binance", "bybit", "okx")] + [(k, "hyperliquid") for k in HL]
+        jobs = [(k, e) for k in CRYPTO for e in ("binance", "bybit", "okx", "bitget")] + [(k, "hyperliquid") for k in HL]
         for key, exch in jobs:
             try:
                 snap = _snapshot(key, exch)
@@ -179,8 +189,14 @@ def coverage(key):
     if not per or any(len(x) < 5 for x in per):
         return None
     lo = min(x[4][0] / x[1] - 1 for x in per) * 100; hi = max(x[4][1] / x[1] - 1 for x in per) * 100
-    return {"down_pct": round(lo, 2), "up_pct": round(hi, 2)}
+    return {"down_pct": max(round(lo, 2), -5.0), "up_pct": min(round(hi, 2), 5.0), "capped": lo < -5 or hi > 5}   # far junk orders: shown as 5%+
 
 
 def api(key):
-    return walls(key)
+    out = walls(key)
+    try:
+        import bookws as WS
+        out["ws"] = WS.status()
+    except Exception:
+        pass
+    return out
