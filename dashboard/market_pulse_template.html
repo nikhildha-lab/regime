@@ -542,7 +542,8 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <nav class="tabs" id="tabs" aria-label="Views">
     <button data-v="desk" aria-pressed="true">Overview</button>
     <button data-v="india" aria-pressed="false">Indian market</button>
-    <button data-v="us" aria-pressed="false">US market</button>
+    <!-- 2026-11-09 (Nikhil: "remove US tab for now"): US market tab and the US sub-tab on the Intraday desk hidden; data and code kept -->
+    <button data-v="us" aria-pressed="false" hidden>US market</button>
     <button data-v="crypto" aria-pressed="false">Crypto</button>
     <button data-v="metals" aria-pressed="false">Metals</button>
     <button data-v="global" aria-pressed="false">Commodities</button>
@@ -3218,8 +3219,9 @@ async function dsLoad(){
 }
 const IDS = (() => { let x = null; try { x = JSON.parse(localStorage.getItem("mp.ids")||"null"); } catch(e){}
   return x && x.sub ? x : {sub:"india", sel:{india:"NIFTY", us:"ES", crypto:"BTC"}}; })();
-const ID_SUBS = [["india","Indian"],["us","US"],["crypto","Crypto"],["metals","Metals"],["global","Commodities"]];
+const ID_SUBS = [["india","Indian"],["crypto","Crypto"],["metals","Metals"],["global","Commodities"]];   // 2026-11-09: US sub-tab removed for now
 IDS.sel = Object.assign({india:"NIFTY", us:"ES", crypto:"BTC", metals:"GOLD", global:"CRUDE"}, IDS.sel||{});
+if (IDS.sub === "us") IDS.sub = "india";     // 2026-11-09: US removed for now
 function idSave(){ try { localStorage.setItem("mp.ids", JSON.stringify(IDS)); } catch(e){} }
 async function idBarRender(){
   const el = $("#idBar"); if (!el) return;
@@ -3626,6 +3628,7 @@ function renderIndiaDesk(){
 }
 document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showView(b.dataset.v));
 try { const v = localStorage.getItem("mp.view"); if (v) VIEW = ({nlive:"india", clive:"crypto"})[v] || v; } catch(e){}
+if (VIEW === "us") VIEW = "india";     // 2026-11-09 (Nikhil): US tab removed for now
 try { const mv = document.getElementById("viewMarkets"); mv.before(document.getElementById("viewNLive"), document.getElementById("viewCLive"), document.getElementById("viewMLive")); } catch(e){}
 try {   // 2026-10-24: market tabs - trade plan first, then timeframes
   const mv = document.getElementById("viewMarkets"), pair = mv.querySelector(".pair"), plan = document.getElementById("planCard");
