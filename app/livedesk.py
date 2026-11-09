@@ -1004,11 +1004,11 @@ def handle_get(path: str, q: dict):
         return _hot("bookwalls").api(q.get("key", "BTC"))
     if path == "/api/livedesk/levelboard2":               # 2026-11-09 (Nikhil): Level Board for the Crypto / Metals / Commodities tabs (app/levelboard2.py)
         key = q.get("key", "BTC")
-        view = None
+        vw2 = None                                            # (named vw2: a local called `view` would shadow the view() function used below)
         for dk in ("crypto", "metals"):
             v = ((_STATE.get("views") or {}).get(dk) or {}).get(key)
-            if v: view = v; break
-        return _hot("levelboard2").api(key, view, _hot)
+            if v: vw2 = v; break
+        return _hot("levelboard2").api(key, vw2, _hot)
     if path == "/api/livedesk/reflevels":                 # 2026-11-04: VAH / VAL, IB, PDH / PDL ... for crypto, metals, energy (app/reflevels.py)
         return _hot("reflevels").get(q.get("key", "BTC"))
     if path == "/api/livedesk/narrative":                 # 2026-11-04: weekly global narrative (app/narrative.py)

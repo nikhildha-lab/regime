@@ -1405,8 +1405,12 @@ function fxChart(V){
   if (!bars.length) return `<p class="small muted" style="padding:30px 0;text-align:center">No footprint bars yet${V.desk==="nifty"?" - the Nifty tracker runs 09:15-15:30 IST on trading days":""}.</p>`;
   const LV = Object.entries(V.levels||{}).filter(([k,v]) => v!=null).map(([k,v]) => [k, +v]);
   const WL = [["Call wall", V.walls&&V.walls.call], ["Put wall", V.walls&&V.walls.put]].filter(x => x[1]!=null).map(([k,v]) => [k, +v]);
-  const SR = V.sr||{}, SRL = [...(SR.support||[]).map(v => ["S", +v]), ...(SR.resistance||[]).map(v => ["R", +v]),
-    ...["PDH","PDL","PWH","PWL"].filter(k => SR[k]!=null).map(k => [k, +SR[k]])];
+  // 2026-11-10 (Nikhil: "we don't need IB levels or swings to display .. previous day / week / month high-low levels to be added"):
+  // the tracker's swing support / resistance clusters are no longer drawn (they flipped every few seconds); PDH / PDL / PWH / PWL from the
+  // tracker, and for the 24/7 markets PDH .. PML from app/reflevels.py (UTC days) when the tracker has none.
+  const SR = Object.assign({}, V.sr||{}), SRL = [];
+  if (V.desk !== "nifty"){ const RF = (typeof refOf === "function" && V.key) ? refOf(V.key) : null; (RF && RF.levels || []).forEach(l => { if (["PDH","PDL","PWH","PWL","PMH","PML"].includes(l.short) && SR[l.short] == null) SR[l.short] = l.px; }); }
+  ["PDH","PDL","PWH","PWL","PMH","PML"].filter(k => SR[k]!=null).forEach(k => SRL.push([k, +SR[k]]));
   if (!FX.L.levels){ LV.length = 0; WL.length = 0; SRL.length = 0; }
   // 2026-11-06 (Nikhil: "VAL, VAH and POC are not shown ... remove IB low and high"): IB lines removed. POC / VAH / VAL were the tracker's
   // and vanished whenever the tracker was off (and the price window hid them) - now worked out from the chart's own bars (today) and the
@@ -1546,7 +1550,7 @@ function fxChart(V){
         <text x="${X0+4}" y="${Math.max(TOP+10, Math.min(y1,y2)-4)}" font-size="10.5" font-weight="${b.strength==="strong"?700:500}" fill="${col}" opacity=".85">${b.side==="R"?"R block":b.side==="IN"?"Price in block":"S block"} ${esc(b.range)} · ${esc(b.strength)}${b.star?" ★":""}</text>` + g; });
     const tfm = FX.tf[V.desk] || 15;
     const EVB = {};
-    (FX.L.signals ? (V.events||[]) : []).forEach(e => { const at = String(e.at||""); let d, hm;
+    (FX.L.signals ? (V.events||[]).filter(e => !/\bIB\b|IB-|IB high|IB low|swing/i.test(String(e.level||"") + " " + String(e.setup||""))) : []).forEach(e => { const at = String(e.at||""); let d, hm;   // 2026-11-10 (Nikhil): no IB / swing events
       if (V.desk==="nifty"){ d = at.slice(0,10); const [h,m] = at.slice(11,16).split(":").map(Number), md = h*60+m, bk = Math.floor((md-555)/tfm)*tfm+555; hm = `${String(Math.floor(bk/60)).padStart(2,"0")}:${String(bk%60).padStart(2,"0")}`; }
       else { const u = new Date(at); d = u.toISOString().slice(0,10); const md = u.getUTCHours()*60+u.getUTCMinutes(), bk = Math.floor(md/tfm)*tfm; hm = `${String(Math.floor(bk/60)).padStart(2,"0")}:${String(bk%60).padStart(2,"0")}`; }
       const i = bars.findIndex(b => b.d===d && b.t===hm); if (i < 0) return;
@@ -1612,14 +1616,14 @@ function fxChart(V){
       g += `<text x="${wx}" y="${yy}" font-size="10.5" font-weight="600" fill="${col}"><title>${esc(tipOf(w))}</title>${ar} ${esc(fit(`${ldPx(w.price)} ${w.x}×`, WW-12))}</text>`; };
     up.forEach((w, i) => lab(w, TOP - 3 - 13*i, "↑"));
     dn.forEach((w, i) => lab(w, PH + 12 + 13*i, "↓")); }
-  const lcol2 = k => k==="S"||k==="PDL"||k==="PWL" ? "var(--bull)" : k==="R"||k==="PDH"||k==="PWH" ? "var(--bear)" : lcol(k);
-  const nm = k => ({"VWAP·":"VWAP", S:"Support", R:"Resistance", PDH:"Prev day high", PDL:"Prev day low", PWH:"Prev week high", PWL:"Prev week low"})[k] || k;
+  const lcol2 = k => k==="S"||k==="PDL"||k==="PWL"||k==="PML" ? "var(--bull)" : k==="R"||k==="PDH"||k==="PWH"||k==="PMH" ? "var(--bear)" : lcol(k);
+  const nm = k => ({"VWAP·":"VWAP", S:"Support", R:"Resistance", PDH:"Prev day high", PDL:"Prev day low", PWH:"Prev week high", PWL:"Prev week low", PMH:"Prev month high", PML:"Prev month low"})[k] || k;
   { // 2026-11-06: right-hand labels laid out so they never overlap: levels in the same row are merged into one line, lines keep 15 px
     // apart inside the price area (down first, then pushed back up at the bottom), the live price tag takes its own slot, and a label
     // moved away from its price gets a thin leader line back to it.
     const items = [];
     [...LV, ...WL, ...SRL].filter(([k,v]) => v>=lo-RS && v<=hi+RS).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => {
-      const wall = k.includes("wall"), srk = ["S","R","PDH","PDL","PWH","PWL"].includes(k);
+      const wall = k.includes("wall"), srk = ["S","R","PDH","PDL","PWH","PWL","PMH","PML"].includes(k);
       if (!srk && k !== "VWAP·") g += `<line x1="${X0}" x2="${lx}" y1="${y(v)+HC}" y2="${y(v)+HC}" stroke="${lcol(k)}" stroke-width="${wall?1.6:1}" stroke-dasharray="${wall?"":"4 3"}" opacity="${wall?0.9:0.7}"/>`;
       const last = items.at(-1);
       if (last && !last.spot && Math.abs(last.v - v) < RS*0.75){ if (!last.names.includes(nm(k))) last.names.push(nm(k)); last.bold = last.bold || wall || srk; return; }
