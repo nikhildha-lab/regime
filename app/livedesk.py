@@ -1009,6 +1009,28 @@ def handle_get(path: str, q: dict):
     if path == "/api/livedesk/break4h":
         B4 = _hot("break4h")
         return B4.api()
+    if path == "/api/livedesk/tradelog":               # 2026-11-09 (Nikhil: "revamp All Paper Trades .. tabular .. history with dates .. dropdown for strategy, date range"):
+        import csv as _csv                               # every paper trade from data_store/livedesk/trade_log.csv (all rules, all markets), cached 60 s
+        pth = os.path.join(ROOT, "data_store", "livedesk", "trade_log.csv")
+        c = _STATE.get("tradelog_cache")
+        try:
+            mt = os.path.getmtime(pth)
+        except OSError:
+            return {"rows": [], "err": "no trade log yet"}
+        if not c or c[0] != mt:
+            keep = ["rule", "rule_label", "group", "market", "key", "side", "status", "plan_account", "opened_ist", "closed_ist", "entry", "stop", "target", "exit", "exit_reason",
+                    "pnl", "ccy", "r", "pnl_open", "now", "instrument", "legs", "premium_check", "why_taken", "went_right", "went_wrong", "where_to_improve", "best_R", "worst_R", "how_it_exits"]
+            rows = []
+            with open(pth, newline="") as f:
+                for r in _csv.DictReader(f):
+                    rows.append({k: r.get(k) for k in keep})
+            _STATE["tradelog_cache"] = (mt, rows)
+            c = _STATE["tradelog_cache"]
+        rows = c[1]
+        g = (q.get("group") or "").strip().lower()
+        if g:
+            rows = [r for r in rows if (r.get("group") or "").lower() == g]
+        return {"rows": rows, "n": len(rows), "as_of": datetime.fromtimestamp(c[0]).strftime("%Y-%m-%d %H:%M")}
     if path == "/api/livedesk/coupling":               # 2026-11-09 (Nikhil): Nifty vs global markets - overnight read + coupling table (app/coupling.py)
         return _hot("coupling").api(q.get("key") or "NIFTY")
     if path == "/api/livedesk/levelboard":             # 2026-11-09 (Nikhil): levels x (blocks, OI, big walls, resting orders, action) in one table
