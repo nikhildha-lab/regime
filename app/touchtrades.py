@@ -257,6 +257,9 @@ def tick(t: datetime, spots: dict) -> bool:
     day = t.strftime("%Y-%m-%d")
     if day < LIVE_FROM:
         return False
+    import nsecal as NSEC
+    if not NSEC.session_ok():                                 # 2026-11-10 (Nikhil): no Indian paper trades on NSE holidays / frozen chains
+        return False
     cards = load_cards(day); have = {c["id"] for c in cards}; changed = False
     now = pd.Timestamp(t.replace(tzinfo=None))
     for s in trades_for(day, spots=spots):

@@ -276,6 +276,9 @@ def tick(force: bool = False) -> bool:
     now = datetime.now(); hm = now.strftime("%H:%M"); day = now.strftime("%Y-%m-%d")
     if not force and (time.time() - S["t"] < 45 or now.weekday() >= 5):
         return False
+    import nsecal as NSEC
+    if not force and not NSEC.session_ok():                 # 2026-11-10 (Nikhil): no Indian paper trades on NSE holidays / frozen chains
+        return False
     S["t"] = time.time()
     rows = _load(); changed = False
     for r in rows:                                               # close open rows once the next day's snapshot exists

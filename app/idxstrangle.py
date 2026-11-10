@@ -196,6 +196,9 @@ def _work():
 def tick(force=False):
     if S["busy"] or (not force and time.time() - S["t"] < 55):
         return False
+    import nsecal as NSEC
+    if not force and not NSEC.session_ok():                 # 2026-11-10 (Nikhil): no Indian paper trades on NSE holidays / frozen chains
+        return False
     S["t"] = time.time(); S["busy"] = True
     threading.Thread(target=_work, name="idxstrangle", daemon=True).start()
     return True

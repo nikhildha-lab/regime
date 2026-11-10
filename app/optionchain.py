@@ -110,13 +110,13 @@ def fetch_nse(symbol: str, ts: str) -> pd.DataFrame:
 
 
 def fetch_dhan(symbol: str, ts: str) -> pd.DataFrame:
-    """Fallback when NSE refuses: Dhan option chain, nearest two expiries (Dhan allows one chain call every 3 s)."""
+    """PRIMARY source since 10 Nov 2026 (Nikhil: premiums from Dhan): Dhan option chain, nearest two expiries (one chain call every 3 s)."""
     import dhan_live as DL
     sid = {"NIFTY": 13, "BANKNIFTY": 25}[symbol]
     exps = sorted(DL._post("/optionchain/expirylist", {"UnderlyingScrip": sid, "UnderlyingSeg": "IDX_I"}) or [])[:2]
     parts = []
     for e in exps:
-        time.sleep(3)
+        time.sleep(3.2)                                           # Dhan: one option-chain call every 3 s
         parts.append(parse_dhan(DL._post("/optionchain", {"UnderlyingScrip": sid, "UnderlyingSeg": "IDX_I", "Expiry": e}), symbol, ts, e))
     parts = [p for p in parts if len(p)]
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=COLS)
@@ -244,15 +244,23 @@ def step(force=False) -> dict:
 def chain_step(now) -> dict:
     ts = now.strftime("%Y-%m-%d %H:%M:%S")
     frames, errs = [], []
+    try:
+        import nsecal as NSEC
+        if not NSEC.is_trading_day(now.date()):                # 2026-11-10 (Nikhil): no snapshots on NSE holidays (the site serves a frozen chain)
+            return {"generated": ts, "skipped": "NSE holiday", "errors": []}
+    except Exception:
+        pass
+    # 2026-11-10 (Nikhil: "for all option-based strategies get premium prices from Dhan"): Dhan is the primary source for premiums (the
+    # same chain every option rule prices from - touch, overnight, vol cycle); NSE's website is the fallback.
     for sym in SYMS:
         try:
-            frames.append(fetch_nse(sym, ts))
+            frames.append(fetch_dhan(sym, ts))
         except Exception as e:
-            errs.append(f"{sym} NSE: {str(e)[:80]}")
+            errs.append(f"{sym} Dhan: {str(e)[:80]}")
             try:
-                frames.append(fetch_dhan(sym, ts))
+                frames.append(fetch_nse(sym, ts))
             except Exception as e2:
-                errs.append(f"{sym} Dhan: {str(e2)[:80]}")
+                errs.append(f"{sym} NSE: {str(e2)[:80]}")
     frames = [f for f in frames if len(f)]
     if not frames:
         raise RuntimeError("; ".join(errs) or "no option-chain data")

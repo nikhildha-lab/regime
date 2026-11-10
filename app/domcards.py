@@ -633,6 +633,9 @@ def tick(hot=None, views=None):
     now = datetime.now()
     if now.weekday() >= 5 or not ("09:15" <= now.strftime("%H:%M") <= "15:35"):
         return
+    import nsecal as NSEC
+    if not NSEC.is_trading_day():                             # 2026-11-10 (Nikhil): NSE holiday -> nothing (the engine's own feed decides the rest)
+        return
     day = now.strftime("%Y-%m-%d")
     if S.get("day") != day or S.get("ver") != 9:
         _new_day(day)

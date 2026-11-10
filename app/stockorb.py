@@ -216,6 +216,9 @@ def tick(force=False) -> bool:
     now = datetime.now(); hm = now.strftime("%H:%M")
     if S.get("busy") or (not force and (time.time() - S["t"] < 60 or now.weekday() >= 5 or not ("09:31" <= hm <= "15:15"))):
         return False
+    import nsecal as NSEC
+    if not force and not NSEC.session_ok():                 # 2026-11-10 (Nikhil): no Indian paper trades on NSE holidays / frozen chains
+        return False
     S["t"] = time.time(); S["busy"] = True
     import threading
     threading.Thread(target=_work, name="stockorb", daemon=True).start()
