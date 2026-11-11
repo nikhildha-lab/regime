@@ -851,12 +851,40 @@ def _boardlive():
     return m
 
 
+SMX_NOW = {"NIFTY": "Nifty 50", "BANKNIFTY": "Bank Nifty", "BTC": "crypto|BTC", "ETH": "crypto|ETH", "SOL": "crypto|SOL",
+           "GOLD": "metals|Gold", "US": "us|S&P 500"}
+
+
+def _smx_v2(g: str) -> dict:
+    """The v2 matrix for one group plus each market's trend / volatility now (this board's own labels, so the page and
+    the study use one definition). {"missing": True} until the study has been run once."""
+    f = os.path.join(ROOT, "data_store", "research", "strategy_regime_3y", "matrix_v2.json")
+    try:
+        d = json.load(open(f))
+    except Exception:
+        return {"missing": True, "group": g, "run": "cd ~/Documents/synaptic-main/Backtrader_App && python3 scripts/research/strategy_regime_v2.py"}
+    now = {}
+    try:
+        rows = (json.load(open(LATEST)) or {}).get("rows") or {}
+        for k, rid in SMX_NOW.items():
+            r = rows.get(rid) or {}
+            if r.get("trend_state"):
+                now[k] = {"trend": r["trend_state"], "vol": r.get("vol_state"), "dir": r.get("vol_dir"), "as_of": r.get("as_of")}
+    except Exception:
+        pass
+    out = {**(d.get(g) or {"rows": []}), "group": g, "meta": d.get("_meta") or {}, "now": now,
+           "built": datetime.fromtimestamp(os.path.getmtime(f)).isoformat(timespec="minutes"), "v2": True}
+    return out
+
+
 def detail(group: str, sym: str, name: str = "", kind: str = "") -> dict:
     """The row, plus a year of closes with the two means, for the generic regime page."""
     # 2026-11-11 (Nikhil: "LTP should refresh every second, live feed wherever possible"): the board page asks for
     # live prices through this existing route (group="_live"), so no dashboard restart is needed for a new route.
     if group == "_live":
         return _boardlive().snap()
+    if group == "_smx":                      # 2026-11-11: Strategy x Regime Matrix on the two-axis regime (scripts/research/strategy_regime_v2.py)
+        return _smx_v2(sym or "india")
     if group == "_ofp":                      # order-flow patterns card (2026-11-11); sym = one market or "" for all
         out = _mod("ofpatterns").api(sym or None, name or None)      # name = timeframe in minutes
         out["runner_err"] = _OFP.get("err")

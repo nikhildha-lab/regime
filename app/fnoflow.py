@@ -337,7 +337,9 @@ def board(univ="all"):
         s = pd.read_csv(sp); last = s.groupby("sym").tail(1).set_index("sym")
         mins = sorted(s.m.unique()); m_now = mins[-1]
         def ago(k):
-            i = max(0, len(mins) - 1 - k); return s[s.m == mins[i]].set_index("sym")
+            # 2026-11-11: two snapshots can land in the same minute (a restart, a manual refresh); keep the later one, or
+            # A.at[sym, ...] returns two rows and the whole board fails with "truth value of a Series is ambiguous"
+            i = max(0, len(mins) - 1 - k); return s[s.m == mins[i]].drop_duplicates("sym", keep="last").set_index("sym")
         a15, a60 = ago(15), ago(60)
         path = s.pivot_table(index="m", columns="sym", values="fut")
         for sym, r in last.iterrows():

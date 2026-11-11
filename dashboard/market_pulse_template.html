@@ -354,6 +354,9 @@ body:not([data-tab="intraday"]) #domSetups, body[data-tab="intraday"]:not([data-
 body[data-tab="india"] #lvlCard, body[data-tab="india"] #prepMini, body[data-tab="india"] #nliveNote,
 body[data-tab="india"] #nliveDesk, body[data-tab="india"] #agentCard{display:none!important}
 #idBar,#idTop{display:none}
+table.smx td.smx-gap, table.smx th.smx-gap{width:10px;padding:0}
+table.smx tr.smx-grp td{background:var(--surface-2);padding:7px 10px;border-top:1px solid var(--line)}
+table.smx tr.smx-free td:nth-child(n+3):nth-child(-n+10){opacity:.45}
 #ixSwitch{display:none;margin:4px 0 10px;align-items:center;gap:6px}
 body[data-tab="intraday"] #ixSwitch, body[data-tab="fno"] #ixSwitch{display:flex}
 #ixSwitch .small{margin-left:8px}
@@ -4530,7 +4533,8 @@ async function planRender(){
   if (!g){ box.innerHTML = ""; if (leg) leg.open = true; return; }
   if (leg) leg.open = false;
   if (!SMX.data[g]){ box.innerHTML = `<p class="small muted">Loading today's strategy plan…</p>`;
-    try { SMX.data[g] = await fetch("/api/livedesk/stratmatrix?group=" + g).then(r=>r.json()); } catch(e){ box.innerHTML = ""; return; } }
+    try { SMX.data[g] = await smxGet(g); } catch(e){ box.innerHTML = ""; return; } }
+  if (SMX.data[g] && SMX.data[g].v2) return planRenderV2(g);
   // 2026-11-10 (Nikhil): on Research there is no market picker, so the plan is Nifty's (or whatever India market is set)
   const RSCH = window.CUR_TAB === "research";
   const D = SMX.data[g], m = RSCH ? ((M && M[state.market] && SMX_G[VIEW] === "india") ? state.market : "NIFTY") : state.market;
@@ -4585,6 +4589,143 @@ async function planRender(){
       <tbody>${items.map(row).join("") || `<tr><td colspan="4" class="small muted">No tested strategy for this market.</td></tr>`}</tbody></table></div></details>
     <p class="small faint" style="margin:6px 0 0">How it decides: each strategy looks at the regime of its own timeframe (intraday → 15-min, swing → daily, positional → weekly) and follows its cell in the Strategy × regime matrix below - only if the regime helped that strategy in the out-of-sample test (May 2025 →, rules set on the earlier period). Otherwise the regime is ignored and it trades at normal size. Indications only - you decide.</p>`}`;
 }
+// ---- 2026-11-11 (Nikhil: "research tab need to be updated with new regime classification"): the matrix and the plan on the
+// Regime Board's two readings - Trend (Bullish / Sideways / Bearish) and Volatility (Calm / Normal / Volatile / Very Volatile),
+// daily, at the previous close. Data: scripts/research/strategy_regime_v2.py -> matrix_v2.json, served through the regime
+// board's hot-loaded route. Until that study has been run the old five-state matrix shows, with a note saying so.
+const SMX_T = [["Up","Bullish"],["Flat","Sideways"],["Down","Bearish"]], SMX_V = [["Calm","Calm"],["Normal","Normal"],["Busy","Volatile"],["Hot","Very Volatile"]];
+const SMX_MAIN = {india:"NIFTY", us:"US", crypto:"BTC", metals:"GOLD", global:"GOLD"};
+const SMX_W = {works:1, plus:0.5, few:0.25, flat:0, minus:0, avoid:0};
+async function smxGet(g){
+  try { const v = await fetch(`/api/livedesk/regimeboard_detail?group=_smx&sym=${g}`).then(r=>r.json());
+    if (v && v.v2) { SMX.run = null; return v; }
+    if (v && v.missing) SMX.run = v.run; } catch(e){}
+  return fetch("/api/livedesk/stratmatrix?group=" + g).then(r=>r.json());
+}
+function smxNowWords(n){ if (!n) return "–"; const t = (SMX_T.find(x => x[0]===n.trend)||[])[1] || n.trend, v = (SMX_V.find(x => x[0]===n.vol)||[])[1] || n.vol;
+  return `${t} · ${v}${n.dir==="rising"?" ↑":n.dir==="easing"?" ↓":""}`; }
+// 2026-11-11 (Nikhil: "remove the logic of sizing for now, just keep trade or don't trade")
+const SMX_TD = {works:["sx-works","✓ Trade"], plus:["sx-works","✓ Trade"], few:["sx-few","Trade · Thin Data"], flat:["sx-flat","✕ Don't"], minus:["sx-flat","✕ Don't"], avoid:["sx-flat","✕ Don't"]};
+function smxCellH(x, on, best){
+  x = x || {status:"few", n:0}; const [tcls, lab] = SMX_TD[x.status] || ["na","–"];
+  const sc = v => v==null ? "–" : (v>0?"+":"")+fmt(v,2);
+  const tip = `${({works:"Trade - positive in both halves", plus:"Trade - positive, not yet steady", few:"Trade - but thin data: under 15 trades in this reading, so no verdict either way (never starred)", flat:"Don't trade - no edge here", minus:"Don't trade - mostly losing here", avoid:"Don't trade - losing in both halves"})[x.status]||""}\n${x.n} trades · avg ${sc(x.avg)}${x.net!=null?` (after costs ${sc(x.net)})`:""}${x.win!=null?` · win ${x.win}%`:""}${x.h1!=null||x.h2!=null?`\nhalves: ${sc(x.h1)} / ${sc(x.h2)}`:""}${on?"\n● the market is here now":""}${best?"\n★ strongest reading for this strategy":""}`;
+  const st = (best ? "box-shadow:inset 0 0 0 2px var(--bull);border-radius:8px;" : "") + (on ? "outline:2px dashed var(--accent);outline-offset:-3px;border-radius:8px" : "");
+  return `<td style="${st}"><span class="cell ${tcls}" title="${esc(tip)}">${best?"★ ":""}${lab}${x.status!=="few"&&x.avg!=null?` <span class="small" style="opacity:.8">${sc(x.avg)}</span>`:""}</span></td>`;
+}
+function smxBest(cells, keys){ let b = null, v = -Infinity;
+  for (const [k] of keys){ const x = cells[k]; if (x && ["works","plus"].includes(x.status) && x.avg!=null && x.avg > v){ v = x.avg; b = k; } } return b; }
+function smxVerdict(v){ return v==="helps" ? ["sx-works","✓ Regime helps"] : v==="hurts" ? ["sx-flat","✕ Regime hurts"] : ["na","Doesn't help"]; }
+// 2026-11-11 (Nikhil: "this is confusing ... full size or half"): ONE answer per strategy for today, the same rule as the plan.
+// The regime cells only count when following them helped that strategy in the out-of-sample test; otherwise normal size.
+function smxToday(r, now){
+  // 2026-11-11 (Nikhil): no sizing for now - Trade or Don't Trade. The cells count only when following them helped the
+  // strategy in the out-of-sample test; then any "Don't" in today's trend or volatility cell means Don't Trade.
+  const cm = r.cmp || {};
+  if (cm.v_reg !== "helps") return {act:"Always On", cls:"sx-works", helps:false,
+    why:`Following the regime ${cm.v_reg==="hurts" ? "hurt" : "did not help"} this strategy in the test (profit factor ${cm.pf_reg ?? "–"} vs ${cm.pf_flat ?? "–"} always trading), so the regime is ignored: trade it.`};
+  if (!now) return {act:"Trade", cls:"sx-works", helps:true, why:"No regime reading for this market yet - nothing says stop."};
+  const ct = (r.cells_trend||{})[now.trend] || {status:"few"}, cv = (r.cells_vol||{})[now.vol] || {status:"few"};
+  const no = x => ["flat","minus","avoid"].includes(x.status), w = x => (SMX_TD[x.status]||["","–"])[1].replace(/^. /,"").toLowerCase();
+  if (no(ct) || no(cv)) return {act:"Sit Out", cls:"sx-flat", helps:true, why:`Regime helped this strategy in the test, so it follows the cells: trend says ${w(ct)}, volatility says ${w(cv)} - one says don't.`};
+  return {act:"Trade", cls:"sx-works", helps:true, why:`Regime helped this strategy in the test, so it follows the cells: trend says ${w(ct)}, volatility says ${w(cv)} - neither says don't.`};
+}
+function smxRenderV2(g){
+  const c = $("#smxCard"), D = SMX.data[g]; if (!c || !D) return;
+  const main = SMX_MAIN[g], now = (D.now||{})[main];
+  const fams = [...new Set((D.rows||[]).map(r => r.family))].sort();
+  const q = SMX.q.toLowerCase();
+  const allK = [...SMX_T.map(x => ["t", x[0]]), ...SMX_V.map(x => ["v", x[0]])];
+  const rows = (D.rows||[]).filter(r => (!q || r.strategy.toLowerCase().includes(q)) && (!SMX.fam || r.family===SMX.fam)
+      && (!SMX.edge || allK.some(([a, k]) => ["works","plus"].includes(((a==="t" ? r.cells_trend : r.cells_vol)[k]||{}).status))));
+  const pfT = v => v==null ? "–" : v >= 99 ? "no losses" : fmt(v, 2);
+  const pfC = v => v==null ? "" : v >= 1.2 ? "pos" : v < 1 ? "neg" : "";
+  const kept = D.rows||[], helped = kept.filter(r => (r.cmp||{}).v_reg==="helps").length, hurt = kept.filter(r => (r.cmp||{}).v_reg==="hurts").length;
+  const cmpH = r => { const m = r.cmp||{}; const [vc, vt] = smxVerdict(m.v_reg);
+    const net = v => m.has_costs ? `<div class="small faint">after costs <span class="${pfC(v)}">${pfT(v)}</span></div>` : `<div class="small faint">costs in data</div>`;
+    const tip = `Tested on May 2025 onwards (cells set on Nov 2023 - Apr 2025 only), ${m.pf_n||0} trades\nalways trade: ${pfT(m.pf_flat)}\ntrend cells only: ${pfT(m.pf_trend)} (${smxVerdict(m.v_trend)[1]})\nvolatility cells only: ${pfT(m.pf_vol)} (${smxVerdict(m.v_vol)[1]})\nboth (smaller size of the two): ${pfT(m.pf_reg)}, ${m.pf_taken||0} trades taken\n${r.plan||""}`;
+    return `<td><b class="${pfC(m.pf_flat)}">${pfT(m.pf_flat)}</b>${net(m.pf_flat_net)}</td><td><b class="${pfC(m.pf_reg)}">${pfT(m.pf_reg)}</b>${net(m.pf_reg_net)}</td>
+      <td><span class="cell ${vc}" title="${esc(tip)}">${vt}</span><div class="small faint" style="margin-top:3px">Trend ${esc(smxVerdict(m.v_trend)[1].replace(/^. /,""))} · Vol ${esc(smxVerdict(m.v_vol)[1].replace(/^. /,""))}</div></td>`; };
+  const STL = {intraday:"intraday", swing:"swing", positional:"positional"};
+  // 2026-11-11 (Nikhil: "Today column is very confusing"): two groups. Regime Decides = following the regime helped in the
+  // test, so today's trend / volatility cells say Trade or Sit Out. Always On = the regime did not help, so it is not used.
+  const one = r => { const bt = smxBest(r.cells_trend||{}, SMX_T), bv = smxBest(r.cells_vol||{}, SMX_V), td = smxToday(r, now);
+    return `<tr${td.helps ? "" : ' class="smx-free"'}><td style="text-align:left;white-space:nowrap"><b>${esc(r.strategy)}</b><div class="small faint">${esc(STL[r.style]||r.style||"")} · ${esc((r.markets||"").replace(/,/g, ", "))} · ${r.n} trades</div></td>
+      <td title="${esc(td.why)}"><span class="cell ${td.cls}" style="font-weight:700;white-space:nowrap">${esc(td.act)}</span></td>
+      ${SMX_T.map(([k]) => smxCellH((r.cells_trend||{})[k], now && now.trend===k, k===bt)).join("")}
+      <td class="smx-gap"></td>
+      ${SMX_V.map(([k]) => smxCellH((r.cells_vol||{})[k], now && now.vol===k, k===bv)).join("")}
+      ${cmpH(r)}</tr>`; };
+  const dec = rows.filter(r => (r.cmp||{}).v_reg === "helps"), free = rows.filter(r => (r.cmp||{}).v_reg !== "helps");
+  const dT = dec.filter(r => smxToday(r, now).act === "Trade").length;
+  const grp = (t, sub) => `<tr class="smx-grp"><td colspan="13" style="text-align:left"><b>${t}</b> <span class="small muted">${sub}</span></td></tr>`;
+  const body = (dec.length ? grp(`Regime Decides · ${dec.length}`, `following the regime helped these in the test · today ${dT} trade, ${dec.length - dT} sit out (${esc(smxNowWords(now))})`) + dec.map(one).join("") : "")
+    + (free.length ? grp(`Always On · ${free.length}`, `the regime did not help these in the test, so it is not used - they trade whatever the regime; the cells are for reference only`) + free.map(one).join("") : "");
+  const th = (t, extra) => `<th style="position:sticky;top:0;background:var(--surface)${extra||""}">${t}</th>`;
+  c.innerHTML = `<div class="spread"><h2>Strategy × Regime Matrix <span class="small muted">${esc({india:"Indian market",us:"US market",crypto:"Crypto",metals:"Metals",global:"Commodities"}[g]||g)} · backtests ${esc(D.period||"")}</span></h2>
+      <span class="small muted"><b>Regime helps ${helped}</b> · hurts ${hurt} of ${kept.length} strategies (tested May 2025 →) · ${(D.removed||[]).length} that lose in every regime removed · now: ${esc(SHORT[main]||main)} <b>${esc(smxNowWords(now))}</b></span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin:6px 0">
+      <input id="smxQ" placeholder="Search strategy" value="${esc(SMX.q)}" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)">
+      <select id="smxF" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)"><option value="">All types</option>${fams.map(f=>`<option ${f===SMX.fam?"selected":""}>${esc(f)}</option>`).join("")}</select>
+      <label class="small"><input type="checkbox" id="smxE" ${SMX.edge?"checked":""}> only strategies with an edge somewhere</label>
+      <span class="small"><b>Cells:</b> <span class="cell sx-works">✓ Trade</span> made money in this reading · <span class="cell sx-flat">✕ Don't</span> no edge or losing · <span class="cell sx-few">Trade · Thin Data</span> under 15 trades - can still trade, no verdict, never starred. ● Now = where the market is · ★ = strongest reading.</span></div>
+    <p class="small" style="margin:0 0 6px"><b>Two groups.</b> <b>Regime Decides</b>: the regime helped these in the test, so today's trend and volatility cells decide - <b>Trade</b>, or <b>Sit Out</b> if either cell says Don't. <b>Always On</b>: the regime did not help these, so they trade whatever the regime (their cells are greyed, for reference). No sizing for now.</p>
+    <div class="tscroll" style="max-height:620px;overflow:auto"><table class="tfgrid smx" style="margin-top:4px"><thead>
+      <tr>${th("", ";text-align:left")}${th("")}<th colspan="3" style="position:sticky;top:0;background:var(--surface)">Trend</th>${th("")}<th colspan="4" style="position:sticky;top:0;background:var(--surface)">Volatility</th><th colspan="3" style="position:sticky;top:0;background:var(--surface)">Out-Of-Sample Test</th></tr>
+      <tr>${th("Strategy", ";text-align:left;top:24px")}${th(`Today<div class="small faint" style="font-weight:400">what to do</div>`, ";top:24px")}${SMX_T.map(([k, l]) => th(l + (now && now.trend===k ? `<div class="small" style="color:var(--accent)">● Now</div>` : ""), ";top:24px")).join("")}${th("", ";top:24px")}${SMX_V.map(([k, l]) => th(l + (now && now.vol===k ? `<div class="small" style="color:var(--accent)">● Now</div>` : ""), ";top:24px")).join("")}
+      ${th(`Profit Factor<div class="small faint" style="font-weight:400">always trade</div>`, ";top:24px")}${th(`Profit Factor<div class="small faint" style="font-weight:400">follow regime</div>`, ";top:24px")}${th("Regime?", ";top:24px")}</tr></thead>
+      <tbody>${body || `<tr><td colspan="13" class="small muted">No strategy matches.</td></tr>`}</tbody></table></div>
+    <p class="small faint" style="margin:6px 0 0">Regime = the Regime Board's daily reading at the previous close, the same for every strategy. Trend: Bullish / Bearish when efficiency &gt; 0.30 and ADX &gt; 22.5 and the 20-day return and the 200-day agree, else Sideways. Volatility: 20-day volatility's percentile in its own year (80+ Very Volatile, 60-80 Volatile, 30-60 Normal, under 30 Calm). "Follow regime" profit factor = the study's test, which sized trades by the cells; the page itself now only says Trade or Don't Trade. Cells were set on Nov 2023 - Apr 2025 and judged on May 2025 onwards. Built ${esc((D.meta||{}).built || D.built || "")}. Research only - you decide.</p>`;
+  $("#smxQ").oninput = e => { SMX.q = e.target.value; clearTimeout(smxRender.t); smxRender.t = setTimeout(() => { smxRender(g); const i = $("#smxQ"); if (i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
+  $("#smxF").onchange = e => { SMX.fam = e.target.value; smxRender(g); };
+  $("#smxE").onchange = e => { SMX.edge = e.target.checked; smxRender(g); };
+}
+function planRenderV2(g){
+  const box = $("#sPlan"), D = SMX.data[g]; if (!box || !D) return;
+  const RSCH = window.CUR_TAB === "research";
+  const m = RSCH ? ((M && M[state.market] && SMX_G[VIEW] === "india") ? state.market : "NIFTY") : state.market;
+  const mkKey = g==="us" ? "US" : m;
+  const isStock = g==="india" && !["NIFTY","BANKNIFTY"].includes(m);
+  const now = (D.now||{})[mkKey];
+  const ACT = {works:["Trade",1,"sx-works"], plus:["½ size",0.5,"sx-plus"], few:["¼ size",0.25,"sx-few"], flat:["Skip",0,"sx-flat"], minus:["Skip",0,"sx-flat"], avoid:["Skip",0,"sx-flat"]};
+  const pfT = v => v==null ? "–" : v >= 99 ? "no losses" : fmt(v, 2);
+  const tW = k => (SMX_T.find(x => x[0]===k)||[])[1] || k, vW = k => (SMX_V.find(x => x[0]===k)||[])[1] || k;
+  const items = (D.rows||[]).filter(r => (r.markets||"").split(",").includes(mkKey)).map(r => {
+    const cm = r.cmp || {}, t = smxToday(r, now), helps = t.helps;
+    const pf = helps ? cm.pf_reg : cm.pf_flat, pfn = helps ? cm.pf_reg_net : cm.pf_flat_net;
+    return {r, act: t.act, cls: t.cls, why: t.why, pf, pfn, helps};
+  });
+  const ord = {"Trade":0, "Always On":1, "Sit Out":2};
+  items.sort((a, b) => ord[a.act] - ord[b.act] || (b.pf||0) - (a.pf||0));
+  const cnt = k => items.filter(x => x.act===k).length;
+  const evid = x => Math.sqrt(Math.min(x.r.n || 0, 300) / 300);
+  const pfUse = x => Math.min((x.r.cmp && x.r.cmp.has_costs && x.pfn!=null) ? x.pfn : (x.pf || 0), 5);
+  const top = items.filter(x => x.act!=="Sit Out" && (x.r.n||0) >= 30 && pfUse(x) > 1.2)
+    .map(x => ({...x, score: (pfUse(x) - 1) * evid(x)})).sort((a, b) => b.score - a.score).slice(0, 5);
+  const row = x => `<tr><td style="text-align:left"><b>${esc(x.r.strategy)}</b><div class="small faint">${esc(x.r.style||"")} · ${x.r.n} trades</div></td>
+      <td><span class="cell ${x.cls}" style="white-space:nowrap">${esc(x.act)}</span></td>
+      <td class="small" style="text-align:left">${esc(x.why)}</td>
+      <td><b class="${x.pf>=1.2?"pos":x.pf<1?"neg":""}">${pfT(x.pf)}</b>${x.pfn!=null&&x.r.cmp&&x.r.cmp.has_costs?`<div class="small faint">after costs ${pfT(x.pfn)}</div>`:""}</td></tr>`;
+  const topRow = (x, i) => `<tr><td style="text-align:left"><b>${i+1}. ${esc(x.r.strategy)}</b><div class="small faint">${esc(x.r.style||"")}</div></td>
+      <td><span class="cell ${x.cls}">${esc(x.act)}</span></td>
+      <td><b class="${pfUse(x)>=1.2?"pos":""}">${pfT(pfUse(x) >= 5 ? x.pf : pfUse(x))}</b><div class="small faint">${x.r.cmp&&x.r.cmp.has_costs?"after costs":"costs in data"}</div></td>
+      <td class="small" style="text-align:left">${x.r.n} backtest trades · ${x.helps ? "Regime Decides" : "Always On"}</td></tr>`;
+  const topH = top.length ? `<div class="eyebrow" style="margin-top:8px">Top ${top.length} Today</div>
+    <table class="tfgrid smx" style="margin:4px 0 6px"><thead><tr><th style="text-align:left">Strategy</th><th>Today</th><th>Profit Factor</th><th style="text-align:left">Evidence</th></tr></thead><tbody>${top.map(topRow).join("")}</tbody></table>
+    <p class="small faint" style="margin:0 0 6px">Ranked by profit factor (after costs where known) × amount of evidence; needs 30+ backtest trades and profit factor above 1.2.</p>`
+    : `<p class="small muted">No strategy meets the Top-5 bar (Trade or Always On, 30+ trades, profit factor above 1.2) today.</p>`;
+  box.innerHTML = `<div class="spread"><h2>Today's Strategy Plan · ${esc(SHORT[m]||m)}</h2><span class="small muted">regime now: <b>${esc(smxNowWords(now))}</b>${now&&now.as_of?` <span class="faint">(close ${esc(now.as_of)})</span>`:""}</span></div>
+    ${isStock ? `<p class="small" style="margin:6px 0"><span class="pill p-wait">No strategy was backtested on ${esc(m)} alone</span> - pick Nifty or Bank Nifty to see the plan.</p>` : `
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin:6px 0">
+      <span class="small"><b>Regime Decides:</b></span><span class="cell sx-works">Trade ${cnt("Trade")}</span><span class="cell sx-flat">Sit Out ${cnt("Sit Out")}</span>
+      <span class="small" style="margin-left:6px"><b>Always On:</b></span><span class="cell sx-works">${cnt("Always On")}</span>
+      <span class="small faint">· ${items.length} strategies tested on ${esc(SHORT[m]||m)} · losing strategies not shown</span></div>
+    ${topH}
+    <details><summary class="small muted" style="cursor:pointer;margin-top:4px">All ${items.length} strategies for ${esc(SHORT[m]||m)} (Trade / Sit Out / Always On with the reason)</summary>
+    <div class="tscroll" style="max-height:520px;overflow:auto"><table class="tfgrid smx"><thead><tr><th style="text-align:left">Strategy</th><th>Today</th><th style="text-align:left">Why</th><th>Profit Factor</th></tr></thead>
+      <tbody>${items.map(row).join("") || `<tr><td colspan="4" class="small muted">No tested strategy for this market.</td></tr>`}</tbody></table></div></details>
+    <p class="small faint" style="margin:6px 0 0">How it decides: the market's Trend and Volatility now (Regime Board, last close) pick one cell on each axis. Regime Decides (the regime helped the strategy in the out-of-sample test, May 2025 →): Trade, or Sit Out if either cell says Don't. Always On (it did not help): trades whatever the regime. No sizing for now. Indications only - you decide.</p>`}`;
+}
 // ---- 2026-10-31 (Nikhil): Strategy x regime matrix on the Indian / US / Crypto tabs ----
 // Data: scripts/research/strategy_regime_3y.py --matrix (MASTER_BACKTESTER backtests, last 3 years, regime at the previous close).
 const SMX = {data:{}, q:"", fam:"", edge:false, loss:false};   // 2026-10-31 (Nikhil): losing strategies removed from the list (overall < 0), shown only on request
@@ -4595,11 +4736,12 @@ async function smxLoad(v){
   if (!g){ c.hidden = true; return; }
   c.hidden = false;
   if (!SMX.data[g]){ c.innerHTML = `<p class="small muted">Loading strategy × regime matrix…</p>`;
-    try { SMX.data[g] = await fetch("/api/livedesk/stratmatrix?group=" + g).then(r=>r.json()); } catch(e){ c.innerHTML = `<p class="small muted">Matrix not available.</p>`; return; } }
+    try { SMX.data[g] = await smxGet(g); } catch(e){ c.innerHTML = `<p class="small muted">Matrix not available.</p>`; return; } }
   smxRender(g);
 }
 function smxRender(g){
   const c = $("#smxCard"), D = SMX.data[g]; if (!c || !D) return;
+  if (D.v2) return smxRenderV2(g);
   const REG = ["Bull_Trend","Range","Compression","High_Volatility","Bear_Trend"];
   // 2026-10-31 (Nikhil): each strategy is judged on the regime of ITS timeframe: intraday -> 15m, swing -> daily, positional -> weekly
   const mk0 = (M && M[state.market]) || {};
@@ -4643,7 +4785,7 @@ function smxRender(g){
   const helped = kept.filter(r => verdict(r.cmp)[1].includes("helps")).length, hurt = kept.filter(r => verdict(r.cmp)[1].includes("hurts")).length;
   const body = rows.map(r => `<tr><td style="text-align:left;white-space:nowrap"><b>${esc(r.strategy)}</b><div class="small faint">${esc(STL[r.style]||r.style||"")} · ${esc(r.markets.replace(/,/g, ", "))} · judged on the <b>${esc(TFL[r.tf]||r.tf)}</b></div></td>
       ${REG.map(k => cellH(r, k)).join("")}${cmpH(r)}</tr>`).join("");
-  c.innerHTML = `<div class="spread"><h2>Strategy × Regime Matrix <span class="small muted">${esc({india:"Indian market",us:"US market",crypto:"Crypto"}[g])} · backtests ${esc(D.period||"")}</span></h2>
+  c.innerHTML = `${SMX.run ? `<p class="small" style="margin:0 0 8px"><span class="pill p-wait">Old 5-State Regime</span> This matrix still uses Bull Trend / Range / Compression / High Volatility / Bear Trend. To rebuild it on the Regime Board's Trend × Volatility, run on the Mac: <code>${esc(SMX.run)}</code></p>` : ""}<div class="spread"><h2>Strategy × Regime Matrix <span class="small muted">${esc({india:"Indian market",us:"US market",crypto:"Crypto"}[g])} · backtests ${esc(D.period||"")}</span></h2>
       <span class="small muted"><b>Regime helps ${helped}</b> · hurts ${hurt} strategies (tested May 2025 →) · ${(D.rows||[]).length} strategies (${lossN} that lose in every regime removed) · now: 15-min <b>${esc(XR_NAME[tfNow("15m")]||"–")}</b> · daily <b>${esc(XR_NAME[now]||"–")}</b> · weekly <b>${esc(XR_NAME[tfNow("weekly")]||"–")}</b> · ★ green outline = strongest regime</span></div>
     <div class="row" style="gap:8px;flex-wrap:wrap;margin:6px 0">
       <input id="smxQ" placeholder="Search strategy" value="${esc(SMX.q)}" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)">
