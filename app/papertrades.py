@@ -10,6 +10,7 @@ Shadow trades (research records) and skipped signals are NOT included. Paper onl
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -41,6 +42,7 @@ RULES = {
     "svb_tr": {"label": "Stock Volume Break v1 · 2-ATR trail (MIS 5x)", "edge": "new 9 Nov - same entries, trail 2 ATR after +1R, target 3R: backtest +0.19 % a trade, win 53 %"},
     # "fsb" BuildUp v1 retired 8 Nov before its first trade (Nikhil: "we will not use v1, retire that and then we use v2")
     "istr_n": {"label": "Index Strangle · NIFTY weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2023-26: +Rs 1,700 a lot a week in positive-gamma weeks, win 78 %, worst week about -Rs 34k; judge after ~20 weeks"},
+    "stfa": {"label": "ST + Fisher + ADX Option Buy · NIFTY 0.6 delta next-week (1 lot)", "edge": "new 11 Nov - PROVISIONAL: backtest Aug 2021 - Nov 2026 on simulated premiums PF 1.33 (train 1.37 / test 1.24), 1,623 trades, win 32 %; edge gone at 2 pt slippage a side; go / no-go after 60+ live trades (fills within ~1 pt of model, PF > 1.2)"},
     "icon_s": {"label": "Index Condor · SENSEX weekly, positive-gamma weeks (1 lot)", "edge": "new 9 Nov - 2024-26: +Rs 1,870 a lot a week in positive-gamma weeks, win 82 %, risk capped by wings; judge after ~20 weeks"},
     "fsb2": {"label": "BuildUp v2 · v1 minus 'late' shorts (at 60-day low / bullish order block broken)", "edge": "new 9 Nov - from Oct 2024: 210 trades, +0.77 % a trade after costs (t 2.7) vs v1 +0.43 % on the same period; judge after ~30"},
     "n5m": {"label": "Nifty 500 Momentum 12-1 · monthly top-decile basket, equal weight (record only)", "edge": "Quantpedia idea, gauntlet 10 Nov: +0.66 Sharpe of EXCESS return over the equal-weight Nifty 500, 17 of 21 years (2006-26); universe = today's members (survivorship) - record only, Rs 1,00,000 notional"},
@@ -455,6 +457,25 @@ def _idx(hot):
     return out
 
 
+def _stfa(hot):
+    """2026-11-11 (Nikhil: "onboard this to our paper trade"): ST + Fisher + ADX Nifty option buying (app/stfisher.py). Entry / stop / exit columns are
+    the NIFTY index levels (so the chart and the SL check work); the money is the option premium x 1 lot after Rs 25 + 0.10 % a side."""
+    out = []
+    for x in hot("stfisher").trades():
+        ins = f"NIFTY {x['K']} {x['typ']} {x['exp']} (delta {x.get('delta')}, IV {x.get('iv')}%), 1 lot ({x['lot']}): bought @ {x['entry']} ask (ltp {x.get('entry_ltp')}, model {x.get('entry_model')})"
+        if x.get("status") == "closed":
+            ins += f", sold @ {x.get('exit')} bid"
+        t = {"rule": "stfa", "key": "NIFTY", "side": "long" if x["side"] == 1 else "short", "opened": x["opened"], "entry": x["idx_entry"], "stop": x["sl"], "stop0": x["sl"],
+             "target": None, "how": "stop on the index (signal candle / previous candle) · exit on Supertrend colour change · flat 15:15 · no target · 1 lot",
+             "instrument": ins, "size": x["lot"], "ccy": "₹", "status": x.get("status", "open"), "why": f"signal candle {str(x.get('sig_ts',''))[11:]} · Supertrend + Fisher + rising ADX"}
+        if t["status"] == "closed":
+            t.update(exit=x.get("idx_exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), r=x.get("r_idx"))
+        else:
+            t.update(pnl_open=x.get("pnl_open"), now=x.get("idx_now"))
+        out.append(t)
+    return out
+
+
 def _ovn(hot):
     """2026-11-06: Overnight hold (app/overnight.py) - three versions of the same signal, each its own row, rupees per 1 lot after costs."""
     O = hot("overnight"); out = []
@@ -629,7 +650,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("ofp", lambda: _ofp(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("ofp", lambda: _ofp(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot)), ("stfa", lambda: _stfa(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -651,16 +672,168 @@ def all_rows(hot, px) -> list:
         if t["rule"] in RULES:
             t["market"] = NAME.get(t["key"], t["key"]); t["rule_label"] = RULES[t["rule"]]["label"]; t["group"] = group_of(t["key"])
     _add_legs(hot, allt, allt)
+    for t in allt:
+        try:
+            fut1(t)
+        except Exception as e:
+            errs["fut1"] = str(e)[:120]
     return allt, errs
+
+
+def _of_last(OP, sym):
+    """Latest price of the futures footprint the order-flow models trade (current 1-min bar's close), if the file moved in the last 90 s."""
+    import os, time, json as _j
+    f = os.path.join(OP.OF_DIR, datetime.now().strftime("%Y-%m-%d"), f"footprint_{sym}.jsonl")
+    try:
+        if time.time() - os.path.getmtime(f) > 90:
+            return None
+        with open(f, "rb") as fh:
+            fh.seek(0, 2); n = fh.tell(); fh.seek(max(0, n - 65536))
+            lines = fh.read().decode(errors="ignore").splitlines()
+        for ln in reversed(lines):
+            try:
+                b = _j.loads(ln)
+            except Exception:
+                continue
+            if b.get("c"):
+                return float(b["c"])
+    except Exception:
+        return None
+    return None
+
+
+def live_now(hot, px) -> list:
+    """2026-11-11 (Nikhil: "some are empty and some are not updating - can it be live feeds?"): a live price + open P&L for every open
+    trade that has a feed, for the Exit / Now column of All Paper Trades. Read-only: no rule, stop or record changes here.
+    Feeds: India index futures + F&O stocks = the order-flow engine's live.json (every 2 s, via domcards._live_px; empty when stale);
+    crypto / metals = the desk prices passed in as px. Order-flow models re-priced with their own money rule; DOM trades with theirs."""
+    out = []
+    try:
+        D = hot("domcards"); lpx = D._live_px() or {}
+    except Exception:
+        D, lpx = None, {}
+    try:
+        OP = hot("ofpatterns")
+        for x in OP.trades():
+            if x.get("status") == "closed" or x.get("rule") not in RULES:
+                continue
+            india = x["key"] in OP.COST_PTS
+            p = _of_last(OP, x["key"]) if india else px.get(x["key"])      # India: the same futures footprint the model trades on
+            if not p:
+                continue
+            risk = abs(x["entry"] - x["stop"]) or None
+            m = OP._money(x["key"], x["side"], x["entry"], float(p), risk)
+            out.append(fut1({"rule": x["rule"], "key": x["key"], "opened": x.get("opened_ist") or f"{x.get('d')} {x.get('opened_t')}",
+                        "now": round(float(p), 4), "pnl_open": m["pnl"], "src": "live", "ccy": "₹" if india else "$", "status": "open"}))
+    except Exception:
+        pass
+    if D is not None and lpx:
+        try:
+            for x in (D.trades() or []):
+                if x.get("status") != "open":
+                    continue
+                y = D._with_live(x, lpx)
+                if y.get("now") is None:
+                    continue
+                ix = x["key"] in D.INDEX
+                rule = ("dom_ix_break" if x.get("setup") == "break" else "dom_ix_hold") if ix else "dom_stocks"
+                out.append(fut1({"rule": rule, "key": x["key"], "opened": x["opened"], "now": y["now"], "pnl_open": y.get("pnl_open"), "src": "live",
+                                 "side": x["side"], "entry": x["entry"], "status": "open", "ccy": "₹"}))
+        except Exception:
+            pass
+    return out
+
+
+# ------------------------------------------------------------------ 2026-11-11 (Nikhil: "all stock based strategies should use futures
+# for paper trade with 1 lot, also if index use futures to trade 1 lot, so pnl should be lot size - update all previous trades").
+# A pricing VIEW on top of each rule's own record: the rule's entry / exit / stop are kept, the money is restated as ONE futures lot
+# (points x lot size, minus futures costs). The rule's original money stays in pnl_orig. Option structures (vol cycle, overnight,
+# strangle / condor, Touch synthetic) and the N500 baskets keep their own pricing. Paper only - never orders.
+FUT_STOCK_RULES = {"dom_stocks", "sorb", "svb", "svb_tr"}            # priced on the cash stock today
+FUT_INDEX_LOTS = {"ofp": 2}                                          # order-flow India books: 2 lots today -> 1
+FUT_COST_PCT = 0.0006                                                # stock futures round trip 0.06 % (same as BuildUp v2, app/fnoshort.py)
+_LOTS: dict = {}
+
+
+def _fut_lot(key):
+    """NSE futures lot size from the Dhan contract list (cached); None if the name has no futures contract."""
+    if key in _LOTS:
+        return _LOTS[key]
+    lot = None
+    try:
+        import fnoflow as FF                                         # the F&O universe from the Dhan master: {sym: {"futs": [(expiry, id, lot)]}}
+        fs = (FF.universe().get(key) or {}).get("futs") or []
+        lot = int(fs[0][2]) if fs and fs[0][2] else None
+    except Exception:
+        return None                                                  # master not readable: try again next time
+    _LOTS[key] = lot
+    return lot
+
+
+def fut1(t: dict) -> dict:
+    """Restate one trade row (in place) as 1 futures lot. Returns the row."""
+    if t.get("_fut1"):
+        return t
+    r = t.get("rule") or ""
+    if r in FUT_STOCK_RULES:
+        lot = _fut_lot(t.get("key"))
+        if not lot or t.get("entry") in (None, ""):
+            return t
+        sd = 1 if t.get("side") == "long" else -1; e = float(t["entry"]); cost = FUT_COST_PCT * e
+        t["pnl_orig"] = t.get("pnl"); t["pnl_open_orig"] = t.get("pnl_open")
+        if t.get("status") == "closed" and t.get("exit") not in (None, ""):
+            t["pnl"] = round((sd * (float(t["exit"]) - e) - cost) * lot)
+        if t.get("status") != "closed" and t.get("now") not in (None, ""):
+            t["pnl_open"] = round((sd * (float(t["now"]) - e) - cost) * lot)
+        t["instrument"] = f"{t.get('key')} futures, 1 lot ({lot}) · priced on the rule's own entry / exit"
+        t["size"] = lot; t["ccy"] = "₹"; t["_fut1"] = True
+    elif r.startswith("ofp_") and t.get("ccy") == "₹":
+        n = FUT_INDEX_LOTS["ofp"]
+        t["pnl_orig"] = t.get("pnl"); t["pnl_open_orig"] = t.get("pnl_open")
+        for k in ("pnl", "pnl_open"):
+            if t.get(k) not in (None, ""):
+                t[k] = round(float(t[k]) / n)
+        t["instrument"] = str(t.get("instrument") or "").replace(f"{n} lots", "1 lot"); t["size"] = 1; t["_fut1"] = True
+    return t
+
+
+_SC: dict = {}
+
+
+def stop_check(hot, op) -> list:
+    """2026-11-11 (Nikhil): open trades whose stop was already reached on their price path (app/tradecharts.stop_hit), cached 30 s.
+    A flag for the table only - each rule's own record still closes on its own schedule (e.g. at the bar close)."""
+    ck = tuple(sorted(f"{t['rule']}|{t['key']}|{t['opened']}" for t in op))
+    h = _SC.get(ck)
+    if h and time.time() - h[0] < 30:
+        return h[1]
+    out = []
+    try:
+        TC = hot("tradecharts")
+        for t in op:
+            h = TC.stop_hit(hot, t)
+            if h:
+                out.append({"rule": t["rule"], "key": t["key"], "opened": t["opened"], "stop": t.get("stop"), **h})
+    except Exception:
+        pass
+    if len(_SC) > 50:
+        _SC.clear()
+    _SC[ck] = (time.time(), out)
+    return out
 
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("ofp", lambda: _ofp(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("ofp", lambda: _ofp(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot)), ("stfa", lambda: _stfa(hot))):
         try:
             allt += fn()
         except Exception as e:
             errs[nm] = str(e)[:120]
+    for t in allt:
+        try:
+            fut1(t)
+        except Exception as e:
+            errs["fut1"] = str(e)[:120]
     if keys:
         allt = [t for t in allt if t["key"] in keys]
     if group:
@@ -680,7 +853,15 @@ def api(hot, px, keys=None, group=None) -> dict:
         z["n"] += 1; z["wins"] += (t.get("pnl") or 0) > 0; z["pnl"] = round(z["pnl"] + (t.get("pnl") or 0), 2)
         if str(t.get("closed", ""))[:10] == today:
             z["today_n"] += 1; z["today_pnl"] = round(z["today_pnl"] + (t.get("pnl") or 0), 2)
-    return {"open": op, "closed": cl[:60], "totals": list(tot.values()), "errors": errs,
+    try:
+        ln = live_now(hot, px)
+    except Exception as e:
+        ln = []; errs["live_now"] = str(e)[:120]
+    try:
+        sc = stop_check(hot, op)
+    except Exception as e:
+        sc = []; errs["stop_check"] = str(e)[:120]
+    return {"open": op, "closed": cl[:60], "totals": list(tot.values()), "errors": errs, "live_now": ln, "stop_check": sc,
             "note": "Paper trades only (never orders). 4H break crypto = 100 USDT margin x 5 leverage = 500 USDT a trade, P&L after 0.14 % costs; Gold / metals / commodities $ = a $10,000 account risking 1% ($100) a trade. Touch-minute = 1 option lot in rupees "
                     "(premiums are estimates). DOM hold / break = index: synthetic future, 1 lot, rupees after costs; stocks: Rs 1,000 risked a trade, after costs. "
                     "Touch + DOM v1 = touch-minute signal with the DOM book agreeing, synthetic future, 1 lot, rupees after costs. "

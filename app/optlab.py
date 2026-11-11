@@ -350,9 +350,63 @@ def ob(syms):
     return _cache(key, 900, go)
 
 
+_OBS: dict = {}
+
+
 def api(q):
     if q.get("lab") == "ob":
         return ob([x for x in (q.get("syms") or "").upper().split(",") if x][:40])
+    if q.get("lab") == "calarb":              # 2026-11-11: research backtest - index calendar arbitrage with synthetic futures (app/calarb_bt.py)
+        import importlib, sys, threading
+        import calarb_bt as CA
+        CA = importlib.reload(sys.modules["calarb_bt"])
+        if q.get("do") == "run" and not _OBS.get("ca_busy"):
+            def go3():
+                _OBS["ca_busy"] = True
+                try:
+                    _OBS["ca"] = CA.run()
+                except Exception as e:
+                    import traceback
+                    _OBS["ca"] = {"err": f"{type(e).__name__}: {str(e)[:200]}", "tb": traceback.format_exc()[-600:]}
+                finally:
+                    _OBS["ca_busy"] = False
+            threading.Thread(target=go3, daemon=True, name="calarb").start()
+        return {"busy": bool(_OBS.get("ca_busy")), "res": _OBS.get("ca")}
+    if q.get("lab") == "obbt":                # 2026-11-11: research backtest - order-block break + 2 ATR trail (app/obbreak_bt.py), runs in a thread
+        import importlib, sys, threading
+        import obbreak_bt as BT
+        BT = importlib.reload(sys.modules["obbreak_bt"])
+        if q.get("do") == "run" and not _OBS.get("bt_busy"):
+            def go():
+                _OBS["bt_busy"] = True
+                try:
+                    if q.get("k"):
+                        BT.ATR_K = float(q["k"])                 # neighbour check (1.5 / 3 ATR)
+                    _OBS["bt"] = BT.run(); _OBS["bt"]["atr_k"] = BT.ATR_K; _OBS["bt_look"] = BT.lookahead_check()
+                except Exception as e:
+                    _OBS["bt"] = {"err": f"{type(e).__name__}: {str(e)[:200]}"}
+                finally:
+                    _OBS["bt_busy"] = False
+            threading.Thread(target=go, daemon=True, name="obbt").start()
+        if q.get("do") == "retest" and not _OBS.get("bt_busy"):
+            def go2():
+                _OBS["bt_busy"] = True
+                try:
+                    BT.ATR_K = 2.0; _OBS["bt_rt"] = BT.run_retest()
+                except Exception as e:
+                    _OBS["bt_rt"] = {"err": f"{type(e).__name__}: {str(e)[:200]}"}
+                finally:
+                    _OBS["bt_busy"] = False
+            threading.Thread(target=go2, daemon=True, name="obbt_rt").start()
+        return {"busy": bool(_OBS.get("bt_busy")), "res": _OBS.get("bt"), "look": _OBS.get("bt_look"), "retest": _OBS.get("bt_rt")}
+    if q.get("lab") == "ob2":                 # 2026-11-11: order-block breaks for Strongest Readings (app/obscan.py), every F&O stock
+        import importlib, sys, obscan as OS
+        mt = os.path.getmtime(OS.__file__)
+        if _OBS.get("mt") is None:
+            _OBS["mt"] = mt
+        elif _OBS["mt"] != mt:
+            OS = importlib.reload(sys.modules["obscan"]); _OBS["mt"] = mt
+        return OS.get()
     w = q.get("lab"); sym = (q.get("sym") or "NIFTY").upper(); day = q.get("day")
     if w == "vol":
         return vol(sym)

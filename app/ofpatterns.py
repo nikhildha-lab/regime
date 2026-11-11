@@ -41,16 +41,24 @@ IST = timezone(timedelta(hours=5, minutes=30))
 MARKETS = {   # key -> (desk, source, pattern timeframes in minutes). 2026-11-11 (Nikhil: "15M + 30M"): each timeframe is its own
     # pattern feed and its own paper book (rule id = model + "_" + minutes, e.g. ofp_stack_15). India keeps 5M too.
     "NIFTY": ("nifty", "of1m", (5, 15, 30)), "BANKNIFTY": ("nifty", "of1m", (5, 15, 30)),
-    "BTC": ("crypto", "fp15", (15, 30)), "ETH": ("crypto", "fp15", (15, 30)), "SOL": ("crypto", "fp15", (15, 30)), "GOLD": ("metals", "fp15", (15, 30))}
+    "BTC": ("crypto", "fp15", (15, 30)), "ETH": ("crypto", "fp15", (15, 30)), "SOL": ("crypto", "fp15", (15, 30)), "GOLD": ("metals", "fp15", (15, 30)),
+    # 2026-11-11 (Nikhil: "replicate to other markets ... create if data allows"): every market with stored real footprint
+    "SILVER": ("metals", "fp15", (15, 30)), "COPPER": ("metals", "fp15", (15, 30)), "CRUDE": ("metals", "fp15", (15, 30)), "NATGAS": ("metals", "fp15", (15, 30)),
+    "BNB": ("crypto", "fp15", (15, 30)), "XRP": ("crypto", "fp15", (15, 30)), "LINK": ("crypto", "fp15", (15, 30)), "AVAX": ("crypto", "fp15", (15, 30)),
+    "UNI": ("crypto", "fp15", (15, 30)), "ZEC": ("crypto", "fp15", (15, 30)), "DASH": ("crypto", "fp15", (15, 30))}
 # 4H is a filter, not a pattern feed: a model trades only with the 4H trend (Regime Board 4H score >= +2 = up, <= -2 = down,
 # between = both sides allowed). The score is snapshotted every pass into h4.json, and a trade uses the snapshot taken at or
 # before its entry, so a later 4H change never rewrites an earlier trade.
-H4_ROW = {"NIFTY": "Nifty 50", "BANKNIFTY": "Bank Nifty", "BTC": "crypto|BTC", "ETH": "crypto|ETH", "SOL": "crypto|SOL", "GOLD": "metals|Gold"}
+H4_ROW = {"NIFTY": "Nifty 50", "BANKNIFTY": "Bank Nifty", "BTC": "crypto|BTC", "ETH": "crypto|ETH", "SOL": "crypto|SOL", "GOLD": "metals|Gold",
+          "SILVER": "metals|Silver", "COPPER": "metals|Copper", "CRUDE": "global|Crude (WTI)", "NATGAS": "global|Natural gas",
+          **{k: "crypto|" + k for k in ("BNB", "XRP", "LINK", "AVAX", "UNI", "ZEC", "DASH")}}
 H4_EDGE = 2.0
 RB_LATEST = os.path.join(ROOT, "data_store", "livedesk", "regimeboard", "latest.json")
 TIME_BARS = {   # time stop in bars per model and timeframe (about the same clock time on every timeframe, floor 4 bars)
     "base": {5: 12, 15: 8, 30: 6}, "lvn": {5: 18, 15: 12, 30: 8}, "div": {5: 24, 15: 16, 30: 10}}
-NAME = {"NIFTY": "Nifty fut", "BANKNIFTY": "Bank Nifty fut", "BTC": "BTC", "ETH": "ETH", "SOL": "SOL", "GOLD": "Gold"}
+NAME = {"NIFTY": "Nifty fut", "BANKNIFTY": "Bank Nifty fut", "BTC": "BTC", "ETH": "ETH", "SOL": "SOL", "GOLD": "Gold",
+        "SILVER": "Silver", "COPPER": "Copper", "CRUDE": "WTI Crude", "NATGAS": "Natural Gas", "BNB": "BNB", "XRP": "XRP", "LINK": "LINK",
+        "AVAX": "AVAX", "UNI": "UNI", "ZEC": "ZEC", "DASH": "DASH"}
 COST_PTS = {"NIFTY": 18.0, "BANKNIFTY": 45.0}          # round trip, futures (real-orderflow-test.md)
 LOTS_FALLBACK = {"NIFTY": 65, "BANKNIFTY": 30}         # only if the Dhan scrip master has no lot size
 LOTS_N = 2                                             # Indian lots: always even, minimum 2
@@ -154,6 +162,11 @@ def merge(bars, tf, start_min=0, base=1):
     return out
 
 
+def is_ist(key):
+    """Nifty / Bank Nifty and the NSE stocks are stamped in IST; everything else is UTC."""
+    return key in COST_PTS or key in (S.get("stocks") or ())
+
+
 def stored_15(desk, key, days=6, fp_dir=None):
     """Stored real 15-min footprint bars (UTC days) - completed bars only (the writer drops the forming bar)."""
     folder = os.path.join(fp_dir or FP_DIR, desk, key)
@@ -171,6 +184,8 @@ def stored_15(desk, key, days=6, fp_dir=None):
             b = day[t]
             if b.get("approx") or b.get("o") is None:
                 continue
+            if desk == "nifty" and not ("09:15" <= str(t) < "15:30"):
+                continue                               # NSE stocks: the 09:00 pre-open bucket is not a trading bar
             rows = _rows(b.get("bins"), "bins")
             if rows:
                 out.append(_mk(b.get("d") or f[:-5], t, b["o"], b["h"], b["l"], b["c"], rows, 0))
@@ -505,7 +520,7 @@ def h4_at(ctx, key, d, hm, tf):
     if not snaps:
         return None
     end = datetime.strptime(f"{d} {hm}", "%Y-%m-%d %H:%M") + timedelta(minutes=tf)
-    stamp = (end if key in COST_PTS else end + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M")
+    stamp = (end if is_ist(key) else end + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d %H:%M")
     v = None
     for t, sc in snaps:
         if t <= stamp:
@@ -764,7 +779,7 @@ def run_models(key, tf, today, ctx, ev, india_1m_today=None):
 
 def _ist(key, d, hm):
     """India bars are already IST; crypto / gold stored bars are UTC."""
-    if key in COST_PTS:
+    if is_ist(key):
         return f"{d} {hm}"
     try:
         x = datetime.strptime(f"{d} {hm}", "%Y-%m-%d %H:%M") + timedelta(hours=5, minutes=30)
@@ -860,9 +875,10 @@ def build_market(key, tf=None, of_dir=None, fp_dir=None, h4=None, _cache=None):
     levels = sorted([{"name": n, "p": round(p, 4), "dist_pct": round((p / last - 1) * 100, 3)} for n, p in lv if p is not None], key=lambda x: abs(x["dist_pct"]))
     all_hist = [b for b in bars]
     outcomes(all_hist, ev)
+    pstats, ndays = _pattern_stats(bars, key, tf)
     h4 = (ctx["h4"][-1][1] if ctx["h4"] else None)
     return {"key": key, "name": NAME[key], "tf": tf, "tfs": list(tfs), "h4": h4, "h4_word": None if h4 is None else ("Up" if h4 >= H4_EDGE else "Down" if h4 <= -H4_EDGE else "Neutral"), "day": d0, "last": last, "bar_t": today[-1]["t"], "n_bars": len(today),
-            "day_type": dt, "levels": levels, "events": ev, "setups": setups, "trades": trades, "base6": baseline(all_hist)}
+            "day_type": dt, "levels": levels, "events": ev, "setups": setups, "trades": trades, "base6": baseline(all_hist), "pstats": pstats, "pdays": ndays}
 
 
 def _h4_path():
@@ -903,6 +919,24 @@ def _h4_record():
         json.dump(snaps, open(tmp, "w")); os.replace(tmp, _h4_path())
 
 
+def _pattern_stats(bars, key, tf):
+    """2026-11-11 (Nikhil: "Scoreboard doesn't record separately for each timeframe"): pattern hit rates over every stored
+    session of THIS book (one market, one timeframe), not just today. Each session is read with only the bars before it
+    (no look-ahead); "right" = price moved the pattern's way 6 bars later inside the same session."""
+    st, S_ = {}, sessions(bars)
+    for i, sess in enumerate(S_):
+        hist = [b for x in S_[:i] for b in x][-60:]
+        ev = detect(sess, {"hist": hist, "prior": profile(S_[i - 1]) if i else None}, key, tf)
+        outcomes(sess, ev)
+        for e in ev:
+            z = st.setdefault(e["pattern"], {"n": 0, "n6": 0, "hit6": 0, "bps6": 0.0})
+            z["n"] += 1
+            f = (e.get("fwd") or {}).get("6")
+            if f is not None:
+                z["n6"] += 1; z["hit6"] += f > 0; z["bps6"] = round(z["bps6"] + f, 2)
+    return st, len(S_)
+
+
 def _log_path():
     return os.path.join(OUT, "trades.json")
 
@@ -923,6 +957,192 @@ def _merge_log(trades):
     tmp = p + f".{os.getpid()}.tmp"
     json.dump(log, open(tmp, "w"), default=str); os.replace(tmp, p)
     return log
+
+
+# ============================================================ event log (2026-11-11, Nikhil: "ok step 1" of orderflow-research-plan)
+# Every pattern on every book - all markets above plus the Nifty 50 stocks (record only, no trades) - written one file per
+# session day: data_store/livedesk/ofpatterns/events/<day>.jsonl. Each line carries the context AS OF that bar (nothing from
+# later bars) and, separately, what price did next (fwd_*, mfe / mae over 12 bars, inside the same session) for the study.
+# Days still in progress are rebuilt every minute; once a day is over it is written one last time and frozen.
+EV_DIR = os.path.join(OUT, "events")
+EV_VERSION = 1
+EV_EVERY = 60
+EV_BACKFILL_DAYS = 60
+
+
+def stocks():
+    try:
+        return sorted(d for d in os.listdir(os.path.join(FP_DIR, "nifty")) if d not in ("NIFTY", "BANKNIFTY") and not d.startswith("."))
+    except Exception:
+        return []
+
+
+def _ev_state():
+    try:
+        return json.load(open(os.path.join(EV_DIR, "_state.json")))
+    except Exception:
+        return {"final": [], "backfilled": [], "version": EV_VERSION}
+
+
+def _ev_books():
+    """(key, desk, source, tfs, record_only) for every book the log covers."""
+    out = [(k, d, src, tfs, False) for k, (d, src, tfs) in MARKETS.items()]
+    out += [(k, "nifty", "fp15", (15, 30), True) for k in S.get("stocks") or ()]
+    return out
+
+
+def _book_bars(key, desk, src, tf, days, cache):
+    if src == "of1m":
+        if "m1" not in cache:
+            cache["m1"] = india_1m(key, days=days)
+        return merge(cache["m1"], tf, 9 * 60 + 15)
+    if "b15" not in cache:
+        cache["b15"] = stored_15(desk, key, days=days)
+    if tf == 15:
+        return cache["b15"]
+    return merge(cache["b15"], tf, 9 * 60 + 15 if desk == "nifty" else 0, base=15)
+
+
+def _event_records(key, tf, sess, prior_bars, hist, snaps, record_only):
+    """Events of one session with as-of context and forward outcomes."""
+    prior = profile(prior_bars) if prior_bars else None
+    ev = detect(sess, {"hist": hist[-60:], "prior": prior}, key, tf)
+    if not ev:
+        return []
+    outcomes(sess, ev)
+    n = len(sess)
+    vw = vwap_series(sess)
+    fh = max(1, 60 // tf)
+    # running context, bar by bar, using only bars up to that one
+    run_vol, poc_now, visits, inside, out_up, out_dn = {}, [], [], False, [], []
+    vcount, ou, od = 0, 0, 0
+    for i, b in enumerate(sess):
+        for pz, bb, ss in b["rows"]:
+            run_vol[pz] = run_vol.get(pz, 0.0) + bb + ss
+        p = max(run_vol, key=run_vol.get) if run_vol else b["c"]
+        on = b["l"] <= p <= b["h"]
+        if on and not inside and i >= fh:
+            vcount += 1
+        inside = on
+        poc_now.append(p); visits.append(vcount)
+        if prior and i >= fh:
+            ou += b["c"] > prior["vah"]; od += b["c"] < prior["val"]
+        out_up.append(ou); out_dn.append(od)
+    allb = hist + sess
+    rng = [x["h"] - x["l"] for x in allb]
+    idx = {b["t"]: i for i, b in enumerate(sess)}
+    recs = []
+    for e in ev:
+        i = idx.get(e["t"])
+        if i is None:
+            continue
+        b = sess[i]
+        k0 = len(hist) + i
+        atr = (sum(rng[max(0, k0 - 13):k0 + 1]) / len(rng[max(0, k0 - 13):k0 + 1])) or b["step"]
+        look = allb[max(0, k0 - 20):k0]
+        mv = _med([x["vol"] for x in look]) or 1.0
+        md = _med([abs(x["delta"]) for x in look]) or 1.0
+        after = i + 1 - fh
+        share = (max(out_up[i], out_dn[i]) / after) if after > 0 else 0.0
+        side_out = "up" if out_up[i] >= out_dn[i] else "down"
+        inval = bool(prior and prior["val"] <= b["c"] <= prior["vah"])
+        if not prior or after < 3:
+            dtype = "Undecided"
+        elif share >= 0.6 and not inval:
+            dtype = "Trend Up" if side_out == "up" else "Trend Down"
+        elif inval and visits[i] >= 3:
+            dtype = "Rotation"
+        else:
+            dtype = "Undecided"
+        ib = sess[:fh]
+        ibr = (max(x["h"] for x in ib) - min(x["l"] for x in ib)) if len(ib) == fh and i >= fh else None
+        dr = max(x["h"] for x in sess[:i + 1]) - min(x["l"] for x in sess[:i + 1])
+        sd = 1 if e["side"] == "long" else -1
+        fut = sess[i + 1:i + 13]
+        mfe = mae = None
+        if fut:
+            hi, lo = max(x["h"] for x in fut), min(x["l"] for x in fut)
+            mfe = round(((hi - b["c"]) if sd > 0 else (b["c"] - lo)) / atr, 2)
+            mae = round(((b["c"] - lo) if sd > 0 else (hi - b["c"])) / atr, 2)
+        pct = lambda a, c=b["c"]: None if a is None else round((a / c - 1) * 100, 3)
+        rec = {"id": f"{key}|{tf}|{e['d']}|{e['t']}|{e['pattern']}|{e['side']}", "v": EV_VERSION, "mkt": key, "tf": tf, "d": e["d"], "t": e["t"],
+               "t_ist": _ist(key, e["d"], e["t"]), "pattern": e["pattern"], "side": e["side"], "price": e["price"], "close": b["c"], "note": e["note"],
+               "record_only": record_only, "ev": e.get("ev"),
+               "ctx": {"bar": i, "bars_in_session": n, "min_from_open": i * tf, "first_hour_done": i >= fh,
+                       "day_type": dtype, "outside_share": round(share, 2), "outside_side": side_out, "in_prior_value": inval,
+                       "vpoc_visits": visits[i], "ib_ext": round(dr / ibr, 2) if ibr else None,
+                       "vwap_dist_pct": pct(vw[i]), "vpoc_dist_pct": pct(poc_now[i]),
+                       "prior_vah_pct": pct(prior["vah"]) if prior else None, "prior_val_pct": pct(prior["val"]) if prior else None,
+                       "prior_poc_pct": pct(prior["poc"]) if prior else None,
+                       "session_ret_pct": round((b["c"] / sess[0]["o"] - 1) * 100, 3) if sess[0]["o"] else None,
+                       "atr": round(atr, 6), "vol_x": round(b["vol"] / mv, 2), "delta_x": round(b["delta"] / md, 2),
+                       # 4H only where a snapshot existed at that bar - the live trades fall back to the first reading, the study must not
+                       "h4": h4_at({"h4": snaps}, key, b["d"], b["t"], tf) if snaps and snaps[0][0] <= _ist(key, b["d"], b["t"]) else None},
+               "fwd": e.get("fwd"), "mfe12_atr": mfe, "mae12_atr": mae, "complete": i + 12 < n}
+        recs.append(rec)
+    return recs
+
+
+def _ev_write(day, recs):
+    os.makedirs(EV_DIR, exist_ok=True)
+    p = os.path.join(EV_DIR, f"{day}.jsonl")
+    tmp = p + f".{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        for r in sorted(recs, key=lambda r: (r["mkt"], r["tf"], r["t"], r["pattern"])):
+            f.write(json.dumps(r, default=str) + "\n")
+    os.replace(tmp, p)
+
+
+def event_log(force=False):
+    """Rebuild the open days (and, the first time, every day on disk) for every book. Runs at most once a minute."""
+    if not force and time.time() - S.get("ev_t", 0) < EV_EVERY:
+        return False
+    S["ev_t"] = time.time()
+    S["stocks"] = stocks()
+    st = _ev_state()
+    if st.get("version") != EV_VERSION:
+        st = {"final": [], "backfilled": [], "version": EV_VERSION}
+    final, done = set(st.get("final") or []), set(st.get("backfilled") or [])
+    snaps = _h4_snaps()
+    days, t0, books = {}, time.time(), 0
+    for key, desk, src, tfs, rec_only in _ev_books():
+        first = key not in done
+        cache = {}
+        for tf in tfs:
+            try:
+                bars = _book_bars(key, desk, src, tf, EV_BACKFILL_DAYS if first else 3, cache)
+            except Exception:
+                continue
+            Ss = sessions(bars)
+            for i, sess in enumerate(Ss):
+                d = sess[0]["d"]
+                if d in final and not first:
+                    continue
+                hist = [b for x in Ss[max(0, i - 3):i] for b in x]
+                try:
+                    days.setdefault(d, []).extend(_event_records(key, tf, sess, Ss[i - 1] if i else None, hist, snaps.get(key, []), rec_only))
+                except Exception as e:
+                    S["ev_err"] = f"{key} {tf} {d}: {type(e).__name__}: {e}"[:160]
+        done.add(key); books += 1
+    for d, recs in days.items():
+        if d in final:
+            old = []
+            try:                                          # a newly added book on a frozen day: keep the day's other books
+                old = [json.loads(x) for x in open(os.path.join(EV_DIR, f"{d}.jsonl"))]
+            except Exception:
+                pass
+            have = {r["id"] for r in recs}
+            recs = recs + [r for r in old if r["id"] not in have and r["mkt"] not in {x["mkt"] for x in recs}]
+        _ev_write(d, recs)
+    today_cut = min(datetime.now(IST).strftime("%Y-%m-%d"), datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    final |= {d for d in days if d < today_cut}
+    st = {"final": sorted(final), "backfilled": sorted(done), "version": EV_VERSION, "at": datetime.now(IST).isoformat(timespec="seconds"),
+          "books": books, "secs": round(time.time() - t0, 1), "days_written": sorted(days)}
+    os.makedirs(EV_DIR, exist_ok=True)
+    tmp = os.path.join(EV_DIR, "_state.json.tmp")
+    json.dump(st, open(tmp, "w")); os.replace(tmp, os.path.join(EV_DIR, "_state.json"))
+    S["ev_last"] = {k: st[k] for k in ("at", "books", "secs", "days_written")}
+    return True
 
 
 def tick(force=False):
@@ -949,6 +1169,10 @@ def tick(force=False):
         _merge_log(all_tr)
     except Exception as e:
         S["err"] = str(e)[:160]
+    try:
+        event_log()
+    except Exception as e:
+        S["ev_err"] = f"{type(e).__name__}: {e}"[:160]
     S["last"] = {"at": datetime.now(IST).isoformat(timespec="seconds"), "markets": out}
     try:
         os.makedirs(OUT, exist_ok=True)
@@ -984,30 +1208,41 @@ def rule_ids():
     return out
 
 
-def scoreboard(markets):
-    sb = {}
-    for k, m in markets.items():
-        for e in m.get("events") or []:
-            z = sb.setdefault(e["pattern"], {"pattern": e["pattern"], "label": PATTERNS.get(e["pattern"], e["pattern"]), "n": 0, "n6": 0, "hit6": 0, "bps6": 0.0})
-            z["n"] += 1
-            f = (e.get("fwd") or {}).get("6")
-            if f is not None:
-                z["n6"] += 1; z["hit6"] += f > 0; z["bps6"] += f
-    for z in sb.values():
-        z["hit_pct"] = round(100 * z["hit6"] / z["n6"]) if z["n6"] else None
-        z["avg_bps"] = round(z["bps6"] / z["n6"], 1) if z["n6"] else None
-    tr = trades()
-    mb = {}
+def scoreboard(markets, key=None, tf=None):
+    """Per timeframe: patterns over every stored session (this market and all markets on the same timeframe), and the
+    paper models' trades for that timeframe's book. tf=None pools every timeframe (the old view)."""
+    def fin(z):
+        return dict(z, hit_pct=round(100 * z["hit6"] / z["n6"]) if z["n6"] else None, avg_bps=round(z["bps6"] / z["n6"], 1) if z["n6"] else None)
+    pa, days = {}, 0
+    for bk, m in markets.items():
+        if m.get("err") or (tf and m.get("tf") != tf):
+            continue
+        days = max(days, m.get("pdays") or 0)
+        for pat, z in (m.get("pstats") or {}).items():
+            row = pa.setdefault(pat, {"pattern": pat, "label": PATTERNS.get(pat, pat), "all": {"n": 0, "n6": 0, "hit6": 0, "bps6": 0.0}, "mkt": {"n": 0, "n6": 0, "hit6": 0, "bps6": 0.0}})
+            for side in (["all", "mkt"] if m.get("key") == key else ["all"]):
+                for f in ("n", "n6", "hit6", "bps6"):
+                    row[side][f] += z[f]
+    pats = sorted(({**r, "all": fin(r["all"]), "mkt": fin(r["mkt"])} for r in pa.values()), key=lambda r: -r["all"]["n"])
     ids = rule_ids()
-    for t in tr:
-        z = mb.setdefault(t["rule"], {"rule": t["rule"], "label": ids.get(t["rule"], t["rule"]), "n": 0, "closed": 0, "wins": 0, "r": 0.0, "open": 0})
-        z["n"] += 1
-        if t.get("status") == "closed":
-            z["closed"] += 1; z["wins"] += (t.get("r") or 0) > 0; z["r"] = round(z["r"] + (t.get("r") or 0), 2)
-        else:
-            z["open"] += 1
-    return {"patterns": sorted(sb.values(), key=lambda z: -z["n"]), "models": [dict(mb.get(k, {"rule": k, "label": v, "n": 0, "closed": 0, "wins": 0, "r": 0.0, "open": 0}), status="Record Only")
-                                                                          for k, v in ids.items()]}
+    want = {k: v for k, v in ids.items() if not tf or k.endswith(f"_{tf}")}
+    mb = {}
+    for t in trades():
+        if t["rule"] not in want:
+            continue
+        for side in (["all", "mkt"] if t.get("key") == key else ["all"]):
+            z = mb.setdefault((t["rule"], side), {"n": 0, "closed": 0, "wins": 0, "r": 0.0, "open": 0})
+            z["n"] += 1
+            if t.get("status") == "closed":
+                z["closed"] += 1; z["wins"] += (t.get("r") or 0) > 0; z["r"] = round(z["r"] + (t.get("r") or 0), 2)
+            else:
+                z["open"] += 1
+    zero = {"n": 0, "closed": 0, "wins": 0, "r": 0.0, "open": 0}
+    models = [{"rule": k, "label": v, "status": "Record Only", "all": mb.get((k, "all"), dict(zero)), "mkt": mb.get((k, "mkt"), dict(zero)),
+               # old flat fields kept so nothing that read them breaks
+               **mb.get((k, "all"), dict(zero))} for k, v in want.items()]
+    flat = [{"pattern": r["pattern"], "label": r["label"], **r["all"]} for r in pats]
+    return {"tf": tf, "key": key, "days": days, "patterns_tf": pats, "patterns": flat, "models": models}
 
 
 def api(key=None, tf=None):
@@ -1015,11 +1250,13 @@ def api(key=None, tf=None):
         tick(force=True)
     L = S.get("last") or {}
     ms = L.get("markets") or {}
-    out = {"at": L.get("at"), "models": MODELS, "patterns": PATTERNS, "score": scoreboard(ms),
+    tfs0 = MARKETS.get(key, (None, None, ()))[2] if key else ()
+    tf_sel = (int(tf) if tf and str(tf).isdigit() and int(tf) in tfs0 else (tfs0[0] if tfs0 else None)) if key else None
+    out = {"at": L.get("at"), "models": MODELS, "patterns": PATTERNS, "score": scoreboard(ms, key, tf_sel),
            "note": "Paper only - never orders. Every model is Record Only until it passes MASTER_BACKTESTER. Each timeframe is its own feed and paper book: "
                    "India 5M, 15M and 30M (1-min for the opening range), crypto and Gold 15M and 30M (built from the stored 15-min footprint - no finer footprint is kept for them). "
                    "4H is a filter: a model trades only with the Regime Board's 4H trend (score >= +2 up, <= -2 down, between = both sides). Iceberg detection is not built yet (needs the order book).",
-           "err": S.get("err")}
+           "err": S.get("err"), "events_log": S.get("ev_last"), "events_err": S.get("ev_err")}
     if key:
         tfs = MARKETS.get(key, (None, None, ()))[2]
         tf = int(tf) if tf and int(tf) in tfs else (tfs[0] if tfs else None)

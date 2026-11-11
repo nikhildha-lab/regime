@@ -21,7 +21,7 @@ COLS = ["rule", "rule_label", "group", "market", "key", "side", "status", "plan_
         "entry", "stop", "target", "exit", "exit_reason", "pnl", "ccy", "r", "pnl_open", "now",
         "instrument", "legs", "legs_expiry", "legs_gross", "legs_costs", "legs_net", "premium_check",
         "why_taken", "went_right", "went_wrong", "where_to_improve", "best_R", "worst_R", "after_exit_best_R", "day_move_pct",
-        "how_it_exits", "logged_at"]
+        "how_it_exits", "logged_at", "pnl_orig", "pnl_open_orig"]   # 2026-11-11: the rule's own money before the 1-futures-lot view
 
 
 def _row(t, now):
@@ -39,7 +39,8 @@ def _row(t, now):
             "legs_expiry": L.get("expiry"), "legs_gross": L.get("gross"), "legs_costs": L.get("costs"), "legs_net": L.get("net"),
             "premium_check": chk, "why_taken": t.get("why", ""), "went_right": R.get("right", ""), "went_wrong": R.get("wrong", ""),
             "where_to_improve": R.get("improve", ""), "best_R": R.get("mfe"), "worst_R": R.get("mae"), "after_exit_best_R": R.get("post_best"),
-            "day_move_pct": R.get("day_move_pct"), "how_it_exits": t.get("how", ""), "logged_at": now}
+            "day_move_pct": R.get("day_move_pct"), "how_it_exits": t.get("how", ""), "logged_at": now,
+            "pnl_orig": t.get("pnl_orig", ""), "pnl_open_orig": t.get("pnl_open_orig", "")}
 
 
 def write(hot, px=None) -> dict:

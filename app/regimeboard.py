@@ -781,14 +781,37 @@ def _ofp_work():
     try:
         _mod("ofpatterns").tick()
         _OFP["err"] = None
+        try:                                 # 2026-11-11: 12-month Binance footprint rebuild (app/ofhistory.py) - starts once, resumes after a restart
+            _mod("ofhistory").start()
+        except Exception as e:
+            _OFP["hist_err"] = f"{type(e).__name__}: {e}"[:160]
+        try:                                 # 2026-11-11: the standing Order Flow Research study (app/ofstudy.py), every 6 hours
+            _mod("ofstudy").start()
+        except Exception as e:
+            _OFP["study_err"] = f"{type(e).__name__}: {e}"[:160]
     except Exception as e:
         _OFP["err"] = f"{type(e).__name__}: {e}"[:160]
     finally:
         _OFP["busy"] = False
 
 
+_STF = {"busy": False}
+
+
+def _stf_work():
+    try:                                     # 2026-11-11: ST + Fisher + ADX Nifty option buying, live paper rule (app/stfisher.py) - ticks every 30 s
+        _mod("stfisher").tick()
+    except Exception as e:
+        _OFP["stf_err"] = f"{type(e).__name__}: {e}"[:160]
+    finally:
+        _STF["busy"] = False
+
+
 def tick(force=False) -> bool:
     """from the live-desk loop: every 15 min in Indian hours, hourly otherwise"""
+    if not _STF["busy"]:
+        _STF["busy"] = True
+        threading.Thread(target=_stf_work, name="stfisher", daemon=True).start()
     # 2026-11-11: the order-flow pattern engine (app/ofpatterns.py) rides on this loop - every 20 s, in its own thread,
     # so paper trades are recorded without a dashboard restart. Paper only.
     if not _OFP["busy"] and time.time() - _OFP["t"] >= 20:
@@ -885,6 +908,32 @@ def detail(group: str, sym: str, name: str = "", kind: str = "") -> dict:
         return _boardlive().snap()
     if group == "_smx":                      # 2026-11-11: Strategy x Regime Matrix on the two-axis regime (scripts/research/strategy_regime_v2.py)
         return _smx_v2(sym or "india")
+    if group == "_ofvid":                    # 2026-11-11: order-flow pattern explainer videos (data_store/research/ofvideos/<key>.mp4) as base64
+        import base64
+        key = (name or sym or "").strip()
+        if key not in ("stack", "absorb", "exhaust", "unfinished", "finished", "trapped", "div"):
+            return {"err": "unknown video"}
+        f = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data_store", "research", "ofvideos", f"{key}.mp4")
+        if not os.path.exists(f):
+            return {"err": "video not found"}
+        return {"key": key, "mime": "video/mp4", "b64": base64.b64encode(open(f, "rb").read()).decode()}
+    if group == "_stf":                      # 2026-11-11: ST + Fisher + ADX paper rule state (app/stfisher.py); sym="tick" forces a tick
+        F = _mod("stfisher")
+        if sym == "tick":
+            F.tick(force=True)
+        if sym == "probe":
+            return F.probe()
+        return {**F.api(), "stf_err": _OFP.get("stf_err")}
+    if group == "_ofstudy":                  # 2026-11-11: Order Flow Research results; sym="run" starts a run now
+        T = _mod("ofstudy")
+        if sym == "run":
+            T.start(now=True)
+        out = T.api()
+        out["engine_errs"] = {k: v for k, v in _OFP.items() if k.endswith("_err") and v}
+        return out
+    if group == "_ofhist":                   # 2026-11-11: rebuild status / start / stop
+        H = _mod("ofhistory")
+        return H.stop() if sym == "stop" else H.start() if sym == "start" else H.status()
     if group == "_ofp":                      # order-flow patterns card (2026-11-11); sym = one market or "" for all
         out = _mod("ofpatterns").api(sym or None, name or None)      # name = timeframe in minutes
         out["runner_err"] = _OFP.get("err")

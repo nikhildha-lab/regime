@@ -354,11 +354,36 @@ body:not([data-tab="intraday"]) #domSetups, body[data-tab="intraday"]:not([data-
 body[data-tab="india"] #lvlCard, body[data-tab="india"] #prepMini, body[data-tab="india"] #nliveNote,
 body[data-tab="india"] #nliveDesk, body[data-tab="india"] #agentCard{display:none!important}
 #idBar,#idTop{display:none}
+/* 2026-11-11: Intraday Desk India order - Chart, Trades In This Market, Patterns, Level Board (CSS order, nothing deleted) */
+body[data-tab="intraday"] #viewNLive, body[data-tab="intraday"] #viewCLive, body[data-tab="intraday"] #viewMLive{display:flex;flex-direction:column}
+body[data-tab="intraday"] #viewNLive[hidden], body[data-tab="intraday"] #viewCLive[hidden], body[data-tab="intraday"] #viewMLive[hidden]{display:none}
+body[data-tab="intraday"] #viewNLive > *, body[data-tab="intraday"] #viewCLive > *, body[data-tab="intraday"] #viewMLive > *{order:9}
+body[data-tab="intraday"] #nliveDesk, body[data-tab="intraday"] #cliveDesk, body[data-tab="intraday"] #mliveDesk{order:1}
+body[data-tab="intraday"] #idTrades{order:2}
+body[data-tab="intraday"] #ofpCard{order:3}
+body[data-tab="intraday"] #lbCard, body[data-tab="intraday"] #lb2Card{order:4}
+body[data-tab="intraday"] #nliveNote, body[data-tab="intraday"] #stkCard{order:0}
+body[data-tab="intraday"] #cfCard{order:5}
+body[data-tab="intraday"] #fcCard{order:6}
+body:not([data-tab="intraday"]) #idNow, body:not([data-tab="intraday"]) #idTrades, body:not([data-tab="intraday"]) #idLogBar{display:none!important}
+#idNow{position:sticky;top:0;z-index:30;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.06)}
+#idNow .nw{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+#idNow .nw .px{font:600 20px/1 var(--mono, ui-monospace, monospace)}
+#idNow .nw .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-right:4px}
+#idNow .jump{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+#idNow .jump button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:2px 10px;cursor:pointer}
+#idTrades table{width:100%;border-collapse:collapse;font-size:13px}
+#idTrades td,#idTrades th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+#idTrades th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+#idTrades td.n,#idTrades th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#idLogBar{margin:6px 0 12px;display:flex;gap:10px;align-items:center}
+body[data-tab="intraday"].log-shut #viewLogbook{display:none!important}
 table.smx td.smx-gap, table.smx th.smx-gap{width:10px;padding:0}
 table.smx tr.smx-grp td{background:var(--surface-2);padding:7px 10px;border-top:1px solid var(--line)}
 table.smx tr.smx-free td:nth-child(n+3):nth-child(-n+10){opacity:.45}
 #ixSwitch{display:none;margin:4px 0 10px;align-items:center;gap:6px}
 body[data-tab="intraday"] #ixSwitch, body[data-tab="fno"] #ixSwitch{display:flex}
+#ixSwitch{display:none!important}   /* 2026-11-11 (Nikhil: "do we need this now" -> "yes"): Desk / F&O Scan switch retired - F&O Scan is a chip in the desk's market row, and F&O Scan has a Desk tab */
 #ixSwitch .small{margin-left:8px}
 /* 2026-11-11: Order Flow Patterns card (app/ofpatterns.py) - top of the Intraday Desk */
 body:not([data-tab="intraday"]) #ofpCard{display:none!important}
@@ -404,8 +429,28 @@ body[data-tab="intraday"] #smxCard, body[data-tab="intraday"] #desk{display:none
 body[data-tab="research"] #mktBar, body[data-tab="overview"] #mktBar,
 body[data-tab="research"] #decision,
 body[data-tab="research"] .ticker,
-body[data-tab="research"] .card:not(#smxCard):not(#desk){display:none!important}
+body[data-tab="research"] .card:not(#smxCard):not(#desk):not(#ofrCard):not(#oflibCard){display:none!important}
 body[data-tab="research"] #smxCard, body[data-tab="research"] #desk{display:block!important}
+body.rs-of[data-tab="research"] #smxCard, body.rs-of[data-tab="research"] #desk{display:none!important}
+body:not(.rs-of) #ofrCard, body:not(.rs-of) #oflibCard{display:none!important}
+/* 2026-11-11: Pattern Library (Research -> Order Flow) */
+#oflibCard{margin-bottom:12px}
+.ofl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:10px}
+.ofl-c{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px}
+.ofl-c h3{margin:0;font-size:16px} .ofl-c .lab{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;margin-top:4px}
+.ofl-c p{margin:0;font-size:13px;line-height:1.45}
+.ofl-play{align-self:flex-start;margin-top:6px}
+#oflVid{position:fixed;inset:0;background:rgba(10,14,20,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
+#oflVid[hidden]{display:none}
+#oflVid .box{background:var(--surface);border-radius:16px;padding:12px;max-width:min(1100px,100%);width:100%}
+#oflVid video{width:100%;border-radius:10px;background:#000;display:block}
+#ofrCard table{width:100%;border-collapse:collapse;font-size:12.5px}
+#ofrCard td,#ofrCard th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+#ofrCard th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--surface)}
+#ofrCard td.n,#ofrCard th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#ofrCard .flt{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+#ofrCard .flt select,#ofrCard .flt input{font:inherit;font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)}
+#ofrCard .up{color:var(--bull)} #ofrCard .dn{color:var(--bear)}
 .smx td,.smx th{padding:4px 6px}
 /* 2026-10-31 (Nikhil): action colours - green = trade, light green = half, yellow = quarter, red = don't */
 .nowstrip{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 16px;align-items:start;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line,#d5dae3);border-radius:12px;background:var(--surface)}
@@ -876,6 +921,10 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 .fno-cc-f div:last-child{text-align:right}
 
 /* 2026-11-08 Options Lab (F&O tab sections) */
+#ixNav{display:none}
+body[data-tab="intraday"] #ixNav, body[data-tab="fno"] #ixNav{display:block}
+#ixNav .lab-nav{margin:4px 0 10px}
+body[data-tab="intraday"] #ixNav .lab-nav{position:static}   /* the desk has its own sticky Now strip */
 .lab-nav{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 4px;padding:5px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);position:sticky;top:6px;z-index:5}
 .lab-nav button{border:0;background:transparent;color:var(--muted);font-weight:600;padding:7px 14px;border-radius:10px;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
 .lab-nav button:hover{color:var(--ink);background:var(--surface)}
@@ -982,6 +1031,8 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
     <button data-ix="fno" onclick="showView('fno')">F&amp;O Scan</button>
     <span class="small faint" id="ixHint"></span>
   </div>
+  <!-- 2026-11-11 (Nikhil: "if click Desk, everything under Desk should come under the strip"): the F&O section strip stays on top of the desk -->
+  <div id="ixNav"></div>
   <!-- 2026-11-10 (Nikhil: "move this drop down on top of the page below the tabs ... add another drop down to select
        Indian market, US, Crypto, Commodities, Metals and the rest updates accordingly"): one place to choose the market.
        The second picker is the existing #rail, moved here by showView(). -->
@@ -993,7 +1044,13 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   </div>
   <!-- 2026-10-31 (Nikhil): Intraday desk sub-tabs (Indian / US / Crypto) + one dropdown; every section below follows the choice -->
   <section class="card" id="idBar"></section>
+  <!-- 2026-11-11 (Nikhil: Intraday Desk India UI review, "yes" to all): Now strip, one trades table for the market,
+       and a fold for the account-wide sections. idLayout() moves Patterns and Trades into the India view in the new order. -->
+  <section class="card" id="idNow" hidden></section>
   <section class="card" id="ofpCard" hidden></section>
+  <section class="card" id="idTrades" hidden></section>
+  <div id="idLogBar" hidden><button class="rc-btn" onclick="idLogToggle()" id="idLogBtn">Show All Paper Trades &amp; Strategy Performance ▾</button>
+    <span class="small faint">every rule, every market · also on the Research tab's records</span></div>
   <div id="idTop"></div>
 
   <div class="view" id="viewDesk">
@@ -1136,7 +1193,12 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
 <div class="view" id="viewFno" hidden><div id="fnoBoard"></div></div>
 <!-- 2026-11-10 (Nikhil: "create a new tab as Research, move Strategy x Regime Matrix and Today's Strategy Plan"):
      the cards keep their own renderers; showView() moves them in and out of here. -->
-<div class="view" id="viewResearch" hidden></div>
+<div class="view" id="viewResearch" hidden>
+  <!-- 2026-11-11 (Nikhil: Order Flow Research - "study result yes ... keep updating to find strong patterns") -->
+  <div id="rsSwitch" class="ld-btns" style="margin:0 0 10px"><button data-rs="strat" onclick="rsSet('strat')">Strategies</button><button data-rs="of" onclick="rsSet('of')">Order Flow</button></div>
+  <section class="card" id="oflibCard"></section>   <!-- 2026-11-11 (Nikhil: "explain each pattern theoretically and add a video") -->
+  <section class="card" id="ofrCard"></section>
+</div>
 <!-- 2026-11-10 (Nikhil: "create a new tab Overview with sections Global Indices, Macro Indicators, Context"):
      the three cards move in here when the tab opens; their renderers are untouched and keep filling them. -->
 <div class="view" id="viewOverview" hidden></div>
@@ -2821,7 +2883,7 @@ async function fxLoad(desk){
   const IDX = desk==="crypto" ? ["BTC","ETH","SOL"] : ["NIFTY","BANKNIFTY"], btnKeys = keys.length > 4 ? keys.filter(k => IDX.includes(k)) : keys, ddKeys = keys.length > 4 ? keys.filter(k => !IDX.includes(k)) : [];
   const dd = ddKeys.length ? `<select class="fx-sel" onchange="${desk==="crypto"?`FX.pick['${desk}']=this.value||null;if(!this.value){FX.sel['${desk}']=null}`:""}if(this.value){FX.sel['${desk}']=this.value};ldLoad('${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:${ddKeys.includes(FX.sel[desk])?"var(--ink)":"var(--surface)"};color:${ddKeys.includes(FX.sel[desk])?"var(--surface)":"var(--ink)"}">
       <option value="">${desk==="crypto"?(FX.pick[desk]?"← back to "+esc(state.market||"BTC"):"More coins ▾"):desk==="nifty"?"Stocks ▾":"Markets ▾"}</option>${ddKeys.map(k=>`<option value="${esc(k)}" ${k===FX.sel[desk]?"selected":""}>${esc(k)} ${ldPx(ins[k].spot)}</option>`).join("")}</select>` : "";
-  const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}')">${l}</button>`).join("")}</span>`;
+  const tfb = `<span class="fx-tf">${FXTF.map(([m,l])=>`<button class="${m===tf?"on":""}" onclick="FX.tf['${desk}']=${m};ldLoad('${desk}');ofpFromChart('${desk}',${m})">${l}</button>`).join("")}</span>`;
   const lyr = `<span class="fx-tf" title="show / hide chart layers">${[["blocks","Blocks"],["levels","Levels"],["signals","Signals"],["cvd","CVD"],["profile","Profile"],["vwap","VWAP"],["walls","Big walls"],...(desk === "crypto" ? [["flow","Flow"],["heat","Liquidity heat"]] : []),["fit","Fit day"]].map(([k,l]) => `<button class="${FX.L[k]?"on":""}" onclick="fxLayer('${k}','${desk}')">${l}</button>`).join("")}</span>`;
   const tsel = `<select class="fx-sel" title="paper trades drawn on the chart" onchange="fxTs(this.value,'${desk}')" style="font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--surface);color:var(--ink)">${FX_TS.map(([k,l]) => `<option value="${k}" ${k===FX.ts?"selected":""}>Trades: ${l}</option>`).join("")}</select>`;
   const head = `<div class="fx-head">${tfb}${lyr}${tsel}${(pinned||follow)?`<span class="fx-chip" style="font-weight:700">${esc(SHORT[FX.sel[desk]]||FX.sel[desk])}${fxFutPx(desk, ins[FX.sel[desk]])}</span>`:btnKeys.map(k=>`<button class="${k===FX.sel[desk]?"on":""}" onclick="FX.pick['${desk}']=null;FX.sel['${desk}']='${k}';ldLoad('${desk}')">${esc(k)} <span style="font-weight:500;opacity:.8">${fxFutPx(desk, ins[k])}</span></button>`).join("")}${pinned||(follow&&desk!=="crypto")?"":dd}
@@ -2874,14 +2936,19 @@ function tcChart(t){
   const off = +(t.chart.off || 0), sh = v => v == null || !isFinite(+v) ? null : +v + off;
   const W = 420, H = 210, L = 6, R = 104, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
   const tg = (t.targets && t.targets.length ? t.targets : (t.target != null ? [t.target] : [])).map(sh).filter(v => v != null);
-  const lines = [["Entry", sh(t.entry), "var(--ink)", ""], ["Stop", sh(t.stop), "var(--bear)", "4 3"],
+  const lines = (t.chart.nolines ? [] : [["Entry", sh(t.entry), "var(--ink)", ""], ["Stop", sh(t.stop), "var(--bear)", "4 3"],
     ...tg.map((v, i) => [tg.length > 1 ? `T${i+1}` : "Target", v, "var(--bull)", "4 3"]),
-    ...(t.status === "closed" && t.exit != null ? [["Exit", sh(t.exit), (t.pnl||0) >= 0 ? "var(--bull)" : "var(--bear)", "1 2"]] : [])].filter(x => x[1] != null);
+    ...(t.status === "closed" && t.exit != null ? [["Exit", sh(t.exit), (t.pnl||0) >= 0 ? "var(--bull)" : "var(--bear)", "1 2"]] : [])]).filter(x => x[1] != null);   // 2026-11-11: premium structures draw no levels
   let lo = Math.min(...C.map(c => c[3])), hi = Math.max(...C.map(c => c[2])); const rg = (hi - lo) || 1;
   lines.forEach(([, v]) => { if (v >= lo - rg && v <= hi + rg){ lo = Math.min(lo, v); hi = Math.max(hi, v); } });   // a far target does not squash the candles
   const pd = (hi - lo)*0.06 || 1; lo -= pd; hi += pd;
-  const x0 = C[0][0], x1 = C.at(-1)[0] + st, X = s0 => L + (s0 - x0)/(x1 - x0)*pw, Y = p => T + (hi - p)/(hi - lo)*ph;
-  const cw = Math.max(1, Math.min(7, pw/C.length*0.7)), te = t.chart.t0, tx = t.chart.t1 || x1, hhmm = s0 => new Date((s0 + 19800)*1000).toISOString().slice(11,16);
+  // 2026-11-11: "even" charts (4H, multi-day holds) put candles back to back - no overnight / weekend gaps - with empty slots for the days still to come
+  const EV = !!t.chart.even, NS = Math.max(C.length, +t.chart.slots || 0);
+  const x0 = C[0][0], x1 = C.at(-1)[0] + st, Y = p => T + (hi - p)/(hi - lo)*ph;
+  const X = !EV ? (s0 => L + (s0 - x0)/(x1 - x0)*pw) : (s0 => { let i = -1; for (let k = 0; k < C.length; k++){ if (C[k][0] <= s0) i = k; else break; }
+    if (i < 0) return L; return L + (i + Math.min(1, Math.max(0, (s0 - C[i][0])/st)))/NS*pw; });
+  const cw = Math.max(1, Math.min(EV ? 16 : 7, pw/(EV ? NS : C.length)*0.7)), te = t.chart.t0, tx = t.chart.t1 || x1,
+    hhmm = s0 => EV ? new Date((s0 + 19800)*1000).toISOString().slice(5,10).replace("-", "/") : new Date((s0 + 19800)*1000).toISOString().slice(11,16);
   let g = `<rect x="${X(Math.max(te, x0))}" y="${T}" width="${Math.max(1, X(Math.min(tx, x1)) - X(Math.max(te, x0)))}" height="${ph}" fill="var(--accent)" fill-opacity="0.07"/>`;
   C.forEach(c => { const xc = X(c[0] + st/2), col = c[4] >= c[1] ? "var(--bull)" : "var(--bear)";
     g += `<line x1="${xc.toFixed(1)}" x2="${xc.toFixed(1)}" y1="${Y(c[2]).toFixed(1)}" y2="${Y(c[3]).toFixed(1)}" stroke="${col}"/><rect x="${(xc - cw/2).toFixed(1)}" y="${Y(Math.max(c[1], c[4])).toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, Math.abs(Y(c[1]) - Y(c[4]))).toFixed(1)}" fill="${col}"/>`; });
@@ -2893,13 +2960,14 @@ function tcChart(t){
   for (let j = labs.length - 1; j >= 0; j--){ const lim = j === labs.length - 1 ? T + ph : labs[j+1].y - 13; if (labs[j].y > lim) labs[j].y = lim; }
   labs.forEach(q => { g += `<text x="${L + pw + 6}" y="${(q.y + 4).toFixed(1)}" font-size="10.5" font-weight="600" fill="${q.col}">${esc(q.nm)} ${ldPx(q.v)}${q.far ? " " + q.far : ""}</text>`; });
   const sd = t.side === "long" ? 1 : -1;
-  if (sh(t.entry) != null && te >= x0){ const xe = X(te), ye = Y(Math.min(hi, Math.max(lo, sh(t.entry))));
+  if (!t.chart.nolines && sh(t.entry) != null && te >= x0){ const xe = X(te), ye = Y(Math.min(hi, Math.max(lo, sh(t.entry))));
     g += `<path d="${sd > 0 ? `M${xe} ${ye+3} l-5 9 l10 0z` : `M${xe} ${ye-3} l-5 -9 l10 0z`}" fill="${sd > 0 ? "var(--bull)" : "var(--bear)"}"/>`; }
   if (t.status === "closed" && sh(t.exit) != null && t.chart.t1){ const v = sh(t.exit); if (v >= lo && v <= hi) g += `<circle cx="${X(t.chart.t1).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4" fill="var(--surface)" stroke="${(t.pnl||0) >= 0 ? "var(--bull)" : "var(--bear)"}" stroke-width="2"/>`; }
-  const tk = [[x0, "start"], [te, "in"], [t.chart.t1, "out"], [x1, "end"]].filter(q => q[0] && q[0] >= x0 && q[0] <= x1); let lastX = -99;
+  const tk = (EV ? C.filter(c => new Date((c[0] + 19800)*1000).toISOString().slice(11,16) === "09:15").map(c => [c[0], c[0] <= te && te < c[0] + 86400 ? "in" : "day"])
+    : [[x0, "start"], [te, "in"], [t.chart.t1, "out"], [x1, "end"]]).filter(q => q[0] && q[0] >= x0 && q[0] <= x1); let lastX = -99;
   tk.forEach(([s0, k]) => { const xx = X(s0); if (xx - lastX < 38) return; lastX = xx;
     g += `<text x="${Math.min(L + pw - 14, Math.max(L + 14, xx)).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="${k === "in" || k === "out" ? 700 : 400}">${hhmm(s0)}</text>`; });
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.market)} ${esc(t.tag)} trade chart">${g}</svg>${off ? `<div class="small faint">futures candles - the trade's spot prices are drawn ${off > 0 ? "+" : ""}${off} pts higher to line up</div>` : ""}`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t.market)} ${esc(t.tag)} trade chart">${g}</svg>${t.chart.note ? `<div class="small faint">${esc(t.chart.note)}</div>` : off ? `<div class="small faint">futures candles - the trade's spot prices are drawn ${off > 0 ? "+" : ""}${off} pts higher to line up</div>` : ""}`;
 }
 async function tcLoad(){
   const el = $("#ptCharts"); if (!el || el.hidden || el.offsetParent === null) return;
@@ -3003,7 +3071,7 @@ async function usPaperLoad(){
     ${rows.length ? `<div class="tscroll"><table class="small" style="width:100%"><tr class="muted"><td>Registered (IST)</td><td>Source</td><td>Market</td><td>Side</td><td>Filled</td><td>Stop</td><td>Target</td><td>Status</td><td>Now / exit</td><td>Result</td><td>Instrument · why · rule</td><td></td></tr>${rows.map(tr).join("")}</table></div>`
       : `<p class="small muted">No US paper trade yet.</p>`}`;
 }
-function ptStart(v){ clearInterval(ptStart.t); clearInterval(ptStart.t2); if (v!=="metals" && document.body.dataset.tab!=="intraday") return;   /* 2026-10-31: crypto / India cards are hidden there */
+function ptStart(v){ clearInterval(ptStart.t); clearInterval(ptStart.t2); if (v!=="metals" && document.body.dataset.tab!=="intraday" && !fnoTrades()) return;   /* 2026-10-31: crypto / India cards are hidden there */
   ptLoad(); ptStart.t = setInterval(() => { if (!document.hidden) ptLoad(); }, 5000);
   if (document.body.dataset.tab === "intraday"){ setTimeout(tcLoad, 800); ptStart.t2 = setInterval(() => { if (!document.hidden) tcLoad(); }, 30000); } }   // 2026-11-06: 30 s -> 5 s
 // 2026-11-06 (Nikhil): the instrument actually deployed - option buying / selling, synthetic with or without hedge, exact strikes
@@ -3025,7 +3093,7 @@ function legsHtml(t){
 // strategy and date range"): the all-markets card is a filterable table over data_store/livedesk/trade_log.csv (/api/livedesk/tradelog),
 // with live P&L for open trades from /api/livedesk/papertrades. Per-market cards (crypto / metals) keep the old layout.
 // 2026-11-09 (Nikhil: "suggest short name for each strategy, it's using a lot of space"): short names; the full label stays on hover
-const RULE_SHORT = { ofp_vwap: "OF · VWAP Retest", ofp_lvn: "OF · LVN Reject", ofp_fail: "OF · Failed Auction", ofp_or: "OF · Opening Range", ofp_stack: "OF · Stacked Zone", ofp_div: "OF · Divergence Edge",b4h: "4H Break", b4h_v4: "4H Break v4", b4h_h2: "4H Break H2", b4h_g2: "4H Break Gold", dom_ix: "DOM Index", dom_ix_break: "DOM Break", dom_ix_hold: "DOM Hold",
+const RULE_SHORT = { stfa: "ST-Fisher-ADX Opt", ofp_vwap: "OF · VWAP Retest", ofp_lvn: "OF · LVN Reject", ofp_fail: "OF · Failed Auction", ofp_or: "OF · Opening Range", ofp_stack: "OF · Stacked Zone", ofp_div: "OF · Divergence Edge",b4h: "4H Break", b4h_v4: "4H Break v4", b4h_h2: "4H Break H2", b4h_g2: "4H Break Gold", dom_ix: "DOM Index", dom_ix_break: "DOM Break", dom_ix_hold: "DOM Hold",
   dom_stocks: "DOM Stocks", touchv2: "Touch v2", ovn_h30: "Overnight", ovn_h30f: "Overnight+OF", vcy_night: "Night Straddle", vcy_day: "Day Straddle", vcy_day_sk: "Day Skew",
   vcy_day_bw: "Day Wing Fly", vcy_day_dh: "Day Hedged", us_desk: "US Desk", us_manual: "US Manual", svb: "Vol Break", svb_tr: "Vol Break Trail", istr_n: "Nifty Strangle",
   icon_s: "Sensex Condor", fsb2: "BuildUp v2", fsb: "BuildUp v1", bkf: "BreakFade", t55: "Trend 55", qph: "30d High", n5m: "N500 Mom", n5i: "N500 Ind", sorb: "Stocks ORB", touch: "Touch v1", touchdom: "Touch+DOM", sbt: "Block Touch"};
@@ -3037,7 +3105,10 @@ function ptlSet(k, v){ PTL.f[k] = v; try { localStorage.setItem("mp.ptl.f", JSON
 async function ptlLoad(el){
   if (!PTL.rows || Date.now() - PTL.t > 60000){
     try { const d = await fetch("/api/livedesk/tradelog").then(r => r.json()); PTL.rows = d.rows || []; PTL.t = Date.now(); PTL.as_of = d.as_of; } catch(e){ if (!PTL.rows) return; } }
-  try { const P = await fetch("/api/livedesk/papertrades").then(r => r.json()); PTL.open = {}; (P.open||[]).forEach(t => { PTL.open[`${t.rule}|${t.key}|${t.opened}`] = t; }); } catch(e){}
+  try { const P = await fetch("/api/livedesk/papertrades").then(r => r.json()); PTL.open = {}; (P.open||[]).forEach(t => { PTL.open[`${t.rule}|${t.key}|${t.opened}`] = t; });
+    // 2026-11-11 (Nikhil: "can it be live feeds?"): live price + open P&L from the 2-second feeds (order-flow models, DOM stocks) win over the last bar close
+    PTL.sc = {}; (P.stop_check||[]).forEach(t => { PTL.sc[`${t.rule}|${t.key}|${t.opened}`] = t; });   // 2026-11-11: stop already reached on the price path
+    (P.live_now||[]).forEach(t => { const k = `${t.rule}|${t.key}|${t.opened}`; PTL.open[k] = Object.assign({}, PTL.open[k] || {}, {now: t.now, pnl_open: t.pnl_open, live: true}); }); } catch(e){}
   if (!PTL.tvAt || Date.now() - PTL.tvAt > 120000){ try { PTL.topvol = await fetch("/api/livedesk/topvol").then(r => r.json()); PTL.tvAt = Date.now(); } catch(e){} }   // 2026-11-09: today's top-10 universe
   PTL.el = el; ptlRender(); perfRender();
 }
@@ -3053,7 +3124,7 @@ async function ptlFlash(id, rule, key, opened, side){
 function ptlRender(){
   const el = PTL.el; if (!el || !PTL.rows) return;
   const F = PTL.f, todayIST = new Date(Date.now() + 330*60000).toISOString().slice(0,10);
-  const grp = F.grp === "tab" && MKT_TABS.includes(VIEW) ? VIEW : F.grp === "tab" ? "" : F.grp;
+  const grp = F.grp === "tab" && MKT_TABS.includes(VIEW) ? VIEW : F.grp === "tab" && VIEW === "fno" ? "india" : F.grp === "tab" ? "" : F.grp;   // 2026-11-11: F&O Scan = India-NSE
   const dayOf = r => String(r.status === "open" ? r.opened_ist : (r.closed_ist || r.opened_ist)).slice(0,10);
   const since = d => { const x = new Date(todayIST); x.setDate(x.getDate() - d); return x.toISOString().slice(0,10); };
   let rows = PTL.rows.slice();
@@ -3089,19 +3160,19 @@ function ptlRender(){
   const rv = r => { const a = r.went_right, b = r.went_wrong; if (!a && !b) return '<span class="faint">–</span>';
     return `<span title="${esc((a ? "✓ " + a : "") + (a && b ? "\n" : "") + (b ? "✗ " + b : ""))}">${a ? `<span class="pos">✓</span> ${esc(cut(a, 38))}` : ""}${a && b ? "<br>" : ""}${b ? `<span class="neg">✗</span> ${esc(cut(b, 38))}` : ""}</span>`; };
   const imp = r => { const t = r.where_to_improve; return t && t !== "-" ? `<span title="${esc(t)}">${esc(cut(t, 60))}</span>` : '<span class="faint">–</span>'; };
-  const tr = r => { const live = PTL.open[`${r.rule}|${r.key}|${r.opened_ist}`]; const d = dayOf(r), tIn = String(r.opened_ist).slice(11,16), tOut = String(r.closed_ist||"").slice(11,16);
+  const tr = r => { const live = PTL.open[`${r.rule}|${r.key}|${r.opened_ist}`], sh = r.status === "open" ? (PTL.sc||{})[`${r.rule}|${r.key}|${r.opened_ist}`] : null; const d = dayOf(r), tIn = String(r.opened_ist).slice(11,16), tOut = String(r.closed_ist||"").slice(11,16);
     const pnl = r.status === "open" ? (live && live.pnl_open != null ? money(live.pnl_open, r.ccy) + ' <span class="small faint">live</span>' : (num(r.pnl_open) != null && !isNaN(num(r.pnl_open)) ? money(r.pnl_open, r.ccy) + ' <span class="small faint">open</span>' : '<span class="pill p-accent" style="font-size:11px">open</span>')) : money(r.pnl, r.ccy);
     const id = `${r.rule}|${r.key}|${r.opened_ist}|${r.side}`, isOpen = PTL.openId === id, Fd = PTL.flash[id];
-    const flash = !isOpen ? "" : `<tr class="ptl-flash"><td colspan="12" style="background:var(--surface-2);padding:8px 10px">${!Fd ? '<span class="small muted">Loading the chart…</span>' : Fd.err ? `<span class="small muted">${esc(Fd.err)}</span>` : `<div style="max-width:560px">${tcCard(Fd)}</div>`}</td></tr>`;
+    const flash = !isOpen ? "" : `<tr class="ptl-flash"><td colspan="13" style="background:var(--surface-2);padding:8px 10px">${!Fd ? '<span class="small muted">Loading the chart…</span>' : Fd.err ? `<span class="small muted">${esc(Fd.err)}</span>` : `<div style="max-width:560px">${tcCard(Fd)}</div>`}</td></tr>`;
     return `<tr style="cursor:pointer;${isOpen ? "background:var(--surface-2)" : ""}" title="click for the trade's chart" onclick="ptlFlash(${JSON.stringify(id).replace(/"/g, "&quot;")}, ${JSON.stringify(r.rule).replace(/"/g, "&quot;")}, ${JSON.stringify(r.key).replace(/"/g, "&quot;")}, ${JSON.stringify(r.opened_ist).replace(/"/g, "&quot;")}, ${JSON.stringify(r.side).replace(/"/g, "&quot;")})"><td style="white-space:nowrap">${isOpen ? "▾ " : ""}${esc(d.slice(5))}</td><td style="white-space:nowrap" class="small">${esc(tIn)}${tOut ? "→" + esc(tOut) : ""}</td><td title="${esc(r.rule_label)}" style="white-space:nowrap">${esc(ruleShort(r.rule, r.rule_label))}</td><td><b>${esc(r.market)}</b></td>
-      <td class="${r.side==="long"?"pos":"neg"}">${esc(r.side)}</td><td class="num">${f(r.entry)}</td><td class="num">${r.status==="open" ? (live && live.now != null ? f(live.now) : "–") : f(r.exit)}</td>
-      <td class="small">${r.status==="open" ? "" : esc(r.exit_reason||"")}</td><td class="num">${num(r.r) != null && !isNaN(num(r.r)) && r.status !== "open" ? `<span class="${num(r.r)>0?"pos":"neg"}">${num(r.r)>0?"+":""}${fmt(num(r.r),2)}</span>` : "–"}</td>
+      <td class="${r.side==="long"?"pos":"neg"}">${esc(r.side)}</td><td class="num">${f(r.entry)}</td><td class="num neg" title="stop loss">${r.stop !== "" && r.stop != null ? f(r.stop) : "–"}</td><td class="num">${sh ? `<span class="neg" title="stop reached at ${esc(sh.at)} (${f(sh.px)})">${f(sh.stop_used != null ? sh.stop_used : r.stop)}</span>` : r.status==="open" ? (live && live.now != null ? f(live.now) : "–") : f(r.exit)}</td>
+      <td class="small">${sh ? `<span class="pill p-bear" style="font-size:11px" title="the stop was reached on the price path; the rule closes it on its own schedule (bar close), so the record updates then">SL Hit ${esc(String(sh.at).slice(-5))}</span>` : r.status==="open" ? "" : esc(r.exit_reason||"")}</td><td class="num">${sh ? '<span class="neg" title="about -1R at the stop, before costs">≈ −1.00</span>' : num(r.r) != null && !isNaN(num(r.r)) && r.status !== "open" ? `<span class="${num(r.r)>0?"pos":"neg"}">${num(r.r)>0?"+":""}${fmt(num(r.r),2)}</span>` : "–"}</td>
       <td class="num" style="white-space:nowrap">${pnl}</td><td class="small" style="min-width:200px">${rv(r)}</td><td class="small" style="min-width:180px">${imp(r)}</td></tr>${flash}`; };   // 2026-11-09 (Nikhil): Why column removed (it is in the flash card)
   const TV = PTL.topvol, uni = !TV ? "" : `<div class="small" style="margin:2px 0 4px"><b>Today's stock universe</b> <span class="muted">(top ${TV.n || 10} F&amp;O stocks by 09:15–09:30 traded value - the intraday stock rules trade only these):</span> ${(TV.top||[]).length ? TV.top.map(esc).join(", ") : `<span class="faint">${esc(TV.note || "not ranked yet")}</span>`}</div>`;
   morph(el, `<div class="spread"><h2>All Paper Trades <span class="small muted">every rule · paper only, never orders</span></h2></div>${uni}${bar}
     <div class="small" style="margin:2px 0 6px">${tot || '<span class="faint">No closed trade in this selection.</span>'}</div>
-    <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th title="the trade's own review from its price path">Right / Wrong</th><th>Improve</th></tr></thead>
-      <tbody>${rows.length ? rows.map(tr).join("") : `<tr><td colspan="12" class="small faint">No trades match.</td></tr>`}</tbody></table></div>
+    <div class="tscroll"><table class="ld-tbl small" style="width:100%"><thead><tr><th>Date</th><th>In→Out</th><th>Strategy</th><th>Market</th><th>Side</th><th>Entry</th><th>SL</th><th>Exit / Now</th><th>Exit By</th><th>R</th><th>P&amp;L</th><th title="the trade's own review from its price path">Right / Wrong</th><th>Improve</th></tr></thead>
+      <tbody>${rows.length ? rows.map(tr).join("") : `<tr><td colspan="13" class="small faint">No trades match.</td></tr>`}</tbody></table></div>
     `);
     // 2026-11-10 (Nikhil: "remove this"): the "By strategy in this selection" fold and the help paragraph are gone.
     // 2026-11-11: this note used to sit inside the template string above, so it showed on the page; moved out.
@@ -3132,7 +3203,7 @@ function perfStats(rows){
 function perfRender(){
   const el = $("#perfCard"); if (!el || !PTL.rows) return;
   const F = PERF.f, todayIST = new Date(Date.now() + 330*60000).toISOString().slice(0,10);
-  const grp = F.grp === "tab" && MKT_TABS.includes(VIEW) ? VIEW : F.grp === "tab" ? "" : F.grp;
+  const grp = F.grp === "tab" && MKT_TABS.includes(VIEW) ? VIEW : F.grp === "tab" && VIEW === "fno" ? "india" : F.grp === "tab" ? "" : F.grp;   // 2026-11-11: F&O Scan = India-NSE
   const since = d => { const x = new Date(todayIST); x.setDate(x.getDate() - d); return x.toISOString().slice(0,10); };
   let rows = PTL.rows.filter(r => r.status === "closed" && r.closed_ist);
   if (grp) rows = rows.filter(r => (r.group||"").toLowerCase() === grp);
@@ -3322,7 +3393,7 @@ async function lbLoad(){
 function lbRender(){
   const el = $("#lbCard"); if (!el) return; const D = LBRD.D[LBRD.k];
   const tabs = ["NIFTY","BANKNIFTY"].map(k => `<button class="chip" aria-pressed="${k===LBRD.k}" onclick="lbPick('${k}')">${k==="NIFTY"?"Nifty":"Bank Nifty"}</button>`).join(" ");
-  const head = `<div class="spread"><h2>Level Board <span class="small muted">spot prices · levels · OI · big walls · resting orders · next-day score</span></h2><div class="row lb-tabs" style="gap:6px">${tabs}</div></div>`;
+  const head = `<div class="spread"><h2>Level Board <span class="small muted">Trade Plan · Levels</span></h2><div class="row lb-tabs" style="gap:6px">${tabs}</div></div>`;
   if (!D){ el.innerHTML = head + `<p class="small muted">Loading…</p>`; return; }
   if (D.err){ el.innerHTML = head + `<p class="small muted">${esc(D.err)}</p>`; return; }
   const P = D.price, dp = 0, px = v => fmt(v, dp);
@@ -3396,20 +3467,20 @@ function lbRender(){
     const lvl = first ? `<td rowspan="2" style="vertical-align:top;border-left:4px solid ${st[0]};white-space:nowrap"><b style="font-size:14px">${esc(c.level)}</b><br><span class="small faint">${esc(c.name)}${c.tags.length ? " · " + c.tags.map(esc).join(" ") : ""}</span><br><span class="small faint">fut ${esc(c.fut)}</span></td>
       <td rowspan="2" style="vertical-align:top;white-space:nowrap">${c.side==="R"?"Resistance":c.side==="S"?"Support":"Inside"}<br><span class="small faint">${c.dist>0?"+":""}${fmt(c.dist,0)} pts · ${c.dist_pct>0?"+":""}${fmt(c.dist_pct,2)}%</span></td>
       <td rowspan="2" style="vertical-align:top"><span class="pill" style="background:${st[0]};color:#fff;white-space:nowrap">${st[1]}</span>${c.open ? `<br><span class="small"><b>in ${c.open.setup.toUpperCase()} ${c.open.side}</b> from ${esc(c.open.at)}</span>` : ""}</td>` : "";
-    if (!L) return `<tr>${lvl}<td>${setup}</td><td colspan="7" class="faint small">–</td></tr>`;
+    if (!L) return `<tr>${lvl}<td>${setup}</td><td colspan="5" class="faint small">–</td></tr>`;
     const dc = L.dir === "long" ? "var(--bull)" : "var(--bear)";
-    return `<tr>${lvl}<td><b>${setup}</b></td><td><b style="color:${dc}">${L.dir.toUpperCase()}</b></td><td class="num">${px(L.entry)}</td><td class="num">${px(L.stop)} <span class="small faint">(${L.risk_pts})</span></td>
-      <td class="num" style="white-space:nowrap">${px(L.target)} <span class="small faint">${esc(L.target_note)}</span></td><td class="num">${L.rr} R</td><td class="num">₹${fmt(L.risk_rs,0)}</td>
-      <td style="white-space:nowrap">${ndLeg(L.dir)}</td></tr>`; };   // 2026-11-09 (Nikhil): Synthetic Future and 0.6Δ Option columns removed; Next Day score instead
-  const planTable = `<div class="tscroll"><table class="ld-tbl" style="margin-top:6px;width:100%"><thead><tr><th>Level</th><th>Type · Pts Away</th><th>Status</th><th>Setup</th><th>Side</th><th>Entry</th><th>Stop (pts)</th><th>Target</th><th>R</th><th>Risk / lot</th><th title="Rise / Fall Score, India 1D model: chance the index closes lower tomorrow">Next Day</th></tr></thead><tbody>`
+    return `<tr>${lvl}<td><b>${setup}</b></td><td><b style="color:${dc}">${L.dir.toUpperCase()}</b><div class="small" style="white-space:nowrap">${ndLeg(L.dir)}</div></td><td class="num">${px(L.entry)}</td><td class="num">${px(L.stop)} <span class="small faint">(${L.risk_pts})</span></td>
+      <td class="num" style="white-space:nowrap">${px(L.target)} <span class="small faint">${esc(L.target_note)}</span></td><td class="num" title="Risk ₹${fmt(L.risk_rs,0)} a lot">${L.rr} R<div class="small faint">₹${fmt(L.risk_rs,0)}/lot</div></td></tr>`; };   // 2026-11-11: Risk / Lot folded into R; Next Day moved to the Side cell   // 2026-11-09 (Nikhil): Synthetic Future and 0.6Δ Option columns removed; Next Day score instead
+  const planTable = `<div class="tscroll"><table class="ld-tbl" style="margin-top:6px;width:100%"><thead><tr><th>Level</th><th>Type · Pts Away</th><th>Status</th><th>Setup</th><th>Side</th><th>Entry</th><th>Stop (pts)</th><th>Target</th><th>R</th></tr></thead><tbody>`
     + (D.plan||[]).map(c => planRow(c, c.hold, "HOLD", true) + planRow(c, c.brk, "BREAK", false)).join("") + `</tbody></table></div>
     <p class="small faint" style="margin:4px 0 0">HOLD = bounce off the level (stop 2 bands beyond the far edge); BREAK = run through it (stop 1 band inside). Target = next level ≥ 2 R, else 2 R. Status: far / approaching (≤0.7%) / near (≤0.3%) / price in zone / testing now (engine checklist live) / in trade.</p>`;
   const T = D.today || {};
   const kill = `<div class="small" style="margin:8px 0 2px;padding:6px 10px;border-radius:8px;background:var(--surface-2)"><b>Day limits (DOM v4, ${D.key==="NIFTY"?"Nifty":"Bank Nifty"}):</b> trades ${T.n ?? 0} of ${T.limit ?? 4} · closed ${(T.r_closed ?? 0) > 0 ? "+" : ""}${fmt(T.r_closed ?? 0, 2)} R (₹${fmt(T.pnl ?? 0, 0)}) · plan stops the day at ${T.plan_stop ?? -2} R · entries ${esc(T.window||"09:30–15:00")} · flat ${esc(T.flat||"15:20")}${T.open ? ` · <b>open: ${esc(T.open)}</b>` : ""}${T.gate ? ` · <span class="pill p-neutral" style="font-size:11px">${esc(T.gate)}</span>` : ""}${(T.r_closed ?? 0) <= (T.plan_stop ?? -2) ? ` · <b style="color:var(--bear)">DAY STOP HIT - no more trades</b>` : ""}</div>`;
   const mute = `<label class="small faint" style="margin-left:10px;cursor:pointer"><input type="checkbox" ${LBRD.mute?"checked":""} onchange="LBRD.mute=this.checked;try{localStorage.setItem('mp.lb.mute',this.checked?'1':'0')}catch(e){}"> mute alerts</label>`;
-  const planHtml = (D.plan||[]).length ? `<div class="spread" style="margin-top:8px"><h3 style="margin:0">Trade Plan <span class="small muted">3 nearest levels · how DOM v4 would trade them · indications, untested as a manual plan</span></h3>${mute}</div>` + planTable + kill : "";
+  const planHtml = (D.plan||[]).length ? `<div class="spread" style="margin-top:8px"><h3 style="margin:0">Trade Plan <span class="small muted">3 nearest levels · DOM v4</span></h3>${mute}</div>` + planTable + kill : "";
   lbAlert(D);
-  morph(el, head + planHtml + `<details ${LBRD.tbl===false?"":"open"} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall Score, India 1D model">Next Day</th></tr></thead><tbody>`
+  window.LB_PLAN = {key: D.key, plan: D.plan || []};   // 2026-11-11: read by Trades In This Market
+  morph(el, head + planHtml + `<details ${LBRD.tbl===true?"open":""} style="margin-top:10px" ontoggle="LBRD.tbl=this.open"><summary class="small muted" style="cursor:pointer">Full level table</summary><div class="tscroll"><table class="ld-tbl" style="margin-top:8px;width:100%"><thead><tr><th>Level</th><th>Type</th><th>Pts Away</th><th>OI at Block</th><th>Big Wall</th><th>Standing</th><th>Trend</th><th>Resting Orders</th><th title="Rise / Fall Score, India 1D model">Next Day</th></tr></thead><tbody>`
     + (R.length ? R.map(row).join("") : empty("No level above within 1.2%")) + I.map(row).join("") + prow + (S.length ? S.map(row).join("") : empty("No level below within 1.2%")) + farRow + `</tbody></table></div>`
     + ((D.pulled||[]).length ? `<p class="small muted" style="margin:6px 0 0">Walls pulled in the last 30 min (futures): ${D.pulled.map(p => `${p.side} ${px(p.price)} at ${esc(p.at)}`).join(" · ")}</p>` : "")
     + `<p class="small faint" style="margin:6px 0 0">Updated ${esc(D.at||"")} · OI ${esc(D.oi_at||"–")} · walls / book ${esc(D.walls_at||"–")} (${esc(D.walls_src||"")}). <b>Every price is the spot index</b> (DOM Index v4 trades in spot; the futures figure under each level is for reference; walls and the book are futures data moved to spot). Resting orders = bid (B) / ask (A) lots waiting inside the zone in the 200-level book right now (about ±0.4% of price; beyond that = beyond book). `
@@ -3421,7 +3492,7 @@ function lbRender(){
 const LB2 = {D: {}, cs: {}, k: null, far: false};
 function lb2Key(){ const v = VIEW, desk = v === "crypto" ? "crypto" : "metals"; const keys = TAB_MARKETS[v] || [];
   // 2026-11-11: on the Intraday Desk the board follows the desk's own coin / metal picker (its chips are hidden there)
-  try { if (typeof TAB !== "undefined" && TAB === "intraday" && typeof IDS !== "undefined" && keys.includes(IDS.sel[v])) return IDS.sel[v]; } catch(e){} const k = (FX.pick||{})[desk] || FX.sel[desk] || state.market; return keys.includes(k) ? k : keys[0]; }
+  try { if (window.CUR_TAB === "intraday" && typeof IDS !== "undefined" && keys.includes(IDS.sel[v])) return IDS.sel[v]; } catch(e){} const k = (FX.pick||{})[desk] || FX.sel[desk] || state.market; return keys.includes(k) ? k : keys[0]; }
 async function lb2Load(){
   const el = $("#lb2Card"); if (!el || el.hidden) return; const k = lb2Key(); LB2.k = k;
   if (!LB2.D[k]) try { lb2Render(); } catch(e){}                                          // 2026-11-11: "Loading…" instead of an empty card
@@ -3633,6 +3704,69 @@ async function fnoDetail(sym, quiet){
     if (FNO.open === sym) fnoPop(sym);
     return d; } catch(e){ return null; }
 }
+// 2026-11-11 (Nikhil: "order blocks are not shown in the chart very accurately .. idea for strongest reading is to find top contenders
+// with an order block which they have breached in either direction"): Strongest Readings = names on the move that broke an order block in
+// their direction - bullish through a supply block above, bearish through a bull order block below - today (live price) or in the last
+// 3 sessions and still beyond it. Order blocks from /api/livedesk/fnoflow?lab=ob2 (app/obscan.py, same detection as BuildUp v2), drawn on
+// 25 daily candles + today so the band sits where it formed. The old conviction list stays one click away.
+FNO.sr = (() => { try { return localStorage.getItem("mp.fno.sr") || "brk"; } catch(e){ return "brk"; } })();
+function fnoSrSet(k){ FNO.sr = k; try { localStorage.setItem("mp.fno.sr", k); } catch(e){} fnoRender(); }
+function fnoOb2(){
+  if (FNO.ob2busy || (FNO.ob2 && Date.now() - FNO.ob2at < 600000)) return;
+  FNO.ob2busy = true;
+  fetch("/api/livedesk/fnoflow?lab=ob2").then(r => r.json()).then(d => { FNO.ob2busy = false; if (d && d.syms){ FNO.ob2 = d; FNO.ob2at = Date.now(); if (FNO.sec === "board") fnoRender(); } })
+    .catch(() => { FNO.ob2busy = false; });
+}
+function fnoBreak(r){
+  const X = FNO.ob2 && FNO.ob2.syms && FNO.ob2.syms[r.sym]; if (!X || !r.fut) return null;
+  let k = r.fut_prev && X.close ? r.fut_prev / X.close : 1; if (Math.abs(k - 1) > 0.05) k = 1;   // the page's futures vs the stored contract
+  const p = r.fut, S = z => z ? {lo: z.lo * k, hi: z.hi * k, day: z.day, on: z.on, ago: z.ago} : null;
+  if (r.side > 0){ const a = S(X.supply_up), b = S(X.broke_up);
+    if (a && p > a.hi) return {dir: 1, z: a, when: "today", X, k};
+    if (b && p > b.hi) return {dir: 1, z: b, when: b.on, X, k}; }
+  if (r.side < 0){ const a = S(X.ob_dn), b = S(X.broke_dn);
+    if (a && p < a.lo) return {dir: -1, z: a, when: "today", X, k};
+    if (b && p < b.lo) return {dir: -1, z: b, when: b.on, X, k}; }
+  return null;
+}
+function fnoBreaks(){
+  const R = (FNO.D && FNO.D.rows) || [];
+  const pick = sd => R.filter(r => r.side === sd && (r.conviction || 0) >= 3).map(r => ({r, b: fnoBreak(r)})).filter(x => x.b)   // contenders: conviction 3+ of 5
+    .sort((a, b) => (b.b.when === "today") - (a.b.when === "today") || (b.r.conviction||0) - (a.r.conviction||0) || sd*(b.r.move - a.r.move)).slice(0, 6);
+  return [...pick(1), ...pick(-1)];
+}
+function fnoBreakChart(r, B, W, H){
+  const C = (B.X.candles || []).map(c => [c[0], c[1]*B.k, c[2]*B.k, c[3]*B.k, c[4]*B.k]);
+  const pth = (r.path||[]).map(z => r.fut_prev * (1 + z[1]/100));
+  if (pth.length && r.fut_prev) C.push(["today", pth[0], Math.max(...pth, r.fut), Math.min(...pth, r.fut), r.fut]);
+  if (!C.length) return "";
+  const z = B.z, R = W - 70, n = C.length, cw = R / n;
+  let lo = Math.min(...C.map(c => c[3]), z.lo), hi = Math.max(...C.map(c => c[2]), z.hi); const pd = (hi - lo) * 0.06 || 1; lo -= pd; hi += pd;
+  const y = v => 3 + (hi - v) / (hi - lo) * (H - 14), x = i => i * cw;
+  const zi = C.findIndex(c => c[0] === z.day), zx = zi >= 0 ? x(zi) : 0;
+  const col = B.dir > 0 ? "var(--bear)" : "var(--bull)", lab = B.dir > 0 ? "Supply" : "Bull OB";
+  let g = `<rect x="${zx.toFixed(1)}" y="${y(z.hi).toFixed(1)}" width="${(R - zx).toFixed(1)}" height="${Math.max(2, y(z.lo) - y(z.hi)).toFixed(1)}" fill="${col}" opacity="0.16"/>`;
+  const edge = B.dir > 0 ? z.hi : z.lo;
+  g += `<line x1="${zx.toFixed(1)}" x2="${R}" y1="${y(edge).toFixed(1)}" y2="${y(edge).toFixed(1)}" stroke="${col}" stroke-dasharray="3 2"/>`;
+  C.forEach((c, i) => { const up = c[4] >= c[1], cc = i === n - 1 ? "var(--ink)" : up ? "var(--bull)" : "var(--bear)", xc = x(i) + cw/2;
+    g += `<line x1="${xc.toFixed(1)}" x2="${xc.toFixed(1)}" y1="${y(c[2]).toFixed(1)}" y2="${y(c[3]).toFixed(1)}" stroke="${cc}"/>`
+       + `<rect x="${(xc - cw*0.32).toFixed(1)}" y="${y(Math.max(c[1], c[4])).toFixed(1)}" width="${(cw*0.64).toFixed(1)}" height="${Math.max(1, Math.abs(y(c[1]) - y(c[4]))).toFixed(1)}" fill="${up && i < n - 1 ? "var(--surface)" : cc}" stroke="${cc}"/>`; });
+  g += `<text x="${(zx + 3).toFixed(1)}" y="${(B.dir > 0 ? y(z.hi) - 3 : y(z.lo) + 10).toFixed(1)}" font-size="9" fill="${col}">${lab} ${ldPx(z.lo)}–${ldPx(z.hi)}</text>`;
+  g += `<text x="${W - 1}" y="${(y(r.fut) + 3).toFixed(1)}" font-size="9" font-weight="700" text-anchor="end" fill="var(--ink)">${ldPx(r.fut)}</text>`;
+  g += `<text x="1" y="${H - 1}" font-size="8.5" fill="var(--muted)">${esc(String(C[0][0]).slice(5))}</text><text x="${R}" y="${H - 1}" font-size="8.5" text-anchor="end" fill="var(--muted)">today</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="last 25 sessions with the broken order block">${g}</svg>`;
+}
+function fnoBreakCard(x){
+  const r = x.r, B = x.b, col = r.side > 0 ? "var(--bull)" : "var(--bear)", ch = r.fut_prev ? r.fut - r.fut_prev : null;
+  const when = B.when === "today" ? "today" : `on ${String(B.when).slice(5).replace("-", "/")}`;
+  return `<div class="fno-cc" style="--cc:${col}" onclick="fnoPop('${esc(r.sym)}')" title="${esc(r.name||r.sym)} - click for detail">
+    <div class="fno-cc-h"><span class="fno-ab">${esc(fnoAb(r.sym))}</span><div style="min-width:0"><b>${esc(r.sym)}</b><div class="small muted fno-cc-sec">${esc(r.sector)}</div></div>
+      <span class="pill fno-cc-pill">${r.side > 0 ? "BULLISH" : "BEARISH"}</span>${fnoRing(r.conviction, col)}</div>
+    <div class="fno-cc-m"><span class="fno-cc-pct">${r.move > 0 ? "+" : ""}${fmt(r.move, 2)}%</span><span class="small">₹${ldPx(r.fut)}${ch == null ? "" : ` ${ch > 0 ? "+" : ""}${fmt(ch, 2)}`} · ${BU[r.bu][0]}</span></div>
+    ${fnoBreakChart(r, B, 300, 104)}
+    <div class="fno-cc-f"><div><span>Support</span><b>${r.support == null ? "–" : ldPx(r.support)}</b></div><div><span>Resistance</span><b>${r.resistance == null ? "–" : ldPx(r.resistance)}</b></div>
+      <div><span>${B.dir > 0 ? "Broke Supply" : "Broke Bull OB"} ${when}</span><b style="color:${col}">${ldPx(B.z.lo)}–${ldPx(B.z.hi)}</b></div></div></div>`;
+}
 function fnoStrongest(){
   const R = (FNO.D && FNO.D.rows) || [];
   const pick = sd => R.filter(r => r.side === sd && r.conviction >= 4).sort((a,b) => b.conviction - a.conviction || sd*(b.move - a.move)).slice(0, 6);   // 2026-11-08: every name with conviction 4+ (max 6 a side)
@@ -3650,7 +3784,7 @@ function fnoRender(){
   let h = `<section class="card fno-card"><div class="spread"><div><h2 style="margin:0">F&amp;O Flow</h2>
       <div class="small muted">${live ? `Live · ${esc(D.at||"")} IST · every minute` : `Market closed · ${esc(D.source)} · ${esc(D.at||"")}`}</div></div>
     ${board ? `<span class="fx-tf">${sw("nifty50","Nifty 50")}${sw("all","All F&amp;O")}</span>` : ""}</div>
-    ${labNav()}${labBan()}
+    ${(ixNavRender(), "")}${labBan()}
     ${board ? `<div class="fno-top">
       <div>${fnoHist(D)}</div>
       <div class="fno-sum"><div><b class="pos">${B.up} up</b> · ${B.flat} flat · <b class="neg">${B.down} down</b> <span class="muted">of ${B.names}</span></div>
@@ -3668,10 +3802,18 @@ function fnoRender(){
   }
   FNO.lastSec = FNO.sec;
   // strongest names: tall tile (option OI by strike) + big card
-  const S = fnoStrongest();
+  const S = fnoStrongest(); fnoOb2();
+  const srBar = `<div class="ld-btns" style="margin:0">${[["brk","Order Block Breaks"],["conv","Conviction 4+"]].map(([k, l]) => `<button class="${FNO.sr===k?"on":""}" onclick="fnoSrSet('${k}')">${l}</button>`).join("")}</div>`;
+  if (FNO.sr === "brk"){
+    const BK = fnoBreaks();
+    h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3>${srBar}</div>
+      <p class="small muted" style="margin:4px 0 8px">Conviction 3+ names that broke an order block in their direction - bullish through a supply block above, bearish through a bull order block below - today or in the last 3 sessions and still beyond it · up to 6 each side · 25 daily candles + today, band drawn from the day it formed${FNO.ob2 ? ` · blocks as of ${esc(FNO.ob2.day)}` : ""} · click for detail</p>
+      ${!FNO.ob2 ? `<p class="small muted">Loading order blocks…</p>` : BK.length ? `<div class="fno-ccgrid">${BK.map(fnoBreakCard).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No name on the move has broken an order block in its direction right now.</p>`}</section>`;
+  } else {
   fnoObs(S.map(r => r.sym));                                   // 2026-11-08: compact cards with order blocks (click a card for the option ladder and detail)
-  h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3><span class="small muted">conviction 4 or 5 of 5 · up to 6 each side · shaded bands = order blocks (green bull block below, red supply above) · dashed = option support / resistance · click for detail</span></div>
+  h += `<section class="card"><div class="spread"><h3 style="margin:0">Strongest Readings</h3>${srBar}<span class="small muted">conviction 4 or 5 of 5 · up to 6 each side · shaded bands = order blocks (green bull block below, red supply above) · dashed = option support / resistance · click for detail</span></div>
     ${S.length ? `<div class="fno-ccgrid">${S.map(fnoCompact).join("")}</div>` : `<p class="small muted" style="margin:6px 0 0">No name has 4 or more of the 5 checks right now.</p>`}</section>`;
+  }
   // lists
   const pick = D.rows.filter(r => FNO.f === "all" || r.sector === FNO.f);
   const bull = pick.filter(r => r.side > 0).sort((a,b) => b.conviction - a.conviction || b.move - a.move).slice(0, 15);
@@ -3972,10 +4114,15 @@ function fnoExtras(){
 }
 // ---------------------------------------------------------------- OPTIONS LAB (2026-11-08, Nikhil: "plan very fancy premium visuals") - sections of the F&O tab
 // Data: /api/livedesk/fnoflow?lab=vol|ivmap|flow|gex|inst|ban (app/optlab.py). Context only, not tested signals.
-const LAB_SECS = [["board","Board"],["buildup","BuildUp"],["vol","Volatility"],["flow","Flow"],["gamma","Gamma"],["inst","Institutions"],["roll","Rollover"]];
-FNO.sec = (() => { try { return localStorage.getItem("mp.fno.sec") || "board"; } catch(e){ return "board"; } })();
+// 2026-11-11 (Nikhil): "remove Build Up section, rename Board to Build Up" - fnoBuSection() stays defined, off the strip
+const LAB_SECS = [["board","Build Up"],["vol","Volatility"],["flow","Flow"],["gamma","Gamma"],["inst","Institutions"],["roll","Rollover"]];
+FNO.sec = (() => { try { const k = localStorage.getItem("mp.fno.sec") || "board"; return k === "buildup" ? "board" : k; } catch(e){ return "board"; } })();
 FNO.lab = {}; FNO.vsym = "NIFTY"; FNO.fsym = "NIFTY"; FNO.gsym = "NIFTY";
-function labSet(k){ FNO.sec = k; try { localStorage.setItem("mp.fno.sec", k); } catch(e){} fnoRender(); const el = document.getElementById("fnoBoard"); if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 70, behavior: "smooth"}); }
+// 2026-11-11 (Nikhil: "Board should have All Paper Trades and Strategy Performance"): the logbook view shows under the Build Up section
+function fnoTrades(){ return document.body.dataset.tab === "fno" && FNO.sec === "board"; }
+function fnoTradesSync(){ const lb = document.getElementById("viewLogbook"); if (!lb || document.body.dataset.tab !== "fno") return;
+  lb.hidden = !fnoTrades(); if (fnoTrades()) { try { ptStart(VIEW); } catch(e){} } }
+function labSet(k){ FNO.sec = k; try { localStorage.setItem("mp.fno.sec", k); } catch(e){} fnoRender(); fnoTradesSync(); const el = document.getElementById("fnoBoard"); if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 70, behavior: "smooth"}); }
 function labGet(kind, sym){
   const key = kind + "|" + (sym || ""), c = FNO.lab[key], ttl = (kind === "flow" || kind === "gex") ? 60000 : 600000;
   if (c && (c.busy || Date.now() - c.at < ttl)) return c.d;
@@ -3985,8 +4132,24 @@ function labGet(kind, sym){
   return c ? c.d : null;
 }
 function labNav(){
-  return `<nav class="lab-nav" aria-label="F&amp;O sections">${LAB_SECS.map(([k, l]) => `<button class="${FNO.sec===k?"on":""}" onclick="labSet('${k}')">${l}</button>`).join("")}</nav>`;
+  // 2026-11-11 (Nikhil: "add Desk tab over here as second one"): Desk opens the Intraday Desk (India-NSE) - on the F&O name
+  // that is open in the board if there is one, else on the desk's current pick
+  const desk = `<button onclick="labDesk()" title="Open the Intraday Desk${FNO.open ? " on " + esc(FNO.open) : ""}">Orderflow${FNO.open ? ` · ${esc(FNO.open)}` : ""}</button>`;
+  return `<nav class="lab-nav" aria-label="F&amp;O sections">${LAB_SECS.map(([k, l], i) => (i === 1 ? desk : "") + `<button class="${FNO.sec===k?"on":""}" onclick="labSet('${k}')">${l}</button>`).join("")}</nav>`;
 }
+// 2026-11-11: the same strip drawn above the desk - Desk is lit, every other button opens that F&O section
+// 2026-11-11 (Nikhil): the Desk button is labelled Orderflow
+function ixNavRender(){
+  // one strip for F&O Scan and the Desk: same markup, same place; the lit button follows the view
+  const el = document.getElementById("ixNav"); if (!el) return;
+  const onDesk = window.CUR_TAB === "intraday";
+  const html = `<nav class="lab-nav" aria-label="F&amp;O sections">${LAB_SECS.map(([k, l], i) =>
+      (i === 1 ? (onDesk ? `<button class="on" aria-current="page">Orderflow</button>` : `<button onclick="labDesk()" title="Open the Intraday Desk${FNO.open ? " on " + esc(FNO.open) : ""}">Orderflow${FNO.open ? ` · ${esc(FNO.open)}` : ""}</button>`) : "")
+      + `<button class="${!onDesk && FNO.sec===k ? "on" : ""}" onclick="${onDesk ? `labGo('${k}')` : `labSet('${k}')`}">${l}</button>`).join("")}</nav>`;
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+function labGo(k){ FNO.sec = k; try { localStorage.setItem("mp.fno.sec", k); } catch(e){} showView("fno"); window.scrollTo({top: 0}); }
+function labDesk(){ try { IDS.sub = "india"; if (FNO.open) IDS.sel.india = FNO.open; idSave(); } catch(e){} showView("intraday"); window.scrollTo({top: 0}); }
 function labBan(){
   const B = labGet("ban"); if (!B || B.err || !(B.syms||[]).length) return B && !B.err ? `<div class="lab-ban"><span class="small muted">F&amp;O ban${B.for?` for ${esc(B.for)}`:""}:</span> <span class="small">none</span></div>` : "";
   return `<div class="lab-ban"><span class="small muted">In F&amp;O ban${B.for?` for ${esc(B.for)}`:""} (no new positions):</span> ${B.syms.map(s => `<span class="lab-chip">${esc(s)}</span>`).join("")}</div>`;
@@ -4389,7 +4552,7 @@ function suStart(v){
 function showLive(v){
   v = LIVETAB[v] || v;      // live trackers live inside the India / Crypto / Metals tabs
   for (const k in LIVETRK){ const el = $("#view"+LIVEVIEW[k]); if (el) el.hidden = v!==k; }
-  $("#viewLogbook").hidden = document.body.dataset.tab!=="intraday"; ldStart(v);
+  $("#viewLogbook").hidden = !(document.body.dataset.tab==="intraday" || fnoTrades()); ldStart(v);
 
 }
 // 2026-10-30 audit: an expired Dhan login used to show only in the System tile - now a banner on every tab it affects
@@ -4434,7 +4597,8 @@ function showView(v){
   VIEW = v; if (v === "india") setTimeout(() => { try { lvlLoad(); } catch(e){} }, 1500); try{localStorage.setItem("mp.view", TAB)}catch(e){}
   setTimeout(() => { try { sysBanner(); } catch(e){} }, 0);
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v===TAB || (TAB==="fno" && b.dataset.v==="intraday")));
-  document.querySelectorAll("#ixSwitch button").forEach(b => b.classList.toggle("on", b.dataset.ix===TAB));   // 2026-11-11: merged Intraday tab
+  document.querySelectorAll("#ixSwitch button").forEach(b => b.classList.toggle("on", b.dataset.ix===TAB));
+  if (TAB === "intraday" || TAB === "fno") { try { ixNavRender(); } catch(e){} }   // 2026-11-11: merged Intraday tab
   { const h = $("#ixHint"); if (h) h.textContent = TAB==="fno" ? "Every NSE F&O name: futures build-up, OI and price, sector by sector" : TAB==="intraday" ? "One market at a time: patterns, levels, order flow and trade cards" : ""; }
   ptStart(v); domStart(); setTimeout(() => { try { usPaperStart(v, TAB); } catch(e){} }, 0);   // 2026-11-07: US paper trades card
   if (v==="desk") setTimeout(() => { try { pairAlign(); } catch(e){} }, 60);
@@ -4518,6 +4682,7 @@ function showView(v){
     if (dk) dk.hidden = false;
     smxLoad("india");                       // the matrix is grouped by market; India is the one with the strategies
     planRender();
+    try { rsApply(); } catch(e){}
     setTimeout(() => { try { planRender(); } catch(e){} }, 1200);   // again once the matrix data has landed
   } catch(e){}
 }
@@ -4588,6 +4753,149 @@ async function planRender(){
     <div class="tscroll" style="max-height:520px;overflow:auto"><table class="tfgrid smx"><thead><tr><th style="text-align:left">Strategy</th><th>Today</th><th style="text-align:left">Why</th><th title="profit factor in the out-of-sample test (May 2025 →), with the plan's rule">Profit factor</th></tr></thead>
       <tbody>${items.map(row).join("") || `<tr><td colspan="4" class="small muted">No tested strategy for this market.</td></tr>`}</tbody></table></div></details>
     <p class="small faint" style="margin:6px 0 0">How it decides: each strategy looks at the regime of its own timeframe (intraday → 15-min, swing → daily, positional → weekly) and follows its cell in the Strategy × regime matrix below - only if the regime helped that strategy in the out-of-sample test (May 2025 →, rules set on the earlier period). Otherwise the regime is ignored and it trades at normal size. Indications only - you decide.</p>`}`;
+}
+// ---- 2026-11-11 (Nikhil: "yes for 12 month rebuild and study result ... keep updating to find strong patterns") ----
+// Research tab: Strategies | Order Flow. The Order Flow view reads the standing study (app/ofstudy.py, re-run every 6 h)
+// through the regime board route. A fixed list of scenarios; a test is STRONG only when every check passes.
+const RS = {v: (() => { try { return localStorage.getItem("mp.rsView") || "strat"; } catch(e){ return "strat"; } })()};
+const OFR = {d: null, t: null, f: (() => { try { return JSON.parse(localStorage.getItem("mp.ofr.f") || "{}"); } catch(e){ return {}; } })()};
+OFR.f = Object.assign({scope: "", tf: "", kind: "", v: "sp", q: ""}, OFR.f);
+function rsSet(v){ RS.v = v; try { localStorage.setItem("mp.rsView", v); } catch(e){} rsApply(); }
+function rsApply(){
+  document.body.classList.toggle("rs-of", RS.v === "of");
+  document.querySelectorAll("#rsSwitch button").forEach(b => b.classList.toggle("on", b.dataset.rs === RS.v));
+  if (RS.v === "of" && window.CUR_TAB === "research") ofrLoad();
+}
+async function ofrLoad(run){
+  clearTimeout(OFR.t);
+  if (window.CUR_TAB !== "research" || RS.v !== "of") return;
+  OFR.t = setTimeout(() => { if (!document.hidden) ofrLoad(); }, 60000);
+  if (!OFR.d) $("#ofrCard").innerHTML = `<p class="small muted" style="margin:0">Order Flow Research · Loading…</p>`;
+  try { oflRender(); } catch(e){}
+  try { OFR.d = await fetch("/api/livedesk/regimeboard_detail?group=_ofstudy" + (run ? "&sym=run" : "")).then(r => r.json()); } catch(e){ return; }
+  ofrRender();
+}
+// ---- 2026-11-11 (Nikhil: "under Order Flow Research create a new section to explain each pattern theoretically and add a video"):
+// Pattern Library - one card per pattern: the idea, the engine's exact rule, what to look for, what proves it wrong, the live study's best
+// verdict, and a narrated explainer video (illustrative chart; served by the regime board route as base64, played in a pop-up).
+const OFL_P = [
+  {k: "stack", n: "Stacked Imbalances", side: "with the push",
+   idea: "Aggressive buyers lift the offer at three or more prices in a row, each time with at least 3× the volume of the sellers one row below. The stacked rows mark a zone the buyers built - and often defend when price comes back.",
+   rule: "Buy at a price ≥ 3 × sell one row below (and ≥ 30 % of the bar's median row), on 3+ consecutive rows. Zone = lowest to highest stacked row. Mirror: stacked sell imbalances.",
+   look: "A block of green diagonal imbalances in the middle of a strong bar; later, a pullback into that block that holds.",
+   wrong: "A bar closes back below the whole zone (above it for a sell stack) - the buyers who built it are gone."},
+  {k: "absorb", n: "Absorption", side: "against the push",
+   idea: "Heavy selling hits the bid, yet price does not fall: passive buyers resting on the bid soak it all up. When the selling runs out, there is nobody left to push and price turns.",
+   rule: "Delta ≤ −2 × the median |delta| of the last 20 bars, volume ≥ 1.5 × median, low no more than 1 row below the 3 prior lows, close in the upper half. Mirror at a high.",
+   look: "A big red delta bar at support with a small range that closes off its low.",
+   wrong: "The next bars close below the absorption low - the buyers were overrun."},
+  {k: "exhaust", n: "Exhaustion", side: "against the push",
+   idea: "Price makes a new high, but volume thins out row by row into the top - the last buyers are done and nobody follows. A real breakout attracts more volume, not less.",
+   rule: "High above the 3 prior highs, top-3-row volume falling toward the high, top row ≤ 25 % of the bar's median row, 4+ rows. Mirror at a new low.",
+   look: "A new high whose top rows read like 85 → 40 → 14 and a close off the high.",
+   wrong: "The next bars push through the high with fresh volume - the move was not done."},
+  {k: "unfinished", n: "Unfinished Auction", side: "target, not entry",
+   idea: "At the new high both buyers and sellers were still trading when price left. The auction did not finish, so that price is unfinished business - the market often comes back to it.",
+   rule: "New high vs the 3 prior bars; in the top row both buys and sells ≥ 25 % of the bar's median row. The price stays a target until a later bar trades it. Mirror at lows.",
+   look: "A top row like 210 × 260 at the extreme; mark the level and watch for the revisit.",
+   wrong: "It is a magnet, not timing - price can take days to return, or never."},
+  {k: "finished", n: "Finished Auction", side: "against the push",
+   idea: "An auction moves until one side stops trading. A zero on one side at the extreme means the move found its end - there were no buyers left above.",
+   rule: "New high vs the 3 prior bars; top row's smaller side ≤ 2 % of the row (or zero), 4+ rows. Finished high = short, finished low = long.",
+   look: "A top row like 46 × 0 at a new high, then rotation back down.",
+   wrong: "Price later trades through it with volume - a new auction has started."},
+  {k: "trapped", n: "Trapped Traders", side: "against the trapped side",
+   idea: "Buyers chase the high with market orders, then price closes below where they bought. Every one of them is losing and has to sell to get out - their exits fuel the move down.",
+   rule: "Buy imbalance in the top 3 rows of a bar, then the same bar or the next closed bar closes below the lowest of those rows. Mirror: sell imbalance at the low, close above.",
+   look: "Green imbalances at the top of a spike, followed by a red close under them.",
+   wrong: "Price closes back above the zone - the buyers were not trapped after all."},
+  {k: "div", n: "Delta Divergence", side: "against the push",
+   idea: "Price makes a lower low while cumulative delta makes a higher low: there was less selling behind the new low. Sellers are losing steam.",
+   rule: "Two swing lows (lower than 2 bars each side) at most 24 bars apart; second low lower in price, cumulative delta higher; confirmed 2 bars later; flagged when at yesterday's VAL / VAH.",
+   look: "A lower low on the chart while the CVD line makes a higher low.",
+   wrong: "Price breaks below the second low - the divergence failed."}];
+const OFL = {html: ""};
+function oflVerdict(k){
+  const T = ((OFR.d || {}).tests || []).filter(t => t.kind === "Single" && t.sc === "single|" + k);
+  if (!T.length) return `<span class="small faint">Live study: not run yet</span>`;
+  const R = {Strong: 5, Promising: 4, Mixed: 3, "No Edge": 2, "Too Few": 1}, VC = {Strong: "p-bull", Promising: "p-wait", Mixed: "p-neutral", "No Edge": "p-bear", "Too Few": "p-neutral"};
+  const best = T.slice().sort((a, b) => (R[b.verdict]||0) - (R[a.verdict]||0) || b.n - a.n)[0];
+  const cnt = {}; T.forEach(t => cnt[t.verdict] = (cnt[t.verdict] || 0) + 1);
+  return `<span class="pill ${VC[best.verdict]||""}">${esc(best.verdict)}</span> <span class="small">best: ${esc(best.scope)} · ${best.tf}M · ${best.n} events · net ${best.net1 > 0 ? "+" : ""}${Number(best.net1).toFixed(1)} bp</span>
+    <div class="small faint">${Object.entries(cnt).map(([v, n]) => `${n} ${v}`).join(" · ")} across ${T.length} groups</div>`;
+}
+function oflRender(){
+  const c = $("#oflibCard"); if (!c) return;
+  const html = `<details ${(() => { try { return localStorage.getItem("mp.ofl.shut") === "1" ? "" : "open"; } catch(e){ return "open"; } })()} ontoggle="try{localStorage.setItem('mp.ofl.shut', this.open ? '0' : '1')}catch(e){}">
+      <summary style="cursor:pointer"><h2 style="display:inline">Pattern Library <span class="small muted">the 7 footprint patterns · idea, exact rule, what to look for, what proves it wrong · narrated videos</span></h2></summary>
+      <div class="ofl-grid">${OFL_P.map(p => `<div class="ofl-c"><div class="spread"><h3>${esc(p.n)}</h3><span class="small muted">${esc(p.side)}</span></div>
+        <p>${esc(p.idea)}</p>
+        <div class="lab">Engine Rule</div><p>${esc(p.rule)}</p>
+        <div class="lab">What To Look For</div><p>${esc(p.look)}</p>
+        <div class="lab">What Proves It Wrong</div><p>${esc(p.wrong)}</p>
+        <div class="lab">Live Study</div><div>${oflVerdict(p.k)}</div>
+        <button class="rc-btn ofl-play" onclick="oflPlay('${p.k}')">▶ Watch Explainer</button></div>`).join("")}</div>
+      <p class="small faint" style="margin:8px 0 0">Videos use an illustrative footprint, not live data. Research only - not advice. The live verdicts come from the study below and update with each run.</p></details>`;
+  if (html !== OFL.html){ OFL.html = html; c.innerHTML = html; }
+}
+async function oflPlay(k){
+  let ov = document.getElementById("oflVid");
+  if (!ov){ ov = document.createElement("div"); ov.id = "oflVid"; document.body.appendChild(ov);
+    ov.addEventListener("click", e => { if (e.target === ov) oflClose(); }); }
+  const p = OFL_P.find(x => x.k === k) || {n: k};
+  ov.innerHTML = `<div class="box"><div class="spread" style="margin-bottom:8px"><b>${esc(p.n)}</b><button class="btn-s" onclick="oflClose()" aria-label="Close">✕</button></div><p class="small muted" style="margin:30px 0;text-align:center">Loading the video…</p></div>`;
+  ov.hidden = false;
+  try {
+    OFL.urls = OFL.urls || {};
+    if (!OFL.urls[k]){
+      const d = await fetch(`/api/livedesk/regimeboard_detail?group=_ofvid&name=${k}`).then(r => r.json());
+      if (!d.b64) throw new Error(d.err || "no video");
+      const bin = atob(d.b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      OFL.urls[k] = URL.createObjectURL(new Blob([u8], {type: d.mime || "video/mp4"}));
+    }
+    ov.querySelector(".box").innerHTML = `<div class="spread" style="margin-bottom:8px"><b>${esc(p.n)}</b><button class="btn-s" onclick="oflClose()" aria-label="Close">✕</button></div><video src="${OFL.urls[k]}" controls autoplay playsinline></video>`;
+  } catch(e){ ov.querySelector(".box p").textContent = "Could not load the video (" + e.message + ")."; }
+}
+function oflClose(){ const ov = document.getElementById("oflVid"); if (!ov) return; const v = ov.querySelector("video"); if (v) v.pause(); ov.hidden = true; ov.innerHTML = ""; }
+document.addEventListener("keydown", e => { if (e.key === "Escape") { const ov = document.getElementById("oflVid"); if (ov && !ov.hidden) oflClose(); } });
+function ofrSet(k, v){ OFR.f[k] = v; try { localStorage.setItem("mp.ofr.f", JSON.stringify(OFR.f)); } catch(e){} ofrRender(); }
+function ofrRender(){
+  try { oflRender(); } catch(e){}
+  const c = $("#ofrCard"), D = OFR.d; if (!c || !D) return;
+  const J = D.job || {}, HJ = D.hist_job || {}, have = (HJ.have || D.hist || {});
+  const VC = {Strong: "p-bull", Promising: "p-wait", Mixed: "p-neutral", "No Edge": "p-bear", "Too Few": "p-neutral"};
+  const counts = D.counts || {};
+  const histLine = Object.entries(have).map(([k, v]) => `${k} ${v.days || 0}/${HJ.target_days || 365}`).join(" · ");
+  const head = `<div class="spread"><h2>Order Flow Research <span class="small muted">fixed scenarios · real footprint · re-run every 6 hours</span></h2>
+      <div class="row" style="gap:8px;align-items:center"><span class="small faint">${D.at ? "Last run " + esc(D.at) : "Not run yet"}${J.state === "running" ? " · <b>running</b> " + esc(J.stage || "") : J.next ? " · next " + esc(String(J.next).slice(11)) : ""}</span>
+      <button class="rc-btn" onclick="ofrLoad(true)" ${J.state === "running" ? "disabled" : ""}>Run Now</button></div></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin:6px 0">${Object.entries(counts).map(([k, v]) => `<span class="pill ${VC[k]||"p-neutral"}">${esc(k)} ${v}</span>`).join("")}
+      <span class="small faint">· ${D.n_tests || 0} tests · 12-month rebuild: ${esc(histLine || "starting")}${HJ.running ? " (running)" : ""}</span></div>`;
+  if (D.missing || !(D.tests||[]).length){ c.innerHTML = head + `<p class="small muted" style="margin:6px 0 0">The first run starts by itself a minute after the engine loads; it takes a few minutes. The 12-month crypto rebuild fills in over about an hour, and each run picks up whatever is there.${J.err ? " Last error: " + esc(J.err) : ""}</p>`; return; }
+  const F = OFR.f, T = D.tests;
+  const scopes = [...new Set(T.map(t => t.scope))], tfs = [...new Set(T.map(t => t.tf))].sort((a, b) => a - b), kinds = ["Single", "Context", "Overlap", "Sequence"];
+  const sel = (k, opts, cur) => `<select onchange="ofrSet('${k}', this.value)">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v)===String(cur)?"selected":""}>${esc(l)}</option>`).join("")}</select>`;
+  const vOk = t => F.v === "sp" ? ["Strong","Promising"].includes(t.verdict) : F.v === "all" ? true : t.verdict === F.v;
+  const q = (F.q||"").toLowerCase();
+  const rows = T.filter(t => (!F.scope || t.scope === F.scope) && (!F.tf || String(t.tf) === String(F.tf)) && (!F.kind || t.kind === F.kind) && vOk(t) && (!q || t.label.toLowerCase().includes(q))).slice(0, 300);
+  const n2 = v => v == null ? "–" : `<span class="${v>0?"up":v<0?"dn":""}">${v>0?"+":""}${Number(v).toFixed(1)}</span>`;
+  const ck = t => Object.entries(t.checks||{}).map(([k, v]) => `${v ? "✓" : "✗"} ${({enough:"enough events", train:"first 70 % positive", test:"last 30 % positive", test_2x:"last 30 % positive at 2× cost", best3:"positive with best 3 removed", fdr:"survives the many-tests correction (q ≤ 0.10)", quarters:"most quarters positive", days:"at least 40 separate days of data"})[k]||k}`).join("\n");
+  const body = rows.map(t => `<tr title="${esc(ck(t))}"><td><span class="pill ${VC[t.verdict]||""}">${esc(t.verdict)}</span>${t.streak > 1 ? `<div class="small faint">${t.streak} runs</div>` : ""}</td>
+      <td><b>${esc(t.label)}</b><div class="small faint">${esc(t.kind)} · ${t.markets} market${t.markets>1?"s":""} · ${Math.round(100*t.long/t.n)}% long · ${esc(t.first)} → ${esc(t.last)}</div></td>
+      <td class="small">${esc(t.scope)}</td><td class="n">${t.tf}M</td><td class="n">${t.n}</td><td class="n">${t.win}%</td>
+      <td class="n">${n2(t.gross)}</td><td class="n"><b>${n2(t.net1)}</b></td><td class="n">${n2(t.train)}</td><td class="n">${n2(t.test)}</td><td class="n">${n2(t.test2)}</td>
+      <td class="n">${n2(t.best3_removed)}</td><td class="n">${t.quarters >= 2 ? `${t.q_pos}/${t.quarters}` : "–"}</td><td class="n">${t.q == null ? "–" : t.q < 0.001 ? "<0.001" : Number(t.q).toFixed(3)}</td></tr>`).join("");
+  c.innerHTML = head + `<div class="flt">${sel("scope", [["", "All Scopes"]].concat(scopes.map(x => [x, x])), F.scope)}${sel("tf", [["", "All Timeframes"]].concat(tfs.map(x => [x, x + "M"])), F.tf)}
+      ${sel("kind", [["", "All Kinds"]].concat(kinds.map(x => [x, x])), F.kind)}${sel("v", [["sp", "Strong + Promising"], ["Strong", "Strong"], ["Promising", "Promising"], ["Mixed", "Mixed"], ["No Edge", "No Edge"], ["Too Few", "Too Few"], ["all", "All"]], F.v)}
+      <input placeholder="Search scenario" value="${esc(F.q||"")}" onchange="ofrSet('q', this.value)"><span class="small faint">${rows.length} shown · hover a row for its checks</span></div>
+    <div class="tscroll" style="max-height:640px;overflow:auto"><table><thead><tr><th>Verdict</th><th>Scenario</th><th>Scope</th><th class="n">TF</th><th class="n">Events</th><th class="n">Win</th>
+      <th class="n" title="average move 6 bars later in the pattern's direction, before costs (basis points)">Gross bp</th><th class="n" title="after one round-trip cost">Net bp</th>
+      <th class="n" title="net, first 70 % of dates">First 70%</th><th class="n" title="net, last 30 % of dates">Last 30%</th><th class="n" title="last 30 % at 2× cost">Last 30% · 2× Cost</th>
+      <th class="n">Best 3 Out</th><th class="n" title="quarters with a positive net average">Quarters +</th><th class="n" title="Benjamini-Hochberg q across every test this run">q</th></tr></thead>
+      <tbody>${body || `<tr><td colspan="14" class="small muted">Nothing matches these filters${F.v === "sp" ? " - no scenario is Strong or Promising yet" : ""}.</td></tr>`}</tbody></table></div>
+    <details class="more" style="margin-top:8px"><summary class="small">How a scenario is judged</summary>
+      <p class="small" style="margin:6px 0">${esc(D.rule || "")}</p>
+      <p class="small" style="margin:6px 0">Scenarios are a fixed list written before any result was seen: the 7 patterns alone; each with a trend day (same way / against), a rotation day, or at yesterday's value edge; 8 overlaps (two patterns, same side, within 2 bars); 4 sequences (Failed Auction script, Absorb And Turn, Trend Continuation, Trap Flip). Crypto majors use 12 months of real Binance footprint; every other scope uses what has been recorded since late October, so their verdicts stay "Too Few" or weak until more sessions build up. Promising = positive after cost in both the first 70 % and the last 30 %, but not every check passed. Research only - a Strong scenario is a candidate filter for a rule, not a trade.</p></details>`;
 }
 // ---- 2026-11-11 (Nikhil: "research tab need to be updated with new regime classification"): the matrix and the plan on the
 // Regime Board's two readings - Trend (Bullish / Sideways / Bearish) and Volatility (Calm / Normal / Volatile / Very Volatile),
@@ -4914,7 +5222,7 @@ async function dsLoad(){
 }
 const IDS = (() => { let x = null; try { x = JSON.parse(localStorage.getItem("mp.ids")||"null"); } catch(e){}
   return x && x.sub ? x : {sub:"india", sel:{india:"NIFTY", us:"ES", crypto:"BTC"}}; })();
-const ID_SUBS = [["india","Indian"],["crypto","Crypto"],["metals","Metals"],["global","Commodities"]];   // 2026-11-09: US sub-tab removed for now
+const ID_SUBS = [["india","India-NSE"],["crypto","Crypto"],["metals","Metals"],["global","Commodities"]];   // 2026-11-09: US sub-tab removed for now
 IDS.sel = Object.assign({india:"NIFTY", us:"ES", crypto:"BTC", metals:"GOLD", global:"CRUDE"}, IDS.sel||{});
 if (IDS.sub === "us") IDS.sub = "india";     // 2026-11-09: US removed for now
 function idSave(){ try { localStorage.setItem("mp.ids", JSON.stringify(IDS)); } catch(e){} }
@@ -4928,18 +5236,18 @@ async function idBarRender(){
   else opts = (TAB_MARKETS[sub]||[]).filter(k => M && M[k]).map(k => opt(k, SHORT[k]||k)).join("");
   const what = {india:"index or stock", us:"index", crypto:"coin", metals:"metal", global:"commodity"}[sub];
   el.innerHTML = `<div class="row" style="gap:12px;align-items:center;flex-wrap:wrap">
-      <div class="ld-btns" style="margin:0">${ID_SUBS.map(([k,l]) => `<button class="${k===sub?"on":""}" data-sub="${k}">${l}</button>`).join("")}</div>
+      <div class="ld-btns" style="margin:0">${ID_SUBS.map(([k,l]) => `<button class="${k===sub?"on":""}" data-sub="${k}">${l}</button>`).join("")}</div>`/* 2026-11-11 (Nikhil): F&O Scan chip removed from the desk row - the Intraday tab opens F&O Scan */ + `
       <select id="idSel" aria-label="Choose ${what}" style="font:inherit;font-size:14px;font-weight:600;border:1px solid var(--line);border-radius:10px;padding:6px 12px;background:var(--surface);color:var(--ink);min-width:200px">${opts}</select>
       <span class="small faint">Choose the ${what} · every section below follows it</span></div>`;
   el.querySelectorAll("button[data-sub]").forEach(b => b.onclick = () => { IDS.sub = b.dataset.sub; idSave(); showView("intraday"); });
   $("#idSel").onchange = e => { IDS.sel[IDS.sub] = e.target.value; idSave();
     if (IDS.sub==="india"){ indSelect(e.target.value); if (["NIFTY","BANKNIFTY"].includes(e.target.value) && LBRD.k !== e.target.value) try { lbPick(e.target.value); } catch(err){} }
     else { select(e.target.value); try { lb2Load(); } catch(err){} }
-    setTimeout(() => { idPlace(IDS.sub); try { hvRender(); } catch(e){} try { ofpLoad(); } catch(e){} }, 50); };
+    setTimeout(() => { idPlace(IDS.sub); try { hvRender(); } catch(e){} try { ofpLoad(); } catch(e){} try { idLayout(); idNowTick(); } catch(e){} }, 50); };
 }
 // ---- 2026-11-11 (Nikhil: "enrich order flow, identify pattern, and auto deploy trades"): Order Flow Patterns card (app/ofpatterns.py) ----
 const OFP = {data:null, key:null, tf:(() => { try { return JSON.parse(localStorage.getItem("mp.ofpTf") || "{}"); } catch(e){ return {}; } })(), t:null, open:(() => { try { return localStorage.getItem("mp.ofpOpen") !== "0"; } catch(e){ return true; } })()};
-const OFP_MKTS = {india:["NIFTY","BANKNIFTY"], crypto:["BTC","ETH","SOL"], metals:["GOLD"]};
+const OFP_MKTS = {india:["NIFTY","BANKNIFTY"], crypto:["BTC","ETH","SOL","BNB","XRP","LINK","AVAX","UNI","ZEC","DASH"], metals:["GOLD","SILVER","COPPER"], global:["CRUDE","NATGAS"]};   // 2026-11-11: every market with stored footprint
 function ofpKey(){ const sub = IDS.sub, sel = IDS.sel[sub], ok = OFP_MKTS[sub]; if (!ok) return null; return ok.includes(sel) ? sel : ok[0]; }
 function ofpN(v, d){ if (v==null || isNaN(v)) return "–"; const a = Math.abs(v); d = d ?? (a >= 1000 ? 1 : a >= 10 ? 2 : 3); return Number(v).toLocaleString("en-IN", {minimumFractionDigits:d, maximumFractionDigits:d}); }
 function ofpT(m, d, t){ if (!t) return ""; if (["NIFTY","BANKNIFTY"].includes(m.key)) return t;
@@ -4949,7 +5257,7 @@ async function ofpLoad(){
   const k = ofpKey();
   if (!k || document.body.dataset.tab !== "intraday"){ c.hidden = true; return; }
   c.hidden = false;
-  const tf = OFP.tf[k] || "";
+  const tf = OFP.tf[k] || ofpChartTf(k) || "";   // 2026-11-11: follows the chart's 15m / 30m unless picked here
   if (OFP.key !== k + "|" + tf){ OFP.key = k + "|" + tf; OFP.data = null; c.innerHTML = `<p class="small muted" style="margin:0">Order Flow Patterns · Loading…</p>`; }
   clearTimeout(OFP.t);
   OFP.t = setTimeout(() => { if (!document.hidden) ofpLoad(); }, 20000);
@@ -4959,7 +5267,14 @@ async function ofpLoad(){
     OFP.data = j; ofpRender();
   } catch(e){ if (!OFP.data) c.innerHTML = `<p class="small muted" style="margin:0">Order Flow Patterns: could not load (${esc(String(e).slice(0,80))}).</p>`; }
 }
-function ofpPickTf(k, tf){ OFP.tf[k] = tf; try { localStorage.setItem("mp.ofpTf", JSON.stringify(OFP.tf)); } catch(e){} ofpLoad(); }
+function ofpPickTf(k, tf){ OFP.tf[k] = tf; try { localStorage.setItem("mp.ofpTf", JSON.stringify(OFP.tf)); } catch(e){} ofpLoad();
+  // 2026-11-11: the chart follows 15M / 30M (it has no 5-min footprint yet)
+  const d = ofpDesk(k); if (d && (tf === 15 || tf === 30) && (FX.tf[d] || 15) !== tf){ FX.tf[d] = tf; try { ldLoad(d); } catch(e){} } }
+function ofpDesk(k){ return ["NIFTY","BANKNIFTY"].includes(k) ? "nifty" : OFP_MKTS.crypto.includes(k) ? "crypto" : OFP_MKTS.metals.concat(OFP_MKTS.global).includes(k) ? "metals" : null; }
+function ofpChartTf(k){ const d = ofpDesk(k), t = d ? ((FX.tf && FX.tf[d]) || 15) : null; return (t === 15 || t === 30) ? t : null; }
+function ofpFromChart(desk, tf){ const k = (typeof ofpKey === "function") ? ofpKey() : null;
+  if (k && ofpDesk(k) === desk && (tf === 15 || tf === 30)){ OFP.tf[k] = tf; try { localStorage.setItem("mp.ofpTf", JSON.stringify(OFP.tf)); } catch(e){} try { ofpLoad(); } catch(e){} } }
+function ofpBlocked(m, s){ return s && s.state === "armed" && ((m.h4_word === "Up" && s.side === "short") || (m.h4_word === "Down" && s.side === "long")); }
 function ofpToggle(){ OFP.open = !OFP.open; try { localStorage.setItem("mp.ofpOpen", OFP.open ? "1" : "0"); } catch(e){} ofpRender(); }
 function ofpRender(){
   const c = $("#ofpCard"), j = OFP.data; if (!c || !j) return;
@@ -4987,7 +5302,7 @@ function ofpRender(){
     if (!s) return `<tr><td><b>${esc(mods[k])}</b></td><td class="small faint" colspan="2">${k==="ofp_or" ? (["NIFTY","BANKNIFTY"].includes(m.key) ? (m.tf===5 ? "No setup yet today" : "Runs in the 5M book (1-min bars)") : "India only (needs 1-min footprint)") : "No setup yet today"}</td></tr>`;
     return `<tr><td><b>${esc(mods[k])}</b><div class="small faint">${esc(ofpT(m, m.day, s.t))} · ${s.side==="long"?"Long":s.side==="short"?"Short":"Both"}</div></td>
       <td class="ofp-steps">${(s.steps||[]).map(x => `<span>${esc(x)}</span>`).join("")}${s.why ? `<div class="small faint">${esc(s.why)}</div>` : ""}</td>
-      <td><span class="ofp-st st-${esc(s.state)}">${esc(s.state)}</span></td></tr>`; }).join("");
+      <td>${ofpBlocked(m, s) ? `<span class="ofp-st st-skipped" title="The 4H trend is ${esc(m.h4_word)} (${m.h4}) - this side is not traded">Blocked By 4H</span>` : `<span class="ofp-st st-${esc(s.state)}">${esc(s.state)}</span>`}</td></tr>`; }).join("");
   const pl = j.patterns || {};
   const ev = (m.events||[]).slice().reverse().slice(0, 14).map(e => { const f = (e.fwd||{})["6"];
     return `<tr><td class="n">${esc(ofpT(m, e.d, e.t))}</td><td>${esc(pl[e.pattern]||e.pattern)}</td><td class="${e.side==="long"?"up":"dn"}">${e.side==="long"?"▲":"▼"}</td>
@@ -5000,28 +5315,140 @@ function ofpRender(){
       <td class="n ${pnl>0?"up":pnl<0?"dn":""}">${pnl==null?"–":cur + ofpN(pnl, cur==="₹"?0:2)}${t.r!=null ? ` <span class="faint">(${t.r>0?"+":""}${t.r}R)</span>` : ""}</td></tr>
       <tr><td></td><td colspan="7" class="small faint">${esc(t.why||"")}</td></tr>`; }).join("");
   const sc = j.score || {};
-  const scp = (sc.patterns||[]).map(z => `<tr><td>${esc(z.label)}</td><td class="n">${z.n}</td><td class="n">${z.hit_pct==null?"–":z.hit_pct+"%"}</td><td class="n ${z.avg_bps>0?"up":z.avg_bps<0?"dn":""}">${z.avg_bps==null?"–":z.avg_bps+" bp"}</td></tr>`).join("");
-  const scm = (sc.models||[]).filter(z => z.n).map(z => `<tr><td>${esc(z.label)}</td><td class="n">${z.n}</td><td class="n">${z.open}</td><td class="n">${z.closed ? Math.round(100*z.wins/z.closed)+"%" : "–"}</td><td class="n ${z.r>0?"up":z.r<0?"dn":""}">${z.closed ? (z.r>0?"+":"") + z.r + "R" : "–"}</td></tr>`).join("");
+  // 2026-11-11 (Nikhil: "scoreboard doesn't record separately for each time frame"): per timeframe, every stored session,
+  // this market beside all markets on the same timeframe
+  const pc = z => z && z.n ? `<td class="n">${z.n}</td><td class="n">${z.hit_pct==null?"–":z.hit_pct+"%"}</td><td class="n ${z.avg_bps>0?"up":z.avg_bps<0?"dn":""}">${z.avg_bps==null?"–":z.avg_bps+" bp"}</td>` : `<td class="n faint">–</td><td></td><td></td>`;
+  const scp = (sc.patterns_tf||[]).map(z => `<tr><td>${esc(z.label)}</td>${pc(z.mkt)}${pc(z.all)}</tr>`).join("");
+  const mc = z => z && z.n ? `<td class="n">${z.n}${z.open?` <span class="faint">(${z.open} open)</span>`:""}</td><td class="n">${z.closed ? Math.round(100*z.wins/z.closed)+"%" : "–"}</td><td class="n ${z.r>0?"up":z.r<0?"dn":""}">${z.closed ? (z.r>0?"+":"") + z.r + "R" : "–"}</td>` : `<td class="n faint">–</td><td></td><td></td>`;
+  const scm = (sc.models||[]).filter(z => (z.all||{}).n).map(z => `<tr><td>${esc(z.label)}</td>${mc(z.mkt)}${mc(z.all)}</tr>`).join("");
   c.innerHTML = head(upd) + dtStrip + `
-    <div class="ofp-grid">
+    ${["india","crypto","metals","global"].includes(IDS.sub) ? `<div class="eyebrow" style="margin-top:0">Setup Progress <span class="small faint" style="text-transform:none;letter-spacing:0">· levels are in the Level Board below</span></div><table>${sp}</table>` : `<div class="ofp-grid">
       <div><div class="eyebrow" style="margin-top:0">Levels In Play</div>
         <table><tr><th>Level</th><th class="n">Price</th><th class="n">From Last</th></tr>${lv || `<tr><td colspan="3" class="small muted">No levels yet.</td></tr>`}</table></div>
       <div><div class="eyebrow" style="margin-top:0">Setup Progress</div><table>${sp}</table></div>
-    </div>
+    </div>`}
     <div class="eyebrow">Paper Trades Today · ${esc(m.name)} · ${m.tf}M Book</div>
     ${tr ? `<table><tr><th>Time</th><th>Model</th><th>Side</th><th class="n">Entry</th><th class="n">Stop</th><th class="n">Target</th><th>Exit</th><th class="n">P&amp;L</th></tr>${tr}</table>` : `<p class="small muted" style="margin:4px 0">None yet. A trade is recorded only when a model's last step closes.</p>`}
     <div class="eyebrow">Pattern Feed</div>
     ${ev ? `<table><tr><th class="n">Time</th><th>Pattern</th><th></th><th class="n">Price</th><th>What Happened</th><th class="n">After 6 Bars</th></tr>${ev}</table>` : `<p class="small muted" style="margin:4px 0">No pattern on today's closed bars yet.</p>`}
-    <details class="more" style="margin-top:8px"><summary class="small">Scoreboard (all markets, recent days)</summary>
-      <div class="ofp-grid" style="margin-top:6px">
-        <div><table><tr><th>Pattern</th><th class="n">Seen</th><th class="n">Right After 6 Bars</th><th class="n">Avg Move</th></tr>${scp}</table>
-          <p class="small faint" style="margin:4px 0">"Right" = price moved the pattern's way 6 bars later. Compare with a coin flip (about 50%); small samples mean little.</p></div>
-        <div><table><tr><th>Model</th><th class="n">Trades</th><th class="n">Open</th><th class="n">Win</th><th class="n">Total R</th></tr>${scm || `<tr><td colspan="5" class="small muted">No trades yet.</td></tr>`}</table>
-          <p class="small faint" style="margin:4px 0">Full metrics per model and timeframe: Strategy Performance. Every trade: All Paper Trades.</p></div>
-      </div></details>
+    <details class="more" style="margin-top:8px"><summary class="small">Scoreboard · ${m.tf}M · last ${sc.days||"–"} sessions</summary>
+      <div style="margin-top:6px"><table><tr><th rowspan="2">Pattern</th><th colspan="3" style="text-align:center">${esc(m.name)}</th><th colspan="3" style="text-align:center">All Markets · ${m.tf}M</th></tr>
+        <tr><th class="n">Seen</th><th class="n">Right</th><th class="n">Avg Move</th><th class="n">Seen</th><th class="n">Right</th><th class="n">Avg Move</th></tr>${scp || `<tr><td colspan="7" class="small muted">No pattern yet.</td></tr>`}</table>
+        <p class="small faint" style="margin:4px 0">Each timeframe counted on its own. "Right" = price moved the pattern's way 6 bars later (${m.tf*6} minutes on ${m.tf}M), inside the same session; each session read with only the bars before it. Compare with a coin flip (about 50%); small samples mean little.</p>
+        <table style="margin-top:8px"><tr><th rowspan="2">Model · ${m.tf}M Book</th><th colspan="3" style="text-align:center">${esc(m.name)}</th><th colspan="3" style="text-align:center">All Markets</th></tr>
+        <tr><th class="n">Trades</th><th class="n">Win</th><th class="n">Total R</th><th class="n">Trades</th><th class="n">Win</th><th class="n">Total R</th></tr>${scm || `<tr><td colspan="7" class="small muted">No paper trades yet on the ${m.tf}M book.</td></tr>`}</table>
+          <p class="small faint" style="margin:4px 0">Paper trades start from 11 Nov (the day the engine went live); patterns use every stored session. Full metrics: Strategy Performance.</p></div></details>
     <details class="more" style="margin-top:6px"><summary class="small">Rules, exits and sizes</summary>
       <p class="small" style="margin:4px 0">${esc(j.note||"")}</p>
       <p class="small" style="margin:4px 0">Every model: entry only at a bar's close · stop and target fixed at entry (stop first if a bar touches both) · time stop per model · one open trade per market, at most 3 a day, stop for the day at -2R · India entries 09:21-15:00 and flat 15:20 · Nifty / Bank Nifty 2 lots synthetic future after 18 / 45 pts · crypto / Gold 100 USDT × 5 after 0.14 %. 5M, 15M and 30M are separate books (one open trade each). 4H is a filter: longs only when the 4H score is +2 or more, shorts only at -2 or less, both in between. All six are untested ideas from the order-flow cards: past studies here found flow alone had no edge, so judge them only after the backtest.</p></details>`;
+}
+// ---- 2026-11-11 (Nikhil: Intraday Desk India UI review - "yes" to all) ----
+// India order: Now strip (sticky) -> Order Flow chart -> Trades In This Market -> Order Flow Patterns -> Level Board,
+// then All Paper Trades / Strategy Performance folded. Patterns and Trades are moved into the India view so CSS order can
+// place them; on Crypto / Metals they go back under the picker as before.
+function idLayout(){
+  // 2026-11-11 (Nikhil: "replicate the changes to other markets"): one order on every market - chart, trades, patterns,
+  // level board (then Crypto Flow / Flow Chart on Crypto). The cards move into the market's own view; CSS order places them.
+  const wrap = $("#idBar") && $("#idBar").parentElement, ofp = $("#ofpCard"), trd = $("#idTrades"), now = $("#idNow"), bar = $("#idLogBar");
+  if (!wrap || !ofp || !trd) return;
+  const VW = {india: "#viewNLive", crypto: "#viewCLive", metals: "#viewMLive", global: "#viewMLive"};
+  const on = document.body.dataset.tab === "intraday", v = on && $(VW[IDS.sub] || "");
+  if (now && now.previousElementSibling !== $("#idBar")) $("#idBar").after(now);
+  if (v){ if (ofp.parentElement !== v) v.appendChild(ofp); if (trd.parentElement !== v) v.appendChild(trd);
+    const lb2 = $("#lb2Card"); if (lb2 && IDS.sub !== "india" && lb2.parentElement !== v) v.appendChild(lb2); }
+  else { if (ofp.parentElement !== wrap) now.after(ofp); if (trd.parentElement !== wrap) ofp.after(trd); }
+  const lg = $("#viewLogbook"); if (bar && lg && bar.nextElementSibling !== lg) lg.before(bar);
+  if (bar) bar.hidden = !on;
+  idLogApply();
+}
+const IDLOG = {open: (() => { try { return localStorage.getItem("mp.idLogOpen") === "1"; } catch(e){ return false; } })()};
+function idLogApply(){ document.body.classList.toggle("log-shut", !IDLOG.open);
+  const b = $("#idLogBtn"); if (b) b.textContent = IDLOG.open ? "Hide All Paper Trades & Strategy Performance ▴" : "Show All Paper Trades & Strategy Performance ▾"; }
+function idLogToggle(){ IDLOG.open = !IDLOG.open; try { localStorage.setItem("mp.idLogOpen", IDLOG.open ? "1" : "0"); } catch(e){} idLogApply(); }
+const IDN = {t: null, live: {}, liveT: 0};
+const IDN_LIVE = {NIFTY: "idx|NIFTY 50", BANKNIFTY: "idx|NIFTY BANK", SENSEX: "idx|SENSEX",
+  GOLD: "y|GC=F", SILVER: "y|SI=F", COPPER: "y|HG=F", PLATINUM: "y|PL=F", PALLADIUM: "y|PA=F", ALUMINUM: "y|ALI=F", CRUDE: "y|CL=F", BRENT: "y|BZ=F", NATGAS: "y|NG=F"};
+function idLiveKey(k){ if (IDN_LIVE[k]) return IDN_LIVE[k]; return IDS.sub === "india" ? "eq|" + k : IDS.sub === "crypto" ? "c|" + k + "USDT" : null; }
+function idKey(){ return IDS.sel[IDS.sub]; }
+function idTradeRows(key){
+  const D = NOWPT.d; if (!D) return null;
+  const today = new Date(Date.now() + 330*60000).toISOString().slice(0,10);
+  const op = (D.open||[]).filter(t => t.key === key);
+  const cl = (D.closed||[]).filter(t => t.key === key && String(t.closed||"").slice(0,10) === today);
+  return {op, cl};
+}
+async function idNowTick(){
+  clearTimeout(IDN.t);
+  if (document.body.dataset.tab !== "intraday"){ return; }
+  IDN.t = setTimeout(() => { if (!document.hidden) idNowTick(); }, 5000);
+  try { nowPT(""); } catch(e){}                                   // refreshes the shared paper-trade snapshot (60 s)
+  if (Date.now() - IDN.liveT > 4000){
+    try { const r = await fetch("/api/livedesk/regimeboard_detail?group=_live").then(r => r.json()); IDN.live = r.px || {}; IDN.liveT = Date.now(); } catch(e){} }
+  idNowRender(); idTradesRender();
+}
+function idNowRender(){
+  const el = $("#idNow"); if (!el) return;
+  if (document.body.dataset.tab !== "intraday"){ el.hidden = true; return; }
+  el.hidden = false;
+  const k = idKey(), O = OFP.data && OFP.data.market && OFP.key && OFP.key.startsWith(k + "|") ? OFP.data.market : null;
+  const lk = idLiveKey(k), L = lk ? IDN.live[lk] : null;
+  const px = L ? L.px : O ? O.last : null, chg = L ? L.chg : null;
+  const f = v => v == null ? "–" : Number(v).toLocaleString("en-IN", {maximumFractionDigits: v >= 1000 ? 1 : 2});
+  const dt = O && O.day_type || {};
+  const dtp = /Trend Up/.test(dt.type) ? "p-bull" : /Trend Down/.test(dt.type) ? "p-bear" : dt.type === "Rotation" ? "p-wait" : "p-neutral";
+  const h4 = O && O.h4 != null ? `<span class="pill ${O.h4_word==="Up"?"p-bull":O.h4_word==="Down"?"p-bear":"p-neutral"}">4H ${esc(O.h4_word)} ${O.h4>0?"+":""}${O.h4}</span>` : "";
+  let up = null, dn = null;
+  const lvs = (window.LB_PLAN && window.LB_PLAN.key === k ? [] : []).concat((O && O.levels) || []);
+  lvs.forEach(x => { if (x.dist_pct > 0 && (!up || x.dist_pct < up.dist_pct)) up = x; if (x.dist_pct < 0 && (!dn || x.dist_pct > dn.dist_pct)) dn = x; });
+  const T = idTradeRows(k);
+  const cur = ["NIFTY","BANKNIFTY","SENSEX"].includes(k) || IDS.sub === "india" ? "₹" : "$";
+  const opP = T ? T.op.reduce((a, t) => a + (Number(t.pnl_open) || 0), 0) : 0, clP = T ? T.cl.reduce((a, t) => a + (Number(t.pnl) || 0), 0) : 0;
+  const money = v => `<b class="${v>0?"pos":v<0?"neg":""}">${v<0?"−":v>0?"+":""}${cur}${Math.abs(Math.round(v)).toLocaleString("en-IN")}</b>`;
+  const nm = (typeof SHORT === "object" && SHORT[k]) || k;
+  el.innerHTML = `<div class="nw">
+      <span><span class="k">${esc(nm)}${L && O && IDS.sub === "india" ? " Spot" : ""}</span><span class="px">${f(px)}</span> ${chg != null ? `<b class="${chg>0?"pos":chg<0?"neg":""}">${chg>0?"+":""}${chg.toFixed(2)}%</b>` : ""}${L && O && IDS.sub === "india" ? ` <span class="small faint">· fut ${f(O.last)} (last ${O.tf}M close)</span>` : ""}${L && L.t && IDS.sub !== "india" && Date.now()/1000 - L.t > 300 ? ` <span class="small faint">· ${Math.round((Date.now()/1000 - L.t)/60)} min old</span>` : ""}</span>
+      ${dt.type ? `<span><span class="k">Day</span><span class="pill ${dtp}">${esc(dt.type)}</span></span>` : ""}
+      ${h4 ? `<span><span class="k">Trend</span>${h4}</span>` : ""}
+      ${up ? `<span><span class="k">Above${O && ["NIFTY","BANKNIFTY"].includes(k) ? " (Fut)" : ""}</span>${esc(up.name)} <b>${f(up.p)}</b> <span class="small faint">+${up.dist_pct.toFixed(2)}%</span></span>` : ""}
+      ${dn ? `<span><span class="k">Below${O && ["NIFTY","BANKNIFTY"].includes(k) ? " (Fut)" : ""}</span>${esc(dn.name)} <b>${f(dn.p)}</b> <span class="small faint">${dn.dist_pct.toFixed(2)}%</span></span>` : ""}
+      <span><span class="k">Paper Trades</span>${T ? `${T.op.length} open ${T.op.length ? money(opP) : ""} · ${T.cl.length} closed today ${T.cl.length ? money(clP) : ""}` : `<span class="faint">loading…</span>`}</span>
+    </div>
+    <div class="jump">${[["Chart", ({india:"#nliveDesk", crypto:"#cliveDesk", metals:"#mliveDesk", global:"#mliveDesk"})[IDS.sub]], ["Trades", "#idTrades"],
+        ["Patterns", (OFP_MKTS[IDS.sub]||[]).includes(k) ? "#ofpCard" : null], ["Levels", IDS.sub==="india" ? "#lbCard" : "#lb2Card"],
+        ["Crypto Flow", IDS.sub==="crypto" ? "#cfCard" : null], ["Flow Chart", IDS.sub==="crypto" ? "#fcCard" : null], ["All Trades", "#idLogBar"]]
+      .filter(x => x[1]).map(([l, s]) => `<button onclick="idJump('${s}')">${l}</button>`).join("")}</div>`;
+}
+function idJump(sel){ const e = $(sel); if (!e) return; if (sel === "#idLogBar" && !IDLOG.open) idLogToggle();
+  const h = ($("#idNow") && $("#idNow").offsetHeight) || 0; window.scrollTo({top: e.getBoundingClientRect().top + window.scrollY - h - 8, behavior: "smooth"}); }
+function idTradesRender(){
+  const el = $("#idTrades"); if (!el) return;
+  if (document.body.dataset.tab !== "intraday"){ el.hidden = true; return; }
+  el.hidden = false;
+  const k = idKey(), T = idTradeRows(k), nm = (typeof SHORT === "object" && SHORT[k]) || k;
+  const f = v => v == null || v === "" ? "–" : Number(v).toLocaleString("en-IN", {maximumFractionDigits: 2});
+  const m = (v, c) => v == null || v === "" ? "–" : `<b class="${v>0?"pos":v<0?"neg":""}">${v<0?"−":v>0?"+":""}${c||""}${Math.abs(Number(v)).toLocaleString("en-IN", {maximumFractionDigits: c==="₹"?0:2})}</b>`;
+  const row = (t, open) => `<tr><td><b>${esc(ruleShort(t.rule, t.rule_label))}</b><div class="small faint">${esc(String(t.opened||"").slice(11,16))}${open ? "" : " → " + esc(String(t.closed||"").slice(11,16))}</div></td>
+      <td><b class="${t.side==="long"?"pos":"neg"}">${t.side==="long"?"Long":t.side==="short"?"Short":esc(t.side||"")}</b></td>
+      <td class="n">${f(t.entry)}</td><td class="n">${f(t.stop)}</td><td class="n">${f(t.target)}</td>
+      <td class="n">${open ? "now " + f(t.now) : f(t.exit) + `<div class="small faint">${esc(t.exit_reason||"")}</div>`}</td>
+      <td class="n">${m(open ? t.pnl_open : t.pnl, t.ccy)}${t.r != null && t.r !== "" ? `<div class="small faint">${Number(t.r) > 0 ? "+" : ""}${f(t.r)} R</div>` : ""}</td></tr>`;
+  // close to triggering: order-flow setups that are armed and not blocked by 4H; Level Board levels near or testing
+  const O = OFP.data && OFP.data.market && OFP.key && OFP.key.startsWith(k + "|") ? OFP.data.market : null;
+  const mods = (OFP.data && OFP.data.models) || {};
+  const near = [];
+  if (O){ const last = {}; (O.setups||[]).forEach(s => { if (!last[s.model] || s.t >= last[s.model].t) last[s.model] = s; });
+    Object.values(last).forEach(s => { if (s.state === "armed" && !ofpBlocked(O, s)) near.push(`${esc(mods[s.model]||s.model)} · ${s.side==="long"?"Long":"Short"} · ${esc((s.steps||[]).join(" "))} <span class="faint">(${O.tf}M)</span>`); }); }
+  if (window.LB_PLAN && window.LB_PLAN.key === k) (window.LB_PLAN.plan||[]).filter(c => ["near","price in zone","testing now"].includes(c.status))
+    .forEach(c => near.push(`DOM v4 · ${esc(c.level)} ${c.side==="R"?"resistance":"support"} · <b>${esc(c.status)}</b>`));
+  const head = `<div class="spread"><h2>Trades In This Market <span class="small muted">${esc(nm)} · every rule · today</span></h2></div>`;
+  if (!T){ el.innerHTML = head + `<p class="small muted" style="margin:6px 0 0">Loading paper trades…</p>`; return; }
+  const th = `<tr><th>Rule</th><th>Side</th><th class="n">Entry</th><th class="n">Stop</th><th class="n">Target</th><th class="n">Now / Exit</th><th class="n">P&amp;L</th></tr>`;
+  el.innerHTML = head
+    + (T.op.length ? `<div class="eyebrow">Open · ${T.op.length}</div><table>${th}${T.op.map(t => row(t, true)).join("")}</table>` : `<p class="small muted" style="margin:6px 0">No open paper trade in ${esc(nm)}.</p>`)
+    + (T.cl.length ? `<div class="eyebrow" style="margin-top:10px">Closed Today · ${T.cl.length}</div><table>${th}${T.cl.map(t => row(t, false)).join("")}</table>` : "")
+    + `<div class="eyebrow" style="margin-top:10px">Close To Triggering</div>`
+    + (near.length ? `<ul class="small" style="margin:4px 0 0;padding-left:18px">${near.map(x => `<li>${x}</li>`).join("")}</ul>` : `<p class="small muted" style="margin:4px 0 0">Nothing close right now.</p>`)
+    + `<p class="small faint" style="margin:8px 0 0">Paper only - never orders. Every rule and market: All Paper Trades below.</p>`;
 }
 function idPlace(v){
   const top = $("#idTop"), hv = $("#hvCard"); if (!top || !hv) return;
@@ -5031,7 +5458,7 @@ function idPlace(v){
   if (v==="us") note.innerHTML = `<p class="small muted" style="margin:0">US: only the Verdict is available. Levels &amp; blocks, overnight prep, trade cards, the order-flow chart and the desk analyst need a US intraday feed (not connected yet).</p>`;
 }
 function idAfter(v){
-  idBarRender(); idPlace(v); try { ofpLoad(); } catch(e){}
+  idBarRender(); idPlace(v); try { ofpLoad(); } catch(e){} try { idLayout(); idNowTick(); } catch(e){}
   try { if (v==="india" && !IDX_ALL.includes(IDS.sel.india)) indSelect(IDS.sel.india); } catch(e){}
   try { if (v==="india" && ["NIFTY","BANKNIFTY"].includes(IDS.sel.india) && LBRD.k !== IDS.sel.india) lbPick(IDS.sel.india); } catch(e){}
   try { if (v==="crypto"){ FX.sel.crypto = IDS.sel.crypto; ldLoad("crypto"); } } catch(e){}
@@ -5398,7 +5825,8 @@ function renderIndiaDesk(){
     : `<div class="spread"><h2>Desk Analyst</h2><span class="small muted">waiting for the first run</span></div><p class="small muted">The agent's pre-market read appears here (around 8:45 IST on trading days). Below: the engine's own playbook, live.</p>`;
   deskFacts();
 }
-document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showView(b.dataset.v));
+// 2026-11-11 (Nikhil: "when we click Intraday it should show F&O Scan"): the Intraday tab opens F&O Scan; its Desk button opens the desk
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showView(b.dataset.v === "intraday" ? "fno" : b.dataset.v));
 try { const v = localStorage.getItem("mp.view"); if (v) VIEW = ({nlive:"india", clive:"crypto"})[v] || v; } catch(e){}
 if (VIEW === "us") VIEW = "india";     // 2026-11-09 (Nikhil): US tab removed for now
 try { const mv = document.getElementById("viewMarkets"); mv.before(document.getElementById("viewNLive"), document.getElementById("viewCLive"), document.getElementById("viewMLive")); } catch(e){}
@@ -5918,4 +6346,28 @@ function bwRender(D){
 }
 
 /* altLoad / altRender removed 2026-10-30 (alt-coin feature retired 29 Oct) */
+
+// ---- 2026-11-11 (Nikhil: "page is auto refreshing which closes nested sections again and again - fix across the full dashboard") ----
+// Every card that refreshes rebuilds its HTML, so an open <details> comes back closed. One fix for the whole page:
+// remember what the user opened or closed (keyed by the card it sits in and its summary text, numbers ignored, so
+// "All 54 strategies" and "All 55 strategies" are the same fold) and put it back whenever a fold is (re)drawn.
+// Only the user's own clicks are remembered; folds the code opens or closes are left to the code.
+(function keepFolds(){
+  const KEY = "mp.folds", MAX = 300;
+  let S = {}; try { S = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch(e){ S = {}; }
+  const save = () => { try { const k = Object.keys(S); if (k.length > MAX) k.slice(0, k.length - MAX).forEach(x => delete S[x]); localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} };
+  const keyOf = d => { const sm = d.querySelector(":scope > summary"); if (!sm) return null;
+    const host = d.closest("[id]"), txt = (sm.textContent || "").replace(/[\d.,:%+−-]+/g, "#").replace(/\s+/g, " ").trim().slice(0, 80);
+    return (host ? host.id : "") + "|" + (window.CUR_TAB || "") + "|" + txt; };
+  document.addEventListener("click", e => { const sm = e.target.closest && e.target.closest("summary"); if (sm && sm.parentElement && sm.parentElement.tagName === "DETAILS") sm.parentElement.__user = Date.now(); }, true);
+  document.addEventListener("keydown", e => { const sm = e.target && e.target.tagName === "SUMMARY" ? e.target : null; if (sm && (e.key === "Enter" || e.key === " ")) sm.parentElement.__user = Date.now(); }, true);
+  document.addEventListener("toggle", e => { const d = e.target; if (!d || d.tagName !== "DETAILS" || !d.__user || Date.now() - d.__user > 1500) return;
+    const k = keyOf(d); if (!k) return; delete S[k]; S[k] = d.open ? 1 : 0; save(); }, true);
+  const apply = root => { const list = root.tagName === "DETAILS" ? [root] : (root.querySelectorAll ? root.querySelectorAll("details") : []);
+    for (const d of list){ const k = keyOf(d); if (k && k in S){ const want = !!S[k]; if (d.open !== want) d.open = want; } } };
+  const mo = new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) apply(n); });
+  const start = () => { apply(document.body); mo.observe(document.body, {childList: true, subtree: true}); };
+  if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
+  window.MP_FOLDS = {state: () => S, reset: () => { S = {}; save(); }};
+})();
 </script>
