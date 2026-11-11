@@ -22,7 +22,7 @@ RANGE, NEAR, FAR, TOL = 1.2, 0.30, 0.70, 0.02        # % of price: rows kept, "n
 LOT = {"NIFTY": 65, "BANKNIFTY": 30}
 STEP = {"NIFTY": 50, "BANKNIFTY": 100}
 STR = {"strong": 2, "medium": 1, "weak": 0}
-REF_OK = {"PDH", "PDL", "PWH", "PWL", "PMH", "PML", "VWAP", "POC", "VAH", "VAL"}
+REF_OK = {"PDH", "PDL", "PWH", "PWL", "PMH", "PML", "VWAP"}   # 2026-11-10: no 5-day profile levels (POC / VAH / VAL all dropped)
 S: dict = {"cache": {}}
 
 

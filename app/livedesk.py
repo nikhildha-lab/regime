@@ -587,6 +587,17 @@ def poll_once():
             _STATE.setdefault("views", {})[desk] = views
             _STATE["desks"][desk] = stt
 
+    # 2026-11-10 (Nikhil): these two do not depend on any tracker being up, so they run once per cycle, outside the
+    # per-desk loop - the Nifty tracker being down used to skip them entirely.
+    try:                                           # News Reaction Intraday paper rule (app/newstrade.py)
+        _hot("newstrade").tick()
+    except Exception as e:
+        _STATE["newstrade_error"] = str(e)[:160]
+    try:                                           # Regime Board (app/regimeboard.py)
+        _hot("regimeboard").tick()
+    except Exception as e:
+        _STATE["regimeboard_error"] = str(e)[:160]
+
 
 # ---------------- PCR tracker (2026-10-23): one row per index every 5 min in NSE hours, one CSV per day ----------------
 PCR_DIR = os.path.join(DIR, "pcr")
@@ -1061,6 +1072,10 @@ def handle_get(path: str, q: dict):
             return _hot("blockwatch").get(desk, key, vw, _bs_hv(desk, key))
         except Exception as e:
             return {"key": key, "error": str(e)[:160]}
+    if path == "/api/livedesk/regimeboard":            # 2026-11-10 (Nikhil): regime for every index / market (app/regimeboard.py)
+        return _hot("regimeboard").api()
+    if path == "/api/livedesk/newstrade":              # 2026-11-10 (Nikhil): news-reaction intraday paper trades (app/newstrade.py)
+        return _hot("newstrade").api(int(q.get("days") or 40))
     if path == "/api/livedesk/n50":
         return _hot("stockview").universe()
     if path == "/api/livedesk/stockpulse":
@@ -1097,8 +1112,6 @@ def handle_get(path: str, q: dict):
         if g:
             rows = [r for r in rows if (r.get("group") or "").lower() == g]
         return {"rows": rows, "n": len(rows), "as_of": datetime.fromtimestamp(c[0]).strftime("%Y-%m-%d %H:%M")}
-    if path == "/api/livedesk/coupling":               # 2026-11-09 (Nikhil): Nifty vs global markets - overnight read + coupling table (app/coupling.py)
-        return _hot("coupling").api(q.get("key") or "NIFTY")
     if path == "/api/livedesk/levelboard":             # 2026-11-09 (Nikhil): levels x (blocks, OI, big walls, resting orders, action) in one table
         k = (q.get("key") or "NIFTY").upper(); LB = _hot("levelboard")
         c = LB.S["cache"].get(k)

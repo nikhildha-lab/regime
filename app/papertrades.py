@@ -48,6 +48,13 @@ RULES = {
     "qph": {"label": "Crypto 30-Day High · long while the daily close is a 30-day high (record only)", "edge": "Quantpedia idea, gauntlet 10 Nov: BTC Sharpe 0.89 (hold 0.92, a third of the drawdown), SOL 1.23 (hold 1.03), ETH borderline; in the market ~12 % of days; 500 USDT notional - record only"},
     "t55": {"label": "Trend 55 · long 55-session breakouts, 1 ATR stop, 20 sessions (metals / commodities, record only)", "edge": "new 9 Nov - 2012-26 on gold, silver, copper, WTI, natgas + MCX crude: 878 trades, +0.88 % a trade after costs, PF 1.49 both halves, all 6 markets positive, 11 of 15 years; win 27 % (trend-following) - record only"},
     "bkf": {"label": "BreakFade · short fresh-OI 20-day breakouts, 1 ATR stop / 3 R / 10 sessions (record only)", "edge": "new 9 Nov - from the 132k-experiment search: 753 trades, +0.51 % a trade after costs, PF 1.30, but the train-only pick made +0.06 % out of sample - PROVISIONAL, record only; judge after 60 closed trades"},
+    # 2026-11-11 (Nikhil: "enrich order flow, identify pattern, and auto deploy trades" -> claude/orderflow-patterns-plan-2026-11-11.md): app/ofpatterns.py
+    "ofp_vwap": {"label": "Order Flow · VWAP Break · Retest · Absorb", "edge": "record only - untested (backtest is phase 4)"},
+    "ofp_lvn": {"label": "Order Flow · LVN Rejection", "edge": "record only - untested (backtest is phase 4)"},
+    "ofp_fail": {"label": "Order Flow · Failed Auction (outside yesterday's value)", "edge": "record only - untested (backtest is phase 4)"},
+    "ofp_or": {"label": "Order Flow · Opening Range 6-Min (India)", "edge": "record only - untested (backtest is phase 4)"},
+    "ofp_stack": {"label": "Order Flow · Stacked Imbalance Zone Defend", "edge": "record only - untested (backtest is phase 4)"},
+    "ofp_div": {"label": "Order Flow · Delta Divergence at Value Edge", "edge": "record only - untested (backtest is phase 4)"},
     "sorb": {"label": "Stocks in Play ORB (MIS 5x)", "edge": "small lead - history 61 trades, +0.17 % gross / +0.05 % net a trade, halves -0.04 / +0.13; paper from 5 Nov"},
 }
 
@@ -282,6 +289,44 @@ def _sorb(hot):
             t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed"), pnl=x.get("pnl"), pct_margin=x.get("pnl_margin_pct"))
         elif x.get("pnl_open") is not None:
             t.update(pnl_open=x["pnl_open"], now=x.get("now"))
+        out.append(t)
+    return out
+
+
+# 2026-11-11 (Nikhil: "15M + 30M"): each model is its own paper rule per timeframe (ofp_<model>_<minutes>), so Strategy Performance
+# judges 5M, 15M and 30M separately. The bare ids above stay for the label lookup only.
+for _m in ("ofp_vwap", "ofp_lvn", "ofp_fail", "ofp_or", "ofp_stack", "ofp_div"):
+    for _tf in ((5,) if _m == "ofp_or" else (5, 15, 30)):
+        RULES[f"{_m}_{_tf}"] = {"label": f"{RULES[_m]['label']} · {_tf}M", "edge": RULES[_m]["edge"] + " · trades only with the 4H trend"}
+
+OFP_HOW = {
+    "ofp_vwap": "stop beyond the absorbed retest bar · target nearest level >= 1.5R (else 2R) · time stop 12 / 8 / 6 bars on 5M / 15M / 30M",
+    "ofp_lvn": "stop beyond the LVN band · target the next HVN (needs >= 1.5R) · time stop 18 / 12 / 8 bars",
+    "ofp_fail": "stop beyond the failed extreme · half at yesterday's VPOC, rest at the other value edge, stop to entry after the first half · out on 2 closes back outside value",
+    "ofp_or": "1-min bars · stop beyond the retest / fake-break bar · target 2R (break) or the other side of the range (reversal) · time stop 60 min",
+    "ofp_stack": "stop beyond the stacked zone · target the impulse extreme (needs >= 1.5R) else 2R · time stop 12 / 8 / 6 bars",
+    "ofp_div": "stop beyond the divergence pivot · half at yesterday's VPOC, rest at the far value edge (else 2R) · time stop 24 / 16 / 10 bars",
+}
+
+
+def _ofp(hot):
+    """2026-11-11: order-flow pattern models (app/ofpatterns.py) - RECORD ONLY. Nifty / Bank Nifty 2 lots synthetic future after 18 / 45 pts;
+    crypto / Gold 100 USDT x 5 = 500 USDT after 0.14 %. India flat 15:20. One open trade a market, 3 a day, stop for the day at -2R."""
+    OP = hot("ofpatterns"); out = []
+    for x in OP.trades():
+        india = x["key"] in OP.COST_PTS
+        if x["rule"] not in RULES:
+            continue
+        tg = x.get("targets") or []
+        t = {"rule": x["rule"], "key": x["key"], "side": x["side"], "opened": x.get("opened_ist") or f"{x.get('d')} {x.get('opened_t')}", "entry": x["entry"], "stop": x["stop"],
+             "target": tg[-1][0] if tg else None, "how": OFP_HOW.get(x.get("model") or x["rule"], "") + (" · India flat 15:20" if india else "")
+             + (f" · 4H {x['h4']:+.1f} at entry" if x.get("h4") is not None else ""),
+             "instrument": (f"{NAME.get(x['key'], x['key'])} synthetic future, {OP.LOTS_N} lots" if india else f"{NAME.get(x['key'], x['key'])} perp, 100 USDT x 5"),
+             "size": OP.LOTS_N if india else 500, "ccy": "₹" if india else "$", "status": x["status"], "why": x.get("why", ""), "stop0": x["stop"]}
+        if x["status"] == "closed":
+            t.update(exit=x.get("exit"), exit_reason=x.get("exit_reason"), closed=x.get("closed_ist"), pnl=x.get("pnl"), r=x.get("r"))
+        else:
+            t.update(pnl_open=x.get("open_pnl"), now=x.get("now"))
         out.append(t)
     return out
 
@@ -584,7 +629,7 @@ def all_rows(hot, px) -> list:
     Same rows as api() before any filter, plus every DOM trade (api() lists only the plan account)."""
     allt, errs = [], {}
     for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)),
-                   ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+                   ("sorb", lambda: _sorb(hot)), ("ofp", lambda: _ofp(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:
@@ -611,7 +656,7 @@ def all_rows(hot, px) -> list:
 
 def api(hot, px, keys=None, group=None) -> dict:
     allt, errs = [], {}
-    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
+    for nm, fn in (("b4h", lambda: _b4h(hot, px)), ("touchv2", lambda: _touchv2(hot)), ("dom_ix", lambda: _dom_ix(hot)), ("sorb", lambda: _sorb(hot)), ("ofp", lambda: _ofp(hot)), ("svb", lambda: _svb(hot)), ("fsb", lambda: _fsb(hot)), ("bkf", lambda: _bkf(hot)), ("t55", lambda: _t55(hot)), ("qph", lambda: _qph(hot)), ("n5m", lambda: _n5m(hot)), ("n5i", lambda: _n5i(hot)), ("idx", lambda: _idx(hot)), ("ovn", lambda: _ovn(hot)), ("vcy", lambda: _vcy(hot)), ("us", lambda: _us(hot))):
         try:
             allt += fn()
         except Exception as e:

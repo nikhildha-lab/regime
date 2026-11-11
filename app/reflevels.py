@@ -83,9 +83,10 @@ def build(key: str) -> dict:
         v = z.volume.groupby(tp.values).sum().sort_values(ascending=False)
         va = v[(v.cumsum() / v.sum()) <= 0.7].index
         if len(va):
-            out += [("VAH", "5-day value area high (rolling volume profile, 1-hour bars)", float(max(va))),
-                    ("VAL", "5-day value area low (rolling volume profile, 1-hour bars)", float(min(va)))]
-        out.append(("POC", "5-day point of control (price with the most volume, 1-hour bars)", float(v.index[0])))
+            # 2026-11-10 (Nikhil: "i dont want 5 day anywhere now"): no five-day profile levels are published at all
+            # (the 6 Nov lookback study found no edge in any of them after costs). The profile is still computed above
+            # in case a later study wants it; only what is published changed.
+            pass
     zd = d[d.index >= today]                                       # 2026-11-04: VWAP of the current UTC day (yesterday's until today has 1 bar)
     vd = today if len(zd) and zd.volume.sum() > 0 else today - timedelta(days=1)
     zd = d[(d.index >= vd) & (d.index < vd + timedelta(days=1))]

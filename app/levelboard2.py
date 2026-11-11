@@ -1,6 +1,6 @@
 """LEVEL BOARD for the Crypto / Metals / Commodities tabs (2026-11-09, Nikhil: "can we get level board for all other tabs with whatever
 data we have or can arrange"). Same idea as app/levelboard.py for Nifty, built from what these markets give us:
-  levels : app/reflevels.py (PDH / PDL, PWH / PWL, PMH / PML, 5-day VAH / VAL / POC, day VWAP, IBH / IBL) + the tracker's swing
+  levels : app/reflevels.py (PDH / PDL, PWH / PWL, PMH / PML, 5-day VAH, day VWAP, IBH / IBL) + the tracker's swing
            support / resistance clusters (view["sr"])
   walls / resting orders : app/bookwalls.py - crypto from Binance + Bybit + OKX books (aggregated, with the count of venues that show the
            wall), metals / energy from the Hyperliquid xyz perps book (thin; COMEX / MCX depth is not available)

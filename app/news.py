@@ -394,6 +394,10 @@ def run_all() -> dict:
         sent["series"] = [h["v"] for h in hist[::3]][-80:]
     except Exception as e:
         sent = {"error": str(e)[:100]}
+    # 2026-11-10 (Nikhil: "India - today should show India news"): every headline carries its region, so the dashboard
+    # can show the domestic feed on the India side and leave the rest to the World panel. Same test as the scoring above.
+    for g in fresh:
+        g["region"] = "india" if (re.search(INDIA_RX, (g.get("title") or "").lower()) or g.get("source") in INDIA_SRC) else "global"
     out = {"at": now.strftime("%Y-%m-%d %H:%M:%S"), "shock": shock, "sentiment": sent,
            "top": [g for g in fresh if g["severity"] >= 2][:25],
            "shock_items": [g for g in fresh if g["severity"] == 3][:10],
