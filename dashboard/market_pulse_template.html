@@ -354,6 +354,9 @@ body:not([data-tab="intraday"]) #domSetups, body[data-tab="intraday"]:not([data-
 body[data-tab="india"] #lvlCard, body[data-tab="india"] #prepMini, body[data-tab="india"] #nliveNote,
 body[data-tab="india"] #nliveDesk, body[data-tab="india"] #agentCard{display:none!important}
 #idBar,#idTop{display:none}
+#ixSwitch{display:none;margin:4px 0 10px;align-items:center;gap:6px}
+body[data-tab="intraday"] #ixSwitch, body[data-tab="fno"] #ixSwitch{display:flex}
+#ixSwitch .small{margin-left:8px}
 /* 2026-11-11: Order Flow Patterns card (app/ofpatterns.py) - top of the Intraday Desk */
 body:not([data-tab="intraday"]) #ofpCard{display:none!important}
 #ofpCard .ofp-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between}
@@ -961,8 +964,8 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
   <nav class="tabs" id="tabs" aria-label="Views">
     <button data-v="overview" aria-pressed="false">Macro News</button>   <!-- 2026-11-10 (Nikhil): Global Indices, Macro Indicators and Context -->
     <button data-v="desk" aria-pressed="true">Regime</button>
-    <button data-v="intraday" aria-pressed="false">Intraday Desk</button>
-    <button data-v="fno" aria-pressed="false">F&amp;O Flow</button>
+    <button data-v="intraday" aria-pressed="false">Intraday</button>
+    <button data-v="fno" aria-pressed="false" hidden>F&amp;O Flow</button>   <!-- 2026-11-11 (Nikhil: merge the tabs): now the F&O Scan view inside Intraday -->
     <button data-v="research" aria-pressed="false">Research</button>   <!-- 2026-11-10 (Nikhil): the strategy work, off the daily pages -->
     <button data-v="india" aria-pressed="false" hidden>India · NSE</button>
     <button data-v="us" aria-pressed="false" hidden>US</button>
@@ -970,6 +973,12 @@ details.more>summary{cursor:pointer;color:var(--accent);font-size:13px;margin-to
     <button data-v="metals" aria-pressed="false" hidden>Metals</button>
     <button data-v="global" aria-pressed="false" hidden>Commodities</button>
   </nav>
+  <!-- 2026-11-11 (Nikhil: "merge Desk + F&O"): one Intraday tab with two views. Each view keeps its own page (intraday / fno). -->
+  <div id="ixSwitch" class="ld-btns" role="tablist" aria-label="Intraday views">
+    <button data-ix="intraday" onclick="showView('intraday')">Desk</button>
+    <button data-ix="fno" onclick="showView('fno')">F&amp;O Scan</button>
+    <span class="small faint" id="ixHint"></span>
+  </div>
   <!-- 2026-11-10 (Nikhil: "move this drop down on top of the page below the tabs ... add another drop down to select
        Indian market, US, Crypto, Commodities, Metals and the rest updates accordingly"): one place to choose the market.
        The second picker is the existing #rail, moved here by showView(). -->
@@ -4421,7 +4430,9 @@ function showView(v){
   document.body.dataset.tab = TAB; document.body.dataset.sub = TAB==="intraday" ? v : "";
   VIEW = v; if (v === "india") setTimeout(() => { try { lvlLoad(); } catch(e){} }, 1500); try{localStorage.setItem("mp.view", TAB)}catch(e){}
   setTimeout(() => { try { sysBanner(); } catch(e){} }, 0);
-  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v===TAB));
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v===TAB || (TAB==="fno" && b.dataset.v==="intraday")));
+  document.querySelectorAll("#ixSwitch button").forEach(b => b.classList.toggle("on", b.dataset.ix===TAB));   // 2026-11-11: merged Intraday tab
+  { const h = $("#ixHint"); if (h) h.textContent = TAB==="fno" ? "Every NSE F&O name: futures build-up, OI and price, sector by sector" : TAB==="intraday" ? "One market at a time: patterns, levels, order flow and trade cards" : ""; }
   ptStart(v); domStart(); setTimeout(() => { try { usPaperStart(v, TAB); } catch(e){} }, 0);   // 2026-11-07: US paper trades card
   if (v==="desk") setTimeout(() => { try { pairAlign(); } catch(e){} }, 60);
   $("#viewDesk").hidden = v!=="desk"; showLive(v); suStart(v); b4Start(v);
